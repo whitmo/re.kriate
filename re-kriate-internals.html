@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate — Technical Internals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'Fira Code', 'SF Mono', Consolas, monospace;
+
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --surface2: #edf0f5;
+    --surface-elevated: #ffffff;
+    --border: rgba(0, 0, 0, 0.07);
+    --border-bright: rgba(0, 0, 0, 0.14);
+    --text: #1a2233;
+    --text-dim: #6b7a8d;
+
+    --navy: #1e3a5f;
+    --navy-dim: rgba(30, 58, 95, 0.08);
+    --gold: #b57614;
+    --gold-dim: rgba(181, 118, 20, 0.08);
+    --teal: #0e7c6b;
+    --teal-dim: rgba(14, 124, 107, 0.08);
+    --rust: #a4400e;
+    --rust-dim: rgba(164, 64, 14, 0.08);
+    --slate: #475569;
+    --slate-dim: rgba(71, 85, 105, 0.08);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1724;
+      --surface: #182033;
+      --surface2: #1e2940;
+      --surface-elevated: #222e45;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-bright: rgba(255, 255, 255, 0.12);
+      --text: #d8e0ec;
+      --text-dim: #7a8ba0;
+
+      --navy: #5b9bd5;
+      --navy-dim: rgba(91, 155, 213, 0.12);
+      --gold: #d4a73a;
+      --gold-dim: rgba(212, 167, 58, 0.12);
+      --teal: #3dcbb5;
+      --teal-dim: rgba(61, 203, 181, 0.12);
+      --rust: #e8804a;
+      --rust-dim: rgba(232, 128, 74, 0.12);
+      --slate: #94a3b8;
+      --slate-dim: rgba(148, 163, 184, 0.10);
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 15% 5%, var(--navy-dim) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 95%, var(--gold-dim) 0%, transparent 40%);
+    color: var(--text);
+    font-family: var(--font-body);
+    padding: 40px;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .anim {
+    animation: fadeUp 0.4s ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.06s);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  .container { max-width: 1120px; margin: 0 auto; }
+
+  h1 {
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -1.5px;
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    margin-bottom: 40px;
+  }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-top: 48px;
+    margin-bottom: 20px;
+    color: var(--text);
+  }
+
+  h2 .tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 10px;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+  }
+
+  /* === CARDS === */
+  .ve-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+
+  .ve-card--hero {
+    background: var(--surface-elevated);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    padding: 28px 32px;
+  }
+
+  .ve-card--recessed {
+    background: var(--surface2);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .card-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .c-navy  .card-label { color: var(--navy); }
+  .c-navy  .card-label .dot { background: var(--navy); }
+  .c-navy  { border-color: var(--navy-dim); }
+
+  .c-gold  .card-label { color: var(--gold); }
+  .c-gold  .card-label .dot { background: var(--gold); }
+  .c-gold  { border-color: var(--gold-dim); }
+
+  .c-teal  .card-label { color: var(--teal); }
+  .c-teal  .card-label .dot { background: var(--teal); }
+  .c-teal  { border-color: var(--teal-dim); }
+
+  .c-rust  .card-label { color: var(--rust); }
+  .c-rust  .card-label .dot { background: var(--rust); }
+  .c-rust  { border-color: var(--rust-dim); }
+
+  .c-slate .card-label { color: var(--slate); }
+  .c-slate .card-label .dot { background: var(--slate); }
+  .c-slate { border-color: var(--slate-dim); }
+
+  /* === FLOW ARROW === */
+  .flow-arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 4px 0;
+  }
+
+  .flow-arrow svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: var(--border-bright);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* === INNER GRID === */
+  .inner-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .inner-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  .inner-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    min-width: 0;
+  }
+
+  .inner-card .title {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .inner-card .desc {
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: break-word;
+  }
+
+  code, .code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--navy-dim);
+    color: var(--navy);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+
+  /* === CODE BLOCK === */
+  .code-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    color: var(--text);
+    margin-top: 12px;
+  }
+
+  .code-block .comment { color: var(--text-dim); }
+  .code-block .key     { color: var(--teal); }
+  .code-block .val     { color: var(--gold); }
+  .code-block .fn      { color: var(--rust); }
+
+  /* === PIPELINE === */
+  .pipeline {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .pipeline-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    min-width: 115px;
+    flex-shrink: 0;
+    text-align: center;
+  }
+
+  .pipeline-step .step-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .pipeline-step .step-name {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 3px;
+  }
+
+  .pipeline-step .step-detail {
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .ps--navy { border-color: var(--navy-dim); }
+  .ps--navy .step-num { color: var(--navy); }
+  .ps--gold { border-color: var(--gold-dim); }
+  .ps--gold .step-num { color: var(--gold); }
+  .ps--teal { border-color: var(--teal-dim); }
+  .ps--teal .step-num { color: var(--teal); }
+  .ps--rust { border-color: var(--rust-dim); }
+  .ps--rust .step-num { color: var(--rust); }
+
+  .pipeline-arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 3px;
+    color: var(--border-bright);
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  /* === NODE LIST === */
+  .node-list {
+    list-style: none;
+    font-size: 12px;
+    line-height: 1.9;
+  }
+
+  .node-list li {
+    padding-left: 14px;
+    position: relative;
+  }
+
+  .node-list li::before {
+    content: '\203A';
+    color: var(--text-dim);
+    font-weight: 600;
+    position: absolute;
+    left: 0;
+  }
+
+  /* === GRID VIZ === */
+  .grid-viz {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 3px;
+    max-width: 700px;
+  }
+
+  .grid-cell {
+    aspect-ratio: 1;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: var(--text-dim);
+    transition: background 0.15s;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .grid-cell--on {
+    background: var(--navy-dim);
+    border-color: var(--navy);
+    color: var(--navy);
+    font-weight: 600;
+  }
+
+  .grid-cell--playhead {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .grid-cell--nav {
+    background: var(--teal-dim);
+    border-color: var(--teal);
+    color: var(--teal);
+    font-weight: 600;
+    font-size: 7px;
+  }
+
+  .grid-cell--active {
+    background: var(--rust-dim);
+    border-color: var(--rust);
+    color: var(--rust);
+    font-weight: 600;
+    font-size: 7px;
+  }
+
+  .grid-cell--dim {
+    background: var(--surface2);
+  }
+
+  .grid-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 8px;
+  }
+
+  /* === POLYMETRIC VIZ === */
+  .poly-track {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .poly-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    min-width: 70px;
+    text-align: right;
+  }
+
+  .poly-steps {
+    display: flex;
+    gap: 2px;
+  }
+
+  .poly-step {
+    width: 28px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-dim);
+  }
+
+  .poly-step--loop {
+    background: var(--navy-dim);
+    border-color: var(--navy);
+    color: var(--navy);
+    font-weight: 500;
+  }
+
+  .poly-step--outside {
+    opacity: 0.35;
+  }
+
+  .poly-step--head {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  /* === MERMAID === */
+  .mermaid-wrap {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 24px;
+    overflow: auto;
+    margin-bottom: 16px;
+  }
+
+  .mermaid-wrap .mermaid {
+    display: flex;
+    justify-content: center;
+    transition: transform 0.2s ease;
+    transform-origin: top center;
+  }
+
+  .zoom-controls {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 2px;
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+  }
+
+  .zoom-controls button {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .zoom-controls button:hover {
+    background: var(--border);
+    color: var(--text);
+  }
+
+  .mermaid-wrap.is-zoomed { cursor: grab; }
+  .mermaid-wrap.is-panning { cursor: grabbing; user-select: none; }
+
+  .mermaid .nodeLabel {
+    font-family: var(--font-body) !important;
+    font-size: 15px !important;
+  }
+  .mermaid .edgeLabel {
+    font-family: var(--font-mono) !important;
+    font-size: 12px !important;
+    color: var(--text-dim) !important;
+    background-color: var(--bg) !important;
+  }
+  .mermaid .edgeLabel rect { fill: var(--bg) !important; }
+  .mermaid .nodeLabel { color: var(--text) !important; }
+  .mermaid .node rect,
+  .mermaid .node circle,
+  .mermaid .node polygon { stroke-width: 1.5px !important; }
+  .mermaid .edge-pattern-solid { stroke-width: 1.5px !important; }
+
+  /* === CALLOUT === */
+  .callout {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+
+  .callout strong { color: var(--text); font-weight: 600; }
+
+  /* === TWO COL === */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .three-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 768px) {
+    body { padding: 16px; }
+    h1 { font-size: 26px; }
+    .inner-grid, .inner-grid-3, .two-col, .three-col { grid-template-columns: 1fr; }
+    .pipeline { flex-wrap: wrap; gap: 6px; }
+    .pipeline-arrow { display: none; }
+    .grid-viz { max-width: 100%; }
+    .grid-cell { font-size: 6px; }
+    .poly-steps { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <h1 class="anim" style="--i:0">re.kriate internals</h1>
+  <p class="subtitle anim" style="--i:1">polymetric kria sequencer &mdash; module architecture, data model, and signal flow</p>
+
+  <!-- ============================================= -->
+  <!-- SECTION 1: MODULE OVERVIEW (Mermaid) -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:2">Module Graph <span class="tag" style="background:var(--navy-dim);color:var(--navy)">architecture</span></h2>
+
+  <div class="mermaid-wrap anim" style="--i:3">
+    <div class="zoom-controls">
+      <button onclick="zoomDiagram(this, 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram(this, 0.8)" title="Zoom out">&minus;</button>
+      <button onclick="resetZoom(this)" title="Reset zoom">&#8634;</button>
+    </div>
+    <pre class="mermaid">
+      graph TD
+        MAIN["re_kriate.lua<br/><small>global hooks</small>"]
+        APP["lib/app.lua<br/><small>init, params, wiring</small>"]
+        SEQ["lib/sequencer.lua<br/><small>clock coroutines</small>"]
+        GRID["lib/grid_ui.lua<br/><small>grid display + input</small>"]
+        TRK["lib/track.lua<br/><small>data model</small>"]
+        SCL["lib/scale.lua<br/><small>scale quantization</small>"]
+
+        MAIN -->|"require"| APP
+        APP  -->|"require"| SEQ
+        APP  -->|"require"| GRID
+        APP  -->|"require"| TRK
+        APP  -->|"require"| SCL
+        SEQ  -->|"require"| TRK
+        SEQ  -->|"require"| SCL
+        GRID -->|"require"| TRK
+    </pre>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- SECTION 2: CTX OBJECT -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:4">The ctx Object <span class="tag" style="background:var(--gold-dim);color:var(--gold)">state</span></h2>
+
+  <div class="ve-card ve-card--hero c-gold anim" style="--i:5">
+    <div class="card-label"><span class="dot"></span> Context &mdash; single source of truth</div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
+      All application state lives in one <code>ctx</code> table, created in <code>app.init()</code> and threaded through every function call. No globals, no module-level state.
+    </p>
+    <div class="code-block"><span class="key">ctx</span> = {
+  <span class="key">tracks</span>       = { track1, track2, track3, track4 },  <span class="comment">-- 4 tracks</span>
+  <span class="key">active_track</span> = <span class="val">1</span>,            <span class="comment">-- currently selected (1-4)</span>
+  <span class="key">active_page</span>  = <span class="val">"trigger"</span>,     <span class="comment">-- trigger|note|octave|duration|velocity</span>
+  <span class="key">playing</span>      = <span class="val">false</span>,         <span class="comment">-- sequencer running?</span>
+  <span class="key">loop_held</span>    = <span class="val">false</span>,         <span class="comment">-- grid key 12 held?</span>
+  <span class="key">loop_first_press</span> = <span class="val">nil</span>,      <span class="comment">-- first column of loop edit</span>
+  <span class="key">grid_dirty</span>   = <span class="val">true</span>,          <span class="comment">-- needs grid redraw?</span>
+  <span class="key">scale_notes</span>  = { ... },       <span class="comment">-- MIDI notes from musicutil</span>
+  <span class="key">g</span>            = grid.connect(), <span class="comment">-- grid device handle</span>
+  <span class="key">grid_metro</span>   = metro,          <span class="comment">-- 30fps redraw timer</span>
+  <span class="key">clock_ids</span>    = { ... },        <span class="comment">-- per-track clock coroutine IDs</span>
+}</div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- SECTION 3: TRACK DATA MODEL -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:6">Track Data Model <span class="tag" style="background:var(--teal-dim);color:var(--teal)">lib/track.lua</span></h2>
+
+  <div class="ve-card c-teal anim" style="--i:7">
+    <div class="card-label"><span class="dot"></span> Track Structure</div>
+    <div class="code-block"><span class="key">track</span> = {
+  <span class="key">division</span> = <span class="val">1</span>,       <span class="comment">-- clock division index (1=1/16 .. 7=1/1)</span>
+  <span class="key">muted</span>    = <span class="val">false</span>,
+  <span class="key">params</span>   = {
+    <span class="key">trigger</span>  = { steps={<span class="val">1,0,1,0,...</span>}, loop_start=<span class="val">1</span>, loop_end=<span class="val">16</span>, pos=<span class="val">1</span> },
+    <span class="key">note</span>     = { steps={<span class="val">1,2,3,4,...</span>}, loop_start=<span class="val">1</span>, loop_end=<span class="val">8</span>,  pos=<span class="val">1</span> },
+    <span class="key">octave</span>   = { steps={<span class="val">4,4,4,4,...</span>}, loop_start=<span class="val">1</span>, loop_end=<span class="val">16</span>, pos=<span class="val">1</span> },
+    <span class="key">duration</span> = { steps={<span class="val">3,3,3,3,...</span>}, loop_start=<span class="val">1</span>, loop_end=<span class="val">16</span>, pos=<span class="val">1</span> },
+    <span class="key">velocity</span> = { steps={<span class="val">5,4,5,4,...</span>}, loop_start=<span class="val">1</span>, loop_end=<span class="val">16</span>, pos=<span class="val">1</span> },
+  }
+}</div>
+    <p style="font-size:12px;color:var(--text-dim);margin-top:12px;">
+      Each param has 16 steps, independent loop start/end, and its own playhead position.
+      This is the core of kria's polymetric design &mdash; different loop lengths per parameter create phase-shifting patterns.
+    </p>
+  </div>
+
+  <div class="inner-grid anim" style="--i:8">
+    <div class="inner-card">
+      <div class="title">Step Value Ranges</div>
+      <div class="desc">
+        <code>trigger</code>: 0 or 1<br>
+        <code>note</code>: 1-7 (scale degree)<br>
+        <code>octave</code>: 1-7 (4 = center)<br>
+        <code>duration</code>: 1-7 (mapped to beats)<br>
+        <code>velocity</code>: 1-7 (mapped to 0.15&ndash;1.0)
+      </div>
+    </div>
+    <div class="inner-card">
+      <div class="title">Key Functions</div>
+      <div class="desc">
+        <code>advance(param)</code> &mdash; step forward, return value, wrap at loop_end<br>
+        <code>toggle_step(param, x)</code> &mdash; flip trigger 0/1<br>
+        <code>set_step(param, x, val)</code> &mdash; set value page step<br>
+        <code>set_loop(param, s, e)</code> &mdash; change loop bounds, clamp pos
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- SECTION 4: POLYMETRIC VISUALIZATION -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:9">Polymetric Loops <span class="tag" style="background:var(--rust-dim);color:var(--rust)">core concept</span></h2>
+
+  <div class="ve-card c-rust anim" style="--i:10">
+    <div class="card-label"><span class="dot"></span> Independent loop lengths per parameter</div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">
+      Each parameter advances its own playhead independently. With different loop lengths,
+      the combination of trigger + note + octave produces evolving patterns that only repeat
+      at the LCM of all loop lengths.
+    </p>
+
+    <div class="poly-track">
+      <div class="poly-label">trigger</div>
+      <div class="poly-steps">
+        <div class="poly-step poly-step--head">1</div>
+        <div class="poly-step poly-step--loop">0</div>
+        <div class="poly-step poly-step--loop">1</div>
+        <div class="poly-step poly-step--loop">0</div>
+        <div class="poly-step poly-step--loop">1</div>
+        <div class="poly-step poly-step--loop">0</div>
+        <div class="poly-step poly-step--loop">1</div>
+        <div class="poly-step poly-step--loop">0</div>
+        <div class="poly-step poly-step--loop">1</div>
+        <div class="poly-step poly-step--loop">0</div>
+        <div class="poly-step poly-step--loop">1</div>
+        <div class="poly-step poly-step--loop">0</div>
+        <div class="poly-step poly-step--loop">1</div>
+        <div class="poly-step poly-step--loop">0</div>
+        <div class="poly-step poly-step--loop">1</div>
+        <div class="poly-step poly-step--loop">0</div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">len 16</span>
+    </div>
+
+    <div class="poly-track">
+      <div class="poly-label">note</div>
+      <div class="poly-steps">
+        <div class="poly-step poly-step--loop">1</div>
+        <div class="poly-step poly-step--loop">2</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--head">4</div>
+        <div class="poly-step poly-step--loop">5</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">2</div>
+        <div class="poly-step poly-step--outside">1</div>
+        <div class="poly-step poly-step--outside">3</div>
+        <div class="poly-step poly-step--outside">5</div>
+        <div class="poly-step poly-step--outside">3</div>
+        <div class="poly-step poly-step--outside">1</div>
+        <div class="poly-step poly-step--outside">2</div>
+        <div class="poly-step poly-step--outside">4</div>
+        <div class="poly-step poly-step--outside">5</div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">len 8</span>
+    </div>
+
+    <div class="poly-track">
+      <div class="poly-label">octave</div>
+      <div class="poly-steps">
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--head">4</div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">len 16</span>
+    </div>
+
+    <div class="poly-track">
+      <div class="poly-label">duration</div>
+      <div class="poly-steps">
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--head">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+        <div class="poly-step poly-step--loop">3</div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">len 16</span>
+    </div>
+
+    <div class="poly-track">
+      <div class="poly-label">velocity</div>
+      <div class="poly-steps">
+        <div class="poly-step poly-step--loop">5</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">5</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">5</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">5</div>
+        <div class="poly-step poly-step--loop">4</div>
+        <div class="poly-step poly-step--loop">5</div>
+        <div class="poly-step poly-step--head">4</div>
+        <div class="poly-step poly-step--outside">5</div>
+        <div class="poly-step poly-step--outside">4</div>
+        <div class="poly-step poly-step--outside">5</div>
+        <div class="poly-step poly-step--outside">4</div>
+        <div class="poly-step poly-step--outside">5</div>
+        <div class="poly-step poly-step--outside">4</div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">len 10</span>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">
+        <div style="width:14px;height:14px;border-radius:3px;background:var(--gold-dim);border:1px solid var(--gold)"></div> playhead
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">
+        <div style="width:14px;height:14px;border-radius:3px;background:var(--navy-dim);border:1px solid var(--navy)"></div> in loop
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">
+        <div style="width:14px;height:14px;border-radius:3px;border:1px solid var(--border);opacity:0.4"></div> outside loop
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- SECTION 5: SEQUENCER DATA FLOW -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:11">Sequencer Pipeline <span class="tag" style="background:var(--navy-dim);color:var(--navy)">lib/sequencer.lua</span></h2>
+
+  <div class="ve-card c-navy anim" style="--i:12">
+    <div class="card-label"><span class="dot"></span> Per-Track Clock Coroutine</div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
+      Each track gets its own <code>clock.run()</code> coroutine. On every tick,
+      all 5 parameters advance independently, and a note fires if trigger = 1.
+    </p>
+    <div class="pipeline">
+      <div class="pipeline-step ps--navy">
+        <div class="step-num">SYNC</div>
+        <div class="step-name">clock.sync</div>
+        <div class="step-detail">Division map<br>1/16 &hellip; 1/1</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--teal">
+        <div class="step-num">ADVANCE</div>
+        <div class="step-name">step all params</div>
+        <div class="step-detail">trigger, note,<br>oct, dur, vel</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--gold">
+        <div class="step-num">CHECK</div>
+        <div class="step-name">trigger == 1?</div>
+        <div class="step-detail">Gate open<br>or skip</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--rust">
+        <div class="step-num">RESOLVE</div>
+        <div class="step-name">scale lookup</div>
+        <div class="step-detail">degree + octave<br>&rarr; MIDI note</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--navy">
+        <div class="step-num">OUTPUT</div>
+        <div class="step-name">nb play_note</div>
+        <div class="step-detail">note, velocity,<br>duration</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col anim" style="--i:13">
+    <div class="ve-card ve-card--recessed c-gold">
+      <div class="card-label"><span class="dot"></span> Division Map</div>
+      <div class="code-block" style="font-size:11px"><span class="val">1</span> = 1/4 beat  <span class="comment">-- sixteenth</span>
+<span class="val">2</span> = 1/3 beat  <span class="comment">-- triplet sixteenth</span>
+<span class="val">3</span> = 1/2 beat  <span class="comment">-- eighth</span>
+<span class="val">4</span> = 2/3 beat  <span class="comment">-- triplet eighth</span>
+<span class="val">5</span> = 1 beat    <span class="comment">-- quarter</span>
+<span class="val">6</span> = 2 beats   <span class="comment">-- half</span>
+<span class="val">7</span> = 4 beats   <span class="comment">-- whole</span></div>
+    </div>
+    <div class="ve-card ve-card--recessed c-teal">
+      <div class="card-label"><span class="dot"></span> Scale Resolution</div>
+      <div class="code-block" style="font-size:11px"><span class="fn">scale.to_midi</span>(degree, octave, scale_notes)
+  <span class="comment">-- octave 4 = center (offset 0)</span>
+  <span class="comment">-- idx = (3 + oct_offset) * 7 + degree</span>
+  <span class="comment">-- lookup into musicutil scale table</span>
+  <span class="comment">-- 14 scales: Major, Minor, Dorian, ...</span>
+  <span class="key">return</span> scale_notes[idx]</div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- SECTION 6: GRID UI -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:14">Grid Layout <span class="tag" style="background:var(--teal-dim);color:var(--teal)">lib/grid_ui.lua</span></h2>
+
+  <div class="ve-card c-teal anim" style="--i:15">
+    <div class="card-label"><span class="dot"></span> Trigger Page &mdash; all 4 tracks visible</div>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">
+      Rows 1-4 = tracks 1-4. Active steps light up (brightness 8), playhead = brightness 15, loop region = dim glow.
+    </p>
+
+    <div class="grid-viz">
+      <!-- Row 1: track 1 triggers -->
+      <div class="grid-cell grid-cell--playhead">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <!-- Row 2: track 2 triggers -->
+      <div class="grid-cell grid-cell--playhead">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <!-- Row 3: track 3 triggers -->
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--playhead">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <!-- Row 4: track 4 triggers -->
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--on">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--playhead">1</div>
+      <div class="grid-cell grid-cell--dim"></div>
+      <!-- Rows 5-7: empty -->
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <!-- Row 8: navigation -->
+      <div class="grid-cell grid-cell--active">T1</div>
+      <div class="grid-cell grid-cell--nav">T2</div>
+      <div class="grid-cell grid-cell--nav">T3</div>
+      <div class="grid-cell grid-cell--nav">T4</div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell grid-cell--active">trg</div>
+      <div class="grid-cell grid-cell--nav">not</div>
+      <div class="grid-cell grid-cell--nav">oct</div>
+      <div class="grid-cell grid-cell--nav">dur</div>
+      <div class="grid-cell grid-cell--nav">vel</div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell grid-cell--nav">lp</div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell grid-cell--active">&#9654;</div>
+    </div>
+    <div class="grid-label">
+      row 8: [1-4] track &middot; [6-10] page &middot; [12] loop hold &middot; [16] play/stop
+    </div>
+  </div>
+
+  <div class="ve-card c-navy anim" style="--i:16">
+    <div class="card-label"><span class="dot"></span> Value Page &mdash; single track, 7 rows</div>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">
+      Rows 1-7 map to values 7 down to 1. The bar extends from the bottom up to the step's value. Playhead column lights up bright. Only the active track is shown.
+    </p>
+    <div class="grid-viz">
+      <!-- Value page: note page example for track 1 (1,2,3,4,5,4,3,2) loop_end=8 -->
+      <!-- Row 1 = value 7 -->
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <!-- Row 2 = value 6 -->
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <!-- Row 3 = value 5 -->
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell grid-cell--on">5</div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <!-- Row 4 = value 4 -->
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell grid-cell--on">4</div>
+      <div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--on">4</div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <!-- Row 5 = value 3 -->
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell grid-cell--on">3</div><div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--on">3</div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <!-- Row 6 = value 2 -->
+      <div class="grid-cell"></div><div class="grid-cell grid-cell--playhead">2</div><div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--on">2</div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <!-- Row 7 = value 1 -->
+      <div class="grid-cell grid-cell--on">1</div><div class="grid-cell grid-cell--playhead"></div><div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--dim"></div><div class="grid-cell grid-cell--dim"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div><div class="grid-cell"></div>
+      <!-- Row 8: nav -->
+      <div class="grid-cell grid-cell--active">T1</div>
+      <div class="grid-cell grid-cell--nav">T2</div>
+      <div class="grid-cell grid-cell--nav">T3</div>
+      <div class="grid-cell grid-cell--nav">T4</div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell grid-cell--nav">trg</div>
+      <div class="grid-cell grid-cell--active">not</div>
+      <div class="grid-cell grid-cell--nav">oct</div>
+      <div class="grid-cell grid-cell--nav">dur</div>
+      <div class="grid-cell grid-cell--nav">vel</div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell grid-cell--nav">lp</div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell"></div>
+      <div class="grid-cell grid-cell--active">&#9654;</div>
+    </div>
+    <div class="grid-label">
+      note page, track 1 &mdash; loop 1-8, playhead at step 2 &mdash; values {1,2,3,4,5,4,3,2}
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- SECTION 7: INPUT HANDLING -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:17">Input Routing <span class="tag" style="background:var(--slate-dim);color:var(--slate)">event flow</span></h2>
+
+  <div class="mermaid-wrap anim" style="--i:18">
+    <div class="zoom-controls">
+      <button onclick="zoomDiagram(this, 1.2)" title="Zoom in">+</button>
+      <button onclick="zoomDiagram(this, 0.8)" title="Zoom out">&minus;</button>
+      <button onclick="resetZoom(this)" title="Reset zoom">&#8634;</button>
+    </div>
+    <pre class="mermaid">
+      graph TD
+        GK["grid.key x, y, z"] --> R8{y == 8?}
+        R8 -->|yes| NAV["nav_key"]
+        R8 -->|no| LOOP{loop_held?}
+        LOOP -->|yes| LP["loop_key: set loop bounds"]
+        LOOP -->|no| PG{page?}
+        PG -->|trigger| TK["trigger_key: toggle step"]
+        PG -->|value| VK["value_key: set step value"]
+
+        NAV --> TR["x 1-4: track select"]
+        NAV --> PGS["x 6-10: page select"]
+        NAV --> LPH["x 12: loop hold toggle"]
+        NAV --> PS["x 16: play/stop"]
+    </pre>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- SECTION 8: INIT SEQUENCE -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:19">Init Sequence <span class="tag" style="background:var(--gold-dim);color:var(--gold)">startup</span></h2>
+
+  <div class="ve-card c-gold anim" style="--i:20">
+    <div class="card-label"><span class="dot"></span> app.init() &rarr; ctx</div>
+    <div class="pipeline">
+      <div class="pipeline-step ps--navy">
+        <div class="step-num">1</div>
+        <div class="step-name">new_tracks</div>
+        <div class="step-detail">4 tracks with<br>default patterns</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--teal">
+        <div class="step-num">2</div>
+        <div class="step-name">nb:init</div>
+        <div class="step-detail">Voice system<br>4 voices</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--gold">
+        <div class="step-num">3</div>
+        <div class="step-name">params</div>
+        <div class="step-detail">root, scale,<br>divisions, voices</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--rust">
+        <div class="step-num">4</div>
+        <div class="step-name">build_scale</div>
+        <div class="step-detail">musicutil<br>scale table</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--navy">
+        <div class="step-num">5</div>
+        <div class="step-name">grid.connect</div>
+        <div class="step-detail">Grid device<br>+ key callback</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step ps--teal">
+        <div class="step-num">6</div>
+        <div class="step-name">metro 30fps</div>
+        <div class="step-detail">Grid redraw<br>timer</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- SECTION 9: NORNS API DEPENDENCIES -->
+  <!-- ============================================= -->
+  <h2 class="anim" style="--i:21">norns API Surface <span class="tag" style="background:var(--slate-dim);color:var(--slate)">platform</span></h2>
+
+  <div class="three-col anim" style="--i:22">
+    <div class="ve-card ve-card--recessed c-navy">
+      <div class="card-label"><span class="dot"></span> Timing</div>
+      <ul class="node-list">
+        <li><code>clock.run</code> coroutine per track</li>
+        <li><code>clock.sync</code> division-based sync</li>
+        <li><code>clock.cancel</code> stop coroutines</li>
+        <li><code>metro.init</code> 30fps grid redraw</li>
+      </ul>
+    </div>
+    <div class="ve-card ve-card--recessed c-gold">
+      <div class="card-label"><span class="dot"></span> I/O</div>
+      <ul class="node-list">
+        <li><code>grid.connect</code> monome grid</li>
+        <li><code>screen.*</code> OLED display</li>
+        <li><code>nb</code> voice output system</li>
+        <li><code>params</code> parameter system</li>
+      </ul>
+    </div>
+    <div class="ve-card ve-card--recessed c-teal">
+      <div class="card-label"><span class="dot"></span> Utilities</div>
+      <ul class="node-list">
+        <li><code>musicutil</code> scale generation</li>
+        <li><code>util.clamp</code> value clamping</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout anim" style="--i:23">
+    <strong>Seamstress gap.</strong> These 8 norns APIs have no seamstress equivalents yet.
+    The data model (<code>lib/track.lua</code>) and grid UI logic (<code>lib/grid_ui.lua</code>) are platform-agnostic &mdash;
+    only <code>app.lua</code> and <code>sequencer.lua</code> need a compatibility layer for <code>clock</code>, <code>params</code>, <code>metro</code>, <code>nb</code>, and <code>musicutil</code>.
+  </div>
+
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    look: 'classic',
+    themeVariables: {
+      primaryColor:       isDark ? '#1e3a5f' : '#dbeafe',
+      primaryBorderColor: isDark ? '#5b9bd5' : '#1e3a5f',
+      primaryTextColor:   isDark ? '#d8e0ec' : '#1a2233',
+      secondaryColor:       isDark ? '#2e3a2a' : '#f0fdf4',
+      secondaryBorderColor: isDark ? '#3dcbb5' : '#0e7c6b',
+      secondaryTextColor:   isDark ? '#d8e0ec' : '#1a2233',
+      tertiaryColor:       isDark ? '#3a2e1a' : '#fffbeb',
+      tertiaryBorderColor: isDark ? '#d4a73a' : '#b57614',
+      tertiaryTextColor:   isDark ? '#d8e0ec' : '#1a2233',
+      lineColor: isDark ? '#5b9bd5' : '#6b7a8d',
+      fontSize: '15px',
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+      noteBkgColor:    isDark ? '#1e2940' : '#fefce8',
+      noteTextColor:   isDark ? '#d8e0ec' : '#1a2233',
+      noteBorderColor: isDark ? '#d4a73a' : '#b57614',
+    }
+  });
+</script>
+<script>
+  function updateZoomState(wrap) {
+    var target = wrap.querySelector('.mermaid');
+    var zoom = parseFloat(target.dataset.zoom || '1');
+    wrap.classList.toggle('is-zoomed', zoom > 1);
+  }
+
+  function zoomDiagram(btn, factor) {
+    var wrap = btn.closest('.mermaid-wrap');
+    var target = wrap.querySelector('.mermaid');
+    var current = parseFloat(target.dataset.zoom || '1');
+    var next = Math.min(Math.max(current * factor, 0.3), 5);
+    target.dataset.zoom = next;
+    target.style.transform = 'scale(' + next + ')';
+    updateZoomState(wrap);
+  }
+
+  function resetZoom(btn) {
+    var wrap = btn.closest('.mermaid-wrap');
+    var target = wrap.querySelector('.mermaid');
+    target.dataset.zoom = '1';
+    target.style.transform = 'scale(1)';
+    updateZoomState(wrap);
+  }
+
+  document.querySelectorAll('.mermaid-wrap').forEach(function(wrap) {
+    wrap.addEventListener('wheel', function(e) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      var target = wrap.querySelector('.mermaid');
+      var current = parseFloat(target.dataset.zoom || '1');
+      var factor = e.deltaY < 0 ? 1.1 : 0.9;
+      var next = Math.min(Math.max(current * factor, 0.3), 5);
+      target.dataset.zoom = next;
+      target.style.transform = 'scale(' + next + ')';
+      updateZoomState(wrap);
+    }, { passive: false });
+
+    var startX, startY, scrollL, scrollT;
+    wrap.addEventListener('mousedown', function(e) {
+      if (e.target.closest('.zoom-controls')) return;
+      var target = wrap.querySelector('.mermaid');
+      if (parseFloat(target.dataset.zoom || '1') <= 1) return;
+      wrap.classList.add('is-panning');
+      startX = e.clientX;
+      startY = e.clientY;
+      scrollL = wrap.scrollLeft;
+      scrollT = wrap.scrollTop;
+    });
+    window.addEventListener('mousemove', function(e) {
+      if (!wrap.classList.contains('is-panning')) return;
+      wrap.scrollLeft = scrollL - (e.clientX - startX);
+      wrap.scrollTop = scrollT - (e.clientY - startY);
+    });
+    window.addEventListener('mouseup', function() {
+      wrap.classList.remove('is-panning');
+    });
+  });
+</script>
+
+</body>
+</html>
