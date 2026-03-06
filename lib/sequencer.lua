@@ -1,5 +1,5 @@
 -- lib/sequencer.lua
--- Clock-driven sequencer with per-param step advancement and nb voice output
+-- Clock-driven sequencer with per-param step advancement and voice output
 
 local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
@@ -74,9 +74,9 @@ function M.step_track(ctx, track_num)
 end
 
 function M.play_note(ctx, track_num, note, velocity, duration)
-  local player = params:lookup_param("voice_" .. track_num):get_player()
-  if player then
-    player:play_note(note, velocity, duration)
+  local voice = ctx.voices and ctx.voices[track_num]
+  if voice then
+    voice:play_note(note, velocity, duration)
   end
 end
 
