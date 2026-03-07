@@ -1,6 +1,8 @@
 -- lib/seamstress/screen_ui.lua
 -- Minimal seamstress screen display: title, track/page, play state, step positions
 
+local track_mod = require("lib/track")
+
 local M = {}
 
 function M.redraw(ctx)
@@ -33,7 +35,7 @@ function M.redraw(ctx)
   -- Track step positions
   screen.color(120, 120, 150, 255)
   if ctx.tracks then
-    for t = 1, 4 do
+    for t = 1, track_mod.NUM_TRACKS do
       local track = ctx.tracks[t]
       if track then
         local trig = track.params.trigger

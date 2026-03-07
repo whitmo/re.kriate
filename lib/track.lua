@@ -135,28 +135,6 @@ function M.new_tracks()
   return tracks
 end
 
--- Advance a param's position within its loop, return the current step value
-function M.advance(param)
-  local pos = param.pos
-  local val = param.steps[pos]
-  -- advance
-  if pos >= param.loop_end then
-    param.pos = param.loop_start
-  else
-    param.pos = pos + 1
-    -- handle case where pos went past loop_end (shouldn't happen but be safe)
-    if param.pos > param.loop_end then
-      param.pos = param.loop_start
-    end
-  end
-  return val
-end
-
--- Get current step value without advancing
-function M.peek(param)
-  return param.steps[param.pos]
-end
-
 -- Set a step value
 function M.set_step(param, step, value)
   if step >= 1 and step <= M.NUM_STEPS then

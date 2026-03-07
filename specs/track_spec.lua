@@ -4,6 +4,7 @@
 package.path = package.path .. ";./?.lua"
 
 local track = require("lib/track")
+local direction = require("lib/direction")
 
 describe("track", function()
 
@@ -45,15 +46,15 @@ describe("track", function()
     end)
   end)
 
-  describe("advance", function()
+  describe("advance (via direction module)", function()
     it("advances position within loop", function()
       local p = track.new_param(0)
       p.steps = {1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0}
       assert.are.equal(p.pos, 1)
-      local v1 = track.advance(p)
+      local v1 = direction.advance(p, "forward")
       assert.are.equal(v1, 1)
       assert.are.equal(p.pos, 2)
-      local v2 = track.advance(p)
+      local v2 = direction.advance(p, "forward")
       assert.are.equal(v2, 2)
       assert.are.equal(p.pos, 3)
     end)
@@ -64,7 +65,7 @@ describe("track", function()
       p.loop_end = 4
       p.pos = 4
       p.steps = {10, 20, 30, 40, 50, 60, 70, 80, 0, 0, 0, 0, 0, 0, 0, 0}
-      local v = track.advance(p)
+      local v = direction.advance(p, "forward")
       assert.are.equal(v, 40) -- value at pos 4
       assert.are.equal(p.pos, 1) -- wrapped back to loop_start
     end)
@@ -77,7 +78,7 @@ describe("track", function()
       p.steps = {0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0}
       local vals = {}
       for _ = 1, 8 do
-        table.insert(vals, track.advance(p))
+        table.insert(vals, direction.advance(p, "forward"))
       end
       -- should cycle through 1,2,3,4,1,2,3,4
       assert.are.same(vals, {1, 2, 3, 4, 1, 2, 3, 4})
@@ -140,11 +141,11 @@ describe("track", function()
     end)
   end)
 
-  describe("peek", function()
+  describe("peek (direct access)", function()
     it("returns value without advancing", function()
       local p = track.new_param(0)
       p.steps[1] = 5
-      assert.are.equal(track.peek(p), 5)
+      assert.are.equal(p.steps[p.pos], 5)
       assert.are.equal(p.pos, 1) -- unchanged
     end)
   end)
