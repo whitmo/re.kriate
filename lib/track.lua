@@ -6,7 +6,6 @@ local M = {}
 M.NUM_TRACKS = 4
 M.NUM_STEPS = 16
 M.PARAM_NAMES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
-M.EXTENDED_PARAMS = {"ratchet", "alt_note", "glide"}
 
 -- Step value ranges (1-indexed, matching grid rows 1-7)
 -- trigger: 0 or 1
@@ -93,21 +92,28 @@ local DEFAULT_PATTERNS = {
   },
 }
 
+-- Default values per param name
+local PARAM_DEFAULTS = {
+  trigger  = 0,
+  note     = 4,
+  octave   = 4,
+  duration = 4,
+  velocity = 4,
+  ratchet  = 1,  -- 1 = no ratchet
+  alt_note = 1,  -- 1 = no offset
+  glide    = 1,  -- 1 = no glide
+}
+
 function M.new_track(track_num)
   local defaults = DEFAULT_PATTERNS[track_num] or DEFAULT_PATTERNS[1]
   local track = {
     params = {},
     division = 1,
     muted = false,
+    direction = "forward",
   }
   for _, name in ipairs(M.PARAM_NAMES) do
-    local default_val = 4
-    if name == "trigger" then default_val = 0
-    elseif name == "ratchet" then default_val = 1
-    elseif name == "alt_note" then default_val = 1
-    elseif name == "glide" then default_val = 1
-    end
-    local p = M.new_param(default_val)
+    local p = M.new_param(PARAM_DEFAULTS[name] or 4)
     if defaults[name] then
       for i = 1, M.NUM_STEPS do
         p.steps[i] = defaults[name][i]
