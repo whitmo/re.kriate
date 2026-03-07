@@ -53,17 +53,17 @@
 
 ### Tests for US1-4
 
-- [ ] T013 [P] [US1] Add failing tests for sequencer start/stop MIDI silence (CC 123 on stop) in specs/sequencer_spec.lua
-- [ ] T014 [P] [US2] Add failing tests for trigger page grid display (brightness levels, playhead, loop region) in specs/grid_ui_spec.lua
-- [ ] T015 [P] [US3] Add failing tests for value page grid display and editing (note/octave/duration/velocity bar graphs) in specs/grid_ui_spec.lua
-- [ ] T016 [P] [US4] Add failing tests for nav_key track/page selection and loop modifier hold in specs/grid_ui_spec.lua
+- [x] T013 [P] [US1] Add failing tests for sequencer start/stop MIDI silence (CC 123 on stop) in specs/sequencer_spec.lua
+- [x] T014 [P] [US2] Add failing tests for trigger page grid display (brightness levels, playhead, loop region) in specs/grid_ui_spec.lua
+- [x] T015 [P] [US3] Add failing tests for value page grid display and editing (note/octave/duration/velocity bar graphs) in specs/grid_ui_spec.lua
+- [x] T016 [P] [US4] Add failing tests for nav_key track/page selection and loop modifier hold in specs/grid_ui_spec.lua
 
 ### Implementation for US1-4
 
-- [ ] T017 [US1] Fix any test failures found in T013 (sequencer stop behavior) in lib/sequencer.lua
-- [ ] T018 [US2] Fix any test failures found in T014 (trigger display) in lib/grid_ui.lua
-- [ ] T019 [US3] Fix any test failures found in T015 (value page display/editing) in lib/grid_ui.lua
-- [ ] T020 [US4] Fix any test failures found in T016 (navigation) in lib/grid_ui.lua
+- [x] T017 [US1] Fix any test failures found in T013 (sequencer stop behavior) in lib/sequencer.lua
+- [x] T018 [US2] Fix any test failures found in T014 (trigger display) in lib/grid_ui.lua — no fixes needed, already passing
+- [x] T019 [US3] Fix any test failures found in T015 (value page display/editing) in lib/grid_ui.lua — no fixes needed, already passing
+- [x] T020 [US4] Fix any test failures found in T016 (navigation) in lib/grid_ui.lua — no fixes needed, already passing
 
 **Checkpoint**: P1 stories fully tested and verified. MVP functional.
 

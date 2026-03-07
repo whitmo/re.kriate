@@ -52,6 +52,15 @@ function M.stop(ctx)
     end
     ctx.clock_ids = nil
   end
+  -- silence all voices (CC 123 all-notes-off)
+  if ctx.voices then
+    for t = 1, track_mod.NUM_TRACKS do
+      local voice = ctx.voices[t]
+      if voice and voice.all_notes_off then
+        voice:all_notes_off()
+      end
+    end
+  end
 end
 
 function M.track_clock(ctx, track_num)

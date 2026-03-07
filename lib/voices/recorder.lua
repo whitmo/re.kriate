@@ -38,7 +38,13 @@ function M.new(track_num, shared_buffer)
       })
     end,
 
-    all_notes_off = function(self) end,
+    all_notes_off = function(self)
+      table.insert(self.events, {
+        track = self.track_num,
+        type = "all_notes_off",
+        beat = clock.get_beats(),
+      })
+    end,
 
     set_portamento = function(self, time)
       table.insert(self.events, {

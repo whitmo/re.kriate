@@ -273,6 +273,89 @@ describe("sequencer", function()
 
   end)
 
+  describe("stop silences voices (US1)", function()
+
+    it("calls all_notes_off on each voice when stopping", function()
+      local ctx = make_ctx()
+      ctx.playing = true
+      ctx.clock_ids = {1, 2, 3, 4}
+
+      sequencer.stop(ctx)
+
+      for t = 1, track_mod.NUM_TRACKS do
+        local events = ctx.voices[t]:get_events()
+        local found = false
+        for _, e in ipairs(events) do
+          if e.type == "all_notes_off" then found = true; break end
+        end
+        assert.is_true(found, "voice " .. t .. " should receive all_notes_off on stop")
+      end
+    end)
+
+    it("handles nil voices gracefully on stop", function()
+      local ctx = make_ctx()
+      ctx.voices = nil
+      ctx.playing = true
+      ctx.clock_ids = {1, 2, 3, 4}
+      -- Should not error
+      sequencer.stop(ctx)
+      assert.is_false(ctx.playing)
+    end)
+
+    it("handles missing individual voice gracefully on stop", function()
+      local ctx = make_ctx()
+      ctx.voices[2] = nil
+      ctx.playing = true
+      ctx.clock_ids = {1, 2, 3, 4}
+      -- Should not error
+      sequencer.stop(ctx)
+      assert.is_false(ctx.playing)
+    end)
+
+  end)
+
+  describe("polymetric sequencing (US3)", function()
+
+    it("independent loop lengths produce different cycle counts", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      -- Trigger loop: 1-4 (4 steps), all triggers active
+      track.params.trigger.loop_start = 1
+      track.params.trigger.loop_end = 4
+      track.params.trigger.pos = 1
+      for i = 1, 4 do track.params.trigger.steps[i] = 1 end
+
+      -- Note loop: 1-2 (2 steps), alternating notes
+      track.params.note.loop_start = 1
+      track.params.note.loop_end = 2
+      track.params.note.pos = 1
+      track.params.note.steps[1] = 3
+      track.params.note.steps[2] = 5
+
+      -- Fix octave and other params
+      for _, name in ipairs({"octave", "duration", "velocity", "ratchet", "alt_note", "glide"}) do
+        track.params[name].loop_start = 1
+        track.params[name].loop_end = 1
+        track.params[name].pos = 1
+      end
+
+      -- Step 4 times (full trigger cycle)
+      local notes = {}
+      for _ = 1, 4 do
+        sequencer.step_track(ctx, 1)
+        local all = note_events_for(ctx.voices[1])
+        table.insert(notes, all[#all].note)
+      end
+
+      -- Note should cycle twice (2-step loop within 4 trigger steps)
+      -- note degrees: 3, 5, 3, 5
+      assert.are.equal(notes[1], notes[3], "note should repeat at step 3")
+      assert.are.equal(notes[2], notes[4], "note should repeat at step 4")
+      assert.are_not.equal(notes[1], notes[2], "alternating notes should differ")
+    end)
+
+  end)
+
   describe("muted track advancement (US9)", function()
 
     it("advances all param playheads when muted", function()
