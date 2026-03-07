@@ -54,12 +54,16 @@ end
 
 function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
-  -- advance all params independently
+  -- advance all params independently (primary + extended)
   local trig = track_mod.advance(track.params.trigger)
   local note_deg = track_mod.advance(track.params.note)
   local octave = track_mod.advance(track.params.octave)
   local dur_val = track_mod.advance(track.params.duration)
   local vel_val = track_mod.advance(track.params.velocity)
+  -- advance extended params (values used for future features)
+  for _, name in ipairs(track_mod.EXTENDED_PARAMS) do
+    track_mod.advance(track.params[name])
+  end
 
   -- fire note on trigger
   if trig == 1 then
