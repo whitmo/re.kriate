@@ -149,4 +149,89 @@ describe("track", function()
     end)
   end)
 
+  describe("extended params", function()
+    it("PARAM_NAMES includes ratchet, alt_note, glide", function()
+      local names = {}
+      for _, name in ipairs(track.PARAM_NAMES) do
+        names[name] = true
+      end
+      assert.is_true(names["trigger"])
+      assert.is_true(names["note"])
+      assert.is_true(names["octave"])
+      assert.is_true(names["duration"])
+      assert.is_true(names["velocity"])
+      assert.is_true(names["ratchet"])
+      assert.is_true(names["alt_note"])
+      assert.is_true(names["glide"])
+      assert.equals(8, #track.PARAM_NAMES)
+    end)
+
+    it("CORE_PARAMS has 5 core params", function()
+      assert.equals(5, #track.CORE_PARAMS)
+      assert.are.same(
+        {"trigger", "note", "octave", "duration", "velocity"},
+        track.CORE_PARAMS
+      )
+    end)
+
+    it("EXTENDED_PARAMS has 3 extended params", function()
+      assert.equals(3, #track.EXTENDED_PARAMS)
+      assert.are.same(
+        {"ratchet", "alt_note", "glide"},
+        track.EXTENDED_PARAMS
+      )
+    end)
+
+    it("new_track creates ratchet param with default 1", function()
+      local t = track.new_track(1)
+      assert.is_not_nil(t.params.ratchet)
+      assert.equals(1, t.params.ratchet.steps[1])
+      -- all steps should be 1
+      for i = 1, track.NUM_STEPS do
+        assert.equals(1, t.params.ratchet.steps[i])
+      end
+    end)
+
+    it("new_track creates alt_note param with default 1", function()
+      local t = track.new_track(1)
+      assert.is_not_nil(t.params.alt_note)
+      assert.equals(1, t.params.alt_note.steps[1])
+      for i = 1, track.NUM_STEPS do
+        assert.equals(1, t.params.alt_note.steps[i])
+      end
+    end)
+
+    it("new_track creates glide param with default 1", function()
+      local t = track.new_track(1)
+      assert.is_not_nil(t.params.glide)
+      assert.equals(1, t.params.glide.steps[1])
+      for i = 1, track.NUM_STEPS do
+        assert.equals(1, t.params.glide.steps[i])
+      end
+    end)
+
+    it("extended params have standard loop defaults", function()
+      local t = track.new_track(1)
+      for _, name in ipairs(track.EXTENDED_PARAMS) do
+        assert.equals(1, t.params[name].loop_start)
+        assert.equals(16, t.params[name].loop_end)
+        assert.equals(1, t.params[name].pos)
+      end
+    end)
+  end)
+
+  describe("direction field", function()
+    it("new_track has direction defaulting to forward", function()
+      local t = track.new_track(1)
+      assert.equals("forward", t.direction)
+    end)
+
+    it("new_tracks creates 4 tracks all with forward direction", function()
+      local tracks = track.new_tracks()
+      for i = 1, 4 do
+        assert.equals("forward", tracks[i].direction)
+      end
+    end)
+  end)
+
 end)

@@ -55,17 +55,16 @@ end
 function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
   -- advance all params independently
-  local trig = track_mod.advance(track.params.trigger)
-  local note_deg = track_mod.advance(track.params.note)
-  local octave = track_mod.advance(track.params.octave)
-  local dur_val = track_mod.advance(track.params.duration)
-  local vel_val = track_mod.advance(track.params.velocity)
+  local vals = {}
+  for _, name in ipairs(track_mod.PARAM_NAMES) do
+    vals[name] = track_mod.advance(track.params[name])
+  end
 
   -- fire note on trigger
-  if trig == 1 then
-    local midi_note = scale_mod.to_midi(note_deg, octave, ctx.scale_notes)
-    local duration = track_mod.DURATION_MAP[dur_val] or track_mod.DURATION_MAP[3]
-    local velocity = track_mod.VELOCITY_MAP[vel_val] or track_mod.VELOCITY_MAP[4]
+  if vals.trigger == 1 then
+    local midi_note = scale_mod.to_midi(vals.note, vals.octave, ctx.scale_notes)
+    local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
+    local velocity = track_mod.VELOCITY_MAP[vals.velocity] or track_mod.VELOCITY_MAP[4]
     M.play_note(ctx, track_num, midi_note, velocity, duration)
   end
 
