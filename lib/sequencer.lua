@@ -7,6 +7,18 @@ local direction_mod = require("lib/direction")
 
 local M = {}
 
+-- Glide time map: step value -> portamento time in seconds
+-- 1 = off, 2-7 = increasing portamento duration
+M.GLIDE_TIME_MAP = {
+  [1] = 0,
+  [2] = 0.05,
+  [3] = 0.1,
+  [4] = 0.2,
+  [5] = 0.4,
+  [6] = 0.8,
+  [7] = 1.6,
+}
+
 -- Division map: division value -> clock.sync argument
 -- 1 = sixteenth notes (1/4 beat), higher = slower
 M.DIVISION_MAP = {
@@ -74,27 +86,20 @@ function M.step_track(ctx, track_num)
 
   -- fire note on trigger
   if vals.trigger == 1 then
-    -- compute effective note degree with alt_note
-    local note_deg = vals.note
-    if vals.alt_note and vals.alt_note > 1 then
-      note_deg = ((vals.note - 1) + (vals.alt_note - 1)) % SCALE_DEGREES + 1
-    end
-
-    local midi_note = scale_mod.to_midi(note_deg, vals.octave, ctx.scale_notes)
+    -- alt_note: additive pitch combination
+    local effective_degree = ((vals.note - 1) + (vals.alt_note - 1)) % SCALE_DEGREES + 1
+    local midi_note = scale_mod.to_midi(effective_degree, vals.octave, ctx.scale_notes)
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
     local velocity = track_mod.VELOCITY_MAP[vals.velocity] or track_mod.VELOCITY_MAP[4]
 
-    -- apply glide/portamento
+    -- glide: send portamento before note
     local voice = ctx.voices and ctx.voices[track_num]
     if voice and voice.set_portamento then
-      if vals.glide and vals.glide > 1 then
-        voice:set_portamento(vals.glide)
-      else
-        voice:set_portamento(0)
-      end
+      local glide_time = M.GLIDE_TIME_MAP[vals.glide] or 0
+      voice:set_portamento(glide_time)
     end
 
-    -- handle ratchet
+    -- ratchet: subdivide into N evenly-spaced notes
     local ratchet_count = vals.ratchet or 1
     if ratchet_count > 1 then
       local sub_dur = duration / ratchet_count
@@ -102,7 +107,7 @@ function M.step_track(ctx, track_num)
         for i = 1, ratchet_count do
           M.play_note(ctx, track_num, midi_note, velocity, sub_dur)
           if i < ratchet_count then
-            clock.sync(sub_dur)
+            clock.sleep(sub_dur)
           end
         end
       end)

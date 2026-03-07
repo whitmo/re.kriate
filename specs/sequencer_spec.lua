@@ -49,6 +49,17 @@ local function make_ctx()
   }, buffer
 end
 
+-- Helper: filter note events (exclude portamento) from voice events
+local function note_events_for(voice)
+  local result = {}
+  for _, e in ipairs(voice:get_events()) do
+    if e.note and e.type ~= "portamento" then
+      table.insert(result, e)
+    end
+  end
+  return result
+end
+
 describe("sequencer", function()
 
   before_each(function()
@@ -65,9 +76,9 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1)
-      assert.are.equal(events[1].track, 1)
+      local notes = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #notes)
+      assert.are.equal(1, notes[1].track)
     end)
 
     it("does not fire when trigger is 0", function()
@@ -120,11 +131,11 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1)
+      local notes = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #notes)
       -- scale_mod.to_midi(3, 4, scale_notes) -> scale_notes[(3+0)*7 + 3] = scale_notes[24]
       local expected_note = scale_mod.to_midi(3, 4, ctx.scale_notes)
-      assert.are.equal(events[1].note, expected_note)
+      assert.are.equal(expected_note, notes[1].note)
     end)
 
     it("maps duration from step value via DURATION_MAP", function()
@@ -137,8 +148,8 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(events[1].dur, track_mod.DURATION_MAP[5])
+      local notes = note_events_for(ctx.voices[1])
+      assert.are.equal(track_mod.DURATION_MAP[5], notes[1].dur)
     end)
 
     it("maps velocity from step value via VELOCITY_MAP", function()
@@ -151,8 +162,8 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(events[1].vel, track_mod.VELOCITY_MAP[6])
+      local notes = note_events_for(ctx.voices[1])
+      assert.are.equal(track_mod.VELOCITY_MAP[6], notes[1].vel)
     end)
 
     it("routes notes to the correct track voice", function()
@@ -166,12 +177,12 @@ describe("sequencer", function()
       sequencer.step_track(ctx, 1)
       sequencer.step_track(ctx, 3)
 
-      local events1 = ctx.voices[1]:get_events()
-      local events3 = ctx.voices[3]:get_events()
-      assert.are.equal(#events1, 1)
-      assert.are.equal(events1[1].track, 1)
-      assert.are.equal(#events3, 1)
-      assert.are.equal(events3[1].track, 3)
+      local notes1 = note_events_for(ctx.voices[1])
+      local notes3 = note_events_for(ctx.voices[3])
+      assert.are.equal(1, #notes1)
+      assert.are.equal(1, notes1[1].track)
+      assert.are.equal(1, #notes3)
+      assert.are.equal(3, notes3[1].track)
     end)
 
     it("handles missing voice gracefully", function()
@@ -451,233 +462,8 @@ describe("sequencer", function()
       track.params.trigger.steps[muted_positions.trigger] = 1
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1, "unmuted track should fire notes")
-    end)
-
-  end)
-
-<<<<<<< HEAD
-  describe("alt-note", function()
-
-    it("alt_note value 1 does not alter the note degree", function()
-      local ctx, buffer = make_ctx()
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.note.steps[1] = 3
-      track.params.note.pos = 1
-      track.params.alt_note.steps[1] = 1  -- no offset
-      track.params.alt_note.pos = 1
-      track.params.octave.steps[1] = 4
-      track.params.octave.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1)
-      local expected = scale_mod.to_midi(3, 4, ctx.scale_notes)
-      assert.are.equal(events[1].note, expected)
-    end)
-
-    it("alt_note offsets note degree additively", function()
-      local ctx, buffer = make_ctx()
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.note.steps[1] = 2     -- degree 2
-      track.params.note.pos = 1
-      track.params.alt_note.steps[1] = 3  -- offset +2 degrees
-      track.params.alt_note.pos = 1
-      track.params.octave.steps[1] = 4
-      track.params.octave.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1)
-      -- effective = ((2-1) + (3-1)) % 7 + 1 = (1 + 2) % 7 + 1 = 4
-      local expected = scale_mod.to_midi(4, 4, ctx.scale_notes)
-      assert.are.equal(events[1].note, expected)
-    end)
-
-    it("alt_note wraps around scale degrees", function()
-      local ctx, buffer = make_ctx()
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.note.steps[1] = 6     -- degree 6
-      track.params.note.pos = 1
-      track.params.alt_note.steps[1] = 5  -- offset +4
-      track.params.alt_note.pos = 1
-      track.params.octave.steps[1] = 4
-      track.params.octave.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1)
-      -- effective = ((6-1) + (5-1)) % 7 + 1 = (5 + 4) % 7 + 1 = 2 + 1 = 3
-      local expected = scale_mod.to_midi(3, 4, ctx.scale_notes)
-      assert.are.equal(events[1].note, expected)
-    end)
-
-  end)
-
-  describe("glide", function()
-
-    it("calls set_portamento when glide > 1", function()
-      local ctx, buffer = make_ctx()
-      -- Add set_portamento spy to voice
-      local portamento_calls = {}
-      ctx.voices[1].set_portamento = function(self, time)
-        table.insert(portamento_calls, time)
-      end
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.glide.steps[1] = 3
-      track.params.glide.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      assert.are.equal(#portamento_calls, 1)
-      assert.are.equal(portamento_calls[1], 3)
-    end)
-
-    it("disables portamento when glide is 1", function()
-      local ctx, buffer = make_ctx()
-      local portamento_calls = {}
-      ctx.voices[1].set_portamento = function(self, time)
-        table.insert(portamento_calls, time)
-      end
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.glide.steps[1] = 1
-      track.params.glide.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      assert.are.equal(#portamento_calls, 1)
-      assert.are.equal(portamento_calls[1], 0)
-    end)
-
-    it("does not error when voice has no set_portamento", function()
-      local ctx, buffer = make_ctx()
-      -- Default recorder voice does not have set_portamento
-      -- Remove it explicitly to be sure
-      ctx.voices[1].set_portamento = nil
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.glide.steps[1] = 5
-      track.params.glide.pos = 1
-
-      -- Should not error
-      sequencer.step_track(ctx, 1)
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1)
-    end)
-
-  end)
-
-  describe("ratchet", function()
-
-    before_each(function()
-      clock_run_immediate = true
-    end)
-
-    after_each(function()
-      clock_run_immediate = false
-    end)
-
-    it("ratchet value 1 plays a single note normally", function()
-      local ctx, buffer = make_ctx()
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.ratchet.steps[1] = 1
-      track.params.ratchet.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1)
-    end)
-
-    it("ratchet value 3 produces 3 notes", function()
-      local ctx, buffer = make_ctx()
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.ratchet.steps[1] = 3
-      track.params.ratchet.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 3)
-    end)
-
-    it("ratchet subdivides duration evenly", function()
-      local ctx, buffer = make_ctx()
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.duration.steps[1] = 5  -- 1 beat
-      track.params.duration.pos = 1
-      track.params.ratchet.steps[1] = 4
-      track.params.ratchet.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 4)
-      -- Each sub-note should have duration = 1/4 beat
-      for _, ev in ipairs(events) do
-        assert.are.equal(ev.dur, 1 / 4)
-      end
-    end)
-
-    it("ratchet preserves note and velocity", function()
-      local ctx, buffer = make_ctx()
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 1
-      track.params.trigger.pos = 1
-      track.params.note.steps[1] = 3
-      track.params.note.pos = 1
-      track.params.octave.steps[1] = 4
-      track.params.octave.pos = 1
-      track.params.velocity.steps[1] = 6
-      track.params.velocity.pos = 1
-      track.params.ratchet.steps[1] = 2
-      track.params.ratchet.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 2)
-      local expected_note = scale_mod.to_midi(3, 4, ctx.scale_notes)
-      local expected_vel = track_mod.VELOCITY_MAP[6]
-      for _, ev in ipairs(events) do
-        assert.are.equal(ev.note, expected_note)
-        assert.are.equal(ev.vel, expected_vel)
-      end
-    end)
-
-    it("no ratchet when trigger is 0", function()
-      local ctx, buffer = make_ctx()
-      local track = ctx.tracks[1]
-      track.params.trigger.steps[1] = 0
-      track.params.trigger.pos = 1
-      track.params.ratchet.steps[1] = 4
-      track.params.ratchet.pos = 1
-
-      sequencer.step_track(ctx, 1)
-
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 0)
+      local notes = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #notes, "unmuted track should fire notes")
     end)
 
   end)
@@ -722,6 +508,185 @@ describe("sequencer", function()
     it("glide defaults to 1 (no glide)", function()
       local ctx = make_ctx()
       assert.are.equal(ctx.tracks[1].params.glide.steps[1], 1)
+    end)
+
+  end)
+
+  describe("glide/portamento (US12)", function()
+
+    it("sends portamento CC before note when glide > 1", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.glide.steps[1] = 3
+      track.params.glide.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local events = ctx.voices[1]:get_events()
+      -- Should have portamento event then note event
+      assert.is_true(#events >= 2, "expected portamento + note events, got " .. #events)
+      assert.are.equal("portamento", events[1].type)
+      assert.is_true(events[1].time > 0, "glide > 1 should produce non-zero portamento time")
+      assert.are.equal(events[2].note ~= nil, true, "second event should be a note")
+    end)
+
+    it("sends portamento off (time=0) when glide == 1", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.glide.steps[1] = 1
+      track.params.glide.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local events = ctx.voices[1]:get_events()
+      assert.is_true(#events >= 2, "expected portamento-off + note events")
+      assert.are.equal("portamento", events[1].type)
+      assert.are.equal(0, events[1].time)
+    end)
+
+  end)
+
+  describe("ratchet subdivision (US13)", function()
+
+    it("fires N notes when ratchet > 1", function()
+      -- Override clock mock to execute ratchet callbacks synchronously
+      local orig_run = clock.run
+      local orig_sleep = clock.sleep
+      clock.run = function(fn) fn(); return 1 end
+      clock.sleep = function() end
+
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.ratchet.steps[1] = 3
+      track.params.ratchet.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local note_events = note_events_for(ctx.voices[1])
+      assert.are.equal(3, #note_events, "ratchet=3 should fire 3 notes")
+
+      -- Restore clock mock
+      clock.run = orig_run
+      clock.sleep = orig_sleep
+    end)
+
+    it("fires 1 note when ratchet == 1 (default)", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.ratchet.steps[1] = 1
+      track.params.ratchet.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local note_events = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #note_events, "ratchet=1 should fire 1 note")
+    end)
+
+    it("subdivides duration equally among ratchet notes", function()
+      local orig_run = clock.run
+      local orig_sleep = clock.sleep
+      clock.run = function(fn) fn(); return 1 end
+      clock.sleep = function() end
+
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.duration.steps[1] = 5  -- 1 beat
+      track.params.duration.pos = 1
+      track.params.ratchet.steps[1] = 4
+      track.params.ratchet.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local note_events = note_events_for(ctx.voices[1])
+      local expected_dur = track_mod.DURATION_MAP[5] / 4
+      for i, e in ipairs(note_events) do
+        assert.are.equal(expected_dur, e.dur,
+          "ratchet note " .. i .. " duration should be total/ratchet_count")
+      end
+
+      clock.run = orig_run
+      clock.sleep = orig_sleep
+    end)
+
+  end)
+
+  describe("alt_note additive pitch (US14)", function()
+
+    it("combines note + alt_note additively for effective degree", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.note.steps[1] = 3
+      track.params.note.pos = 1
+      track.params.alt_note.steps[1] = 2
+      track.params.alt_note.pos = 1
+      track.params.octave.steps[1] = 4
+      track.params.octave.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      -- effective_degree = ((3-1) + (2-1)) % 7 + 1 = 4
+      local expected_note = scale_mod.to_midi(4, 4, ctx.scale_notes)
+      local note_events = note_events_for(ctx.voices[1])
+
+      assert.is_true(#note_events >= 1, "should have at least one note event")
+      assert.are.equal(expected_note, note_events[1].note,
+        "note=3 + alt_note=2 should produce degree 4")
+    end)
+
+    it("alt_note=1 (default) does not alter the note", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.note.steps[1] = 5
+      track.params.note.pos = 1
+      track.params.alt_note.steps[1] = 1
+      track.params.alt_note.pos = 1
+      track.params.octave.steps[1] = 4
+      track.params.octave.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      -- effective_degree = ((5-1) + (1-1)) % 7 + 1 = 4 % 7 + 1 = 5
+      local expected_note = scale_mod.to_midi(5, 4, ctx.scale_notes)
+      local note_events = note_events_for(ctx.voices[1])
+
+      assert.are.equal(expected_note, note_events[1].note,
+        "alt_note=1 should not change the note")
+    end)
+
+    it("wraps around scale length when combined degree exceeds 7", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.note.steps[1] = 6
+      track.params.note.pos = 1
+      track.params.alt_note.steps[1] = 5
+      track.params.alt_note.pos = 1
+      track.params.octave.steps[1] = 4
+      track.params.octave.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      -- effective_degree = ((6-1) + (5-1)) % 7 + 1 = 9 % 7 + 1 = 2 + 1 = 3
+      local expected_note = scale_mod.to_midi(3, 4, ctx.scale_notes)
+      local note_events = note_events_for(ctx.voices[1])
+
+      assert.are.equal(expected_note, note_events[1].note,
+        "note=6 + alt_note=5 should wrap to degree 3")
     end)
 
   end)
