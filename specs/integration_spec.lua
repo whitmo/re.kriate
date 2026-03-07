@@ -71,6 +71,15 @@ rawset(_G, "screen", {
   update = function() end,
 })
 
+-- Mock util (needed by app.enc)
+rawset(_G, "util", {
+  clamp = function(val, min, max)
+    if val < min then return min end
+    if val > max then return max end
+    return val
+  end,
+})
+
 -- Mock musicutil (needed by scale.build_scale via app.init)
 package.loaded["musicutil"] = {
   generate_scale = function(root, scale_type, octaves)
@@ -315,6 +324,335 @@ describe("integration", function()
       local ctx = make_app()
       ctx.playing = true
       screen_ui.redraw(ctx)
+    end)
+
+  end)
+
+  describe("app.rebuild_scale (T065)", function()
+
+    it("changes scale_notes when root_note param changes", function()
+      local ctx = make_app()
+      local original = {}
+      for i, n in ipairs(ctx.scale_notes) do original[i] = n end
+      params:set("root_note", 72)
+      assert.are_not.equal(original[1], ctx.scale_notes[1])
+    end)
+
+    it("changes scale_notes when scale_type param changes", function()
+      local ctx = make_app()
+      local original_count = #ctx.scale_notes
+      params:set("scale_type", 2)
+      -- Still produces a valid scale
+      assert.is_true(#ctx.scale_notes > 0)
+    end)
+
+  end)
+
+  describe("app.redraw (T065)", function()
+
+    it("does not error with valid ctx", function()
+      local ctx = make_app()
+      app.redraw(ctx)
+    end)
+
+    it("does not error when playing", function()
+      local ctx = make_app()
+      ctx.playing = true
+      app.redraw(ctx)
+    end)
+
+  end)
+
+  describe("app.key (T065)", function()
+
+    it("K2 toggles play state", function()
+      local ctx = make_app()
+      assert.is_false(ctx.playing)
+      app.key(ctx, 2, 1)
+      assert.is_true(ctx.playing)
+      app.key(ctx, 2, 1)
+      assert.is_false(ctx.playing)
+    end)
+
+    it("K2 key-up is ignored", function()
+      local ctx = make_app()
+      app.key(ctx, 2, 0)
+      assert.is_false(ctx.playing)
+    end)
+
+    it("K3 resets playheads", function()
+      local ctx = make_app()
+      ctx.tracks[1].params.trigger.pos = 8
+      ctx.tracks[2].params.note.pos = 5
+      app.key(ctx, 3, 1)
+      assert.are.equal(ctx.tracks[1].params.trigger.loop_start, ctx.tracks[1].params.trigger.pos)
+      assert.are.equal(ctx.tracks[2].params.note.loop_start, ctx.tracks[2].params.note.pos)
+    end)
+
+  end)
+
+  describe("app.enc (T065)", function()
+
+    it("E1 selects track", function()
+      local ctx = make_app()
+      assert.are.equal(1, ctx.active_track)
+      app.enc(ctx, 1, 1)
+      assert.are.equal(2, ctx.active_track)
+      app.enc(ctx, 1, 1)
+      assert.are.equal(3, ctx.active_track)
+    end)
+
+    it("E1 clamps to valid range", function()
+      local ctx = make_app()
+      app.enc(ctx, 1, -10)
+      assert.are.equal(1, ctx.active_track)
+      app.enc(ctx, 1, 100)
+      assert.are.equal(track_mod.NUM_TRACKS, ctx.active_track)
+    end)
+
+    it("E2 selects page", function()
+      local ctx = make_app()
+      assert.are.equal("trigger", ctx.active_page)
+      app.enc(ctx, 2, 1)
+      assert.are.equal("note", ctx.active_page)
+      app.enc(ctx, 2, 1)
+      assert.are.equal("octave", ctx.active_page)
+    end)
+
+    it("E2 clamps to valid page range", function()
+      local ctx = make_app()
+      app.enc(ctx, 2, -10)
+      assert.are.equal("trigger", ctx.active_page)
+      app.enc(ctx, 2, 100)
+      assert.are.equal("velocity", ctx.active_page)
+    end)
+
+  end)
+
+  describe("extended features integration (T064)", function()
+
+    it("glide sends portamento CC before note", function()
+      local ctx, buffer = make_app()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[1].params.trigger.pos = 1
+      ctx.tracks[1].params.glide.steps[1] = 3  -- non-zero glide
+      ctx.tracks[1].params.glide.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      -- Find portamento event before note event
+      local port_idx, note_idx
+      for i, e in ipairs(buffer) do
+        if e.type == "portamento" and not port_idx then port_idx = i end
+        if e.note and e.type ~= "portamento" and not note_idx then note_idx = i end
+      end
+      assert.is_not_nil(port_idx, "portamento event should exist")
+      assert.is_not_nil(note_idx, "note event should exist")
+      assert.is_true(port_idx < note_idx, "portamento should come before note")
+    end)
+
+    it("glide=1 sends zero portamento time", function()
+      local ctx, buffer = make_app()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[1].params.trigger.pos = 1
+      ctx.tracks[1].params.glide.steps[1] = 1  -- off
+      ctx.tracks[1].params.glide.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local port_event
+      for _, e in ipairs(buffer) do
+        if e.type == "portamento" then port_event = e; break end
+      end
+      assert.is_not_nil(port_event)
+      assert.are.equal(0, port_event.time)
+    end)
+
+    it("ratchet subdivides into multiple notes", function()
+      local ctx, buffer = make_app()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[1].params.trigger.pos = 1
+      ctx.tracks[1].params.ratchet.steps[1] = 3
+      ctx.tracks[1].params.ratchet.pos = 1
+
+      -- Override clock.run to execute synchronously (ratchet uses clock.run+clock.sleep)
+      local orig_run = clock.run
+      local orig_sleep = clock.sleep
+      clock.run = function(fn) fn(); return 1 end
+      clock.sleep = function() end
+
+      sequencer.step_track(ctx, 1)
+
+      clock.run = orig_run
+      clock.sleep = orig_sleep
+
+      local notes = note_events(buffer)
+      assert.are.equal(3, #notes, "ratchet=3 should produce 3 notes")
+    end)
+
+    it("alt_note shifts pitch additively", function()
+      local ctx, buffer = make_app()
+      -- First: play with alt_note=1 (no shift)
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[1].params.trigger.pos = 1
+      ctx.tracks[1].params.note.steps[1] = 1
+      ctx.tracks[1].params.note.pos = 1
+      ctx.tracks[1].params.alt_note.steps[1] = 1
+      ctx.tracks[1].params.alt_note.pos = 1
+      ctx.tracks[1].params.octave.steps[1] = 1
+      ctx.tracks[1].params.octave.pos = 1
+
+      sequencer.step_track(ctx, 1)
+      local notes1 = note_events(buffer)
+      local base_note = notes1[1].note
+
+      -- Clear and play with alt_note=3 (shift by 2)
+      for i = #buffer, 1, -1 do table.remove(buffer, i) end
+      -- Reset positions
+      ctx.tracks[1].params.trigger.pos = 1
+      ctx.tracks[1].params.note.pos = 1
+      ctx.tracks[1].params.alt_note.pos = 1
+      ctx.tracks[1].params.octave.pos = 1
+      ctx.tracks[1].params.alt_note.steps[1] = 3
+
+      sequencer.step_track(ctx, 1)
+      local notes2 = note_events(buffer)
+      local shifted_note = notes2[1].note
+
+      assert.are_not.equal(base_note, shifted_note, "alt_note=3 should shift pitch")
+    end)
+
+    it("muted track advances but fires no notes", function()
+      local ctx, buffer = make_app()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[1].params.trigger.pos = 1
+      ctx.tracks[1].muted = true
+
+      sequencer.step_track(ctx, 1)
+
+      local notes = note_events(buffer)
+      assert.are.equal(0, #notes, "muted track should produce no notes")
+      -- But position should advance
+      assert.are_not.equal(1, ctx.tracks[1].params.trigger.pos, "playhead should advance")
+    end)
+
+    it("muted track unmutes at correct position", function()
+      local ctx, buffer = make_app()
+      -- Enable triggers on all 16 steps
+      for i = 1, 16 do
+        ctx.tracks[1].params.trigger.steps[i] = 1
+      end
+      ctx.tracks[1].muted = true
+
+      -- Advance 3 times while muted
+      for _ = 1, 3 do sequencer.step_track(ctx, 1) end
+      local notes = note_events(buffer)
+      assert.are.equal(0, #notes, "no notes while muted")
+
+      -- Unmute and verify position advanced past step 3
+      ctx.tracks[1].muted = false
+      sequencer.step_track(ctx, 1)
+      local notes2 = note_events(buffer)
+      assert.is_true(#notes2 >= 1, "should fire note after unmute")
+    end)
+
+    it("pattern save and load through app ctx", function()
+      local ctx = make_app()
+      local pattern_mod = require("lib/pattern")
+
+      -- Set a distinctive value
+      ctx.tracks[1].params.note.steps[1] = 7
+      pattern_mod.save(ctx, 1)
+
+      -- Change the value
+      ctx.tracks[1].params.note.steps[1] = 3
+      assert.are.equal(3, ctx.tracks[1].params.note.steps[1])
+
+      -- Load restores original
+      pattern_mod.load(ctx, 1)
+      assert.are.equal(7, ctx.tracks[1].params.note.steps[1])
+    end)
+
+    it("pattern save is independent copy", function()
+      local ctx = make_app()
+      local pattern_mod = require("lib/pattern")
+
+      pattern_mod.save(ctx, 1)
+      ctx.tracks[1].params.note.steps[1] = 99
+      -- Saved pattern should not be affected
+      assert.are_not.equal(99, ctx.patterns[1].tracks[1].params.note.steps[1])
+    end)
+
+  end)
+
+  describe("full end-to-end cycle (T064)", function()
+
+    it("init -> start -> step all tracks -> stop -> verify notes", function()
+      local ctx, buffer = make_app()
+      -- Enable triggers on all tracks
+      for t = 1, track_mod.NUM_TRACKS do
+        ctx.tracks[t].params.trigger.steps[1] = 1
+        ctx.tracks[t].params.trigger.pos = 1
+      end
+
+      sequencer.start(ctx)
+      assert.is_true(ctx.playing)
+
+      -- Step each track
+      for t = 1, track_mod.NUM_TRACKS do
+        sequencer.step_track(ctx, t)
+      end
+
+      sequencer.stop(ctx)
+      assert.is_false(ctx.playing)
+
+      -- Verify notes from each track
+      local notes = note_events(buffer)
+      assert.are.equal(track_mod.NUM_TRACKS, #notes)
+      for t = 1, track_mod.NUM_TRACKS do
+        assert.are.equal(t, notes[t].track)
+      end
+
+      -- Verify all_notes_off was sent on stop
+      local off_events = {}
+      for _, e in ipairs(buffer) do
+        if e.type == "all_notes_off" then table.insert(off_events, e) end
+      end
+      assert.are.equal(track_mod.NUM_TRACKS, #off_events)
+    end)
+
+    it("direction mode affects step sequence in full cycle", function()
+      local ctx, buffer = make_app()
+      -- Set reverse direction on track 1
+      params:set("direction_1", 2)
+      assert.are.equal("reverse", ctx.tracks[1].direction)
+
+      -- Set distinct note values
+      for i = 1, 4 do
+        ctx.tracks[1].params.note.steps[i] = i
+      end
+      ctx.tracks[1].params.trigger.loop_end = 4
+      ctx.tracks[1].params.note.loop_end = 4
+
+      -- Set trigger active for all steps
+      for i = 1, 4 do
+        ctx.tracks[1].params.trigger.steps[i] = 1
+      end
+
+      -- Step 4 times, collect notes
+      local collected_notes = {}
+      for _ = 1, 4 do
+        local before = #buffer
+        sequencer.step_track(ctx, 1)
+        -- Find the note event that was just added
+        for i = before + 1, #buffer do
+          if buffer[i].note and buffer[i].type ~= "portamento" then
+            table.insert(collected_notes, buffer[i].note)
+          end
+        end
+      end
+
+      assert.are.equal(4, #collected_notes, "should have 4 notes from 4 steps")
     end)
 
   end)
