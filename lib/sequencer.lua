@@ -46,7 +46,7 @@ function M.track_clock(ctx, track_num)
   while ctx.playing do
     local div = M.DIVISION_MAP[track.division] or M.DIVISION_MAP[1]
     clock.sync(div)
-    if ctx.playing and not track.muted then
+    if ctx.playing then
       M.step_track(ctx, track_num)
     end
   end
@@ -54,14 +54,14 @@ end
 
 function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
-  -- advance all params independently
+  -- advance all params independently (even when muted)
   local vals = {}
   for _, name in ipairs(track_mod.PARAM_NAMES) do
     vals[name] = track_mod.advance(track.params[name])
   end
 
-  -- fire note on trigger
-  if vals.trigger == 1 then
+  -- fire note on trigger (suppress when muted)
+  if not track.muted and vals.trigger == 1 then
     local midi_note = scale_mod.to_midi(vals.note, vals.octave, ctx.scale_notes)
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
     local velocity = track_mod.VELOCITY_MAP[vals.velocity] or track_mod.VELOCITY_MAP[4]

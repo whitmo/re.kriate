@@ -262,4 +262,67 @@ describe("sequencer", function()
 
   end)
 
+  describe("muted track advancement (US9)", function()
+
+    it("advances all param playheads when muted", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.muted = true
+
+      -- Record starting positions
+      local start_positions = {}
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        track.params[name].pos = 1
+        start_positions[name] = 1
+      end
+
+      sequencer.step_track(ctx, 1)
+
+      -- All params should have advanced even though muted
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        assert.are_not.equal(track.params[name].pos, start_positions[name],
+          name .. " should have advanced on muted track")
+      end
+    end)
+
+    it("fires no notes when muted", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.muted = true
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local events = ctx.voices[1]:get_events()
+      assert.are.equal(#events, 0, "muted track should fire no notes")
+    end)
+
+    it("resumes at correct position after unmute", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+
+      -- Step while muted 4 times
+      track.muted = true
+      for _ = 1, 4 do
+        sequencer.step_track(ctx, 1)
+      end
+
+      -- Record positions after muted advancement
+      local muted_positions = {}
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        muted_positions[name] = track.params[name].pos
+      end
+
+      -- Unmute and step - should fire from current position
+      track.muted = false
+      track.params.trigger.steps[muted_positions.trigger] = 1
+      sequencer.step_track(ctx, 1)
+
+      local events = ctx.voices[1]:get_events()
+      assert.are.equal(#events, 1, "unmuted track should fire notes")
+    end)
+
+  end)
+
 end)
