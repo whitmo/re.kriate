@@ -696,6 +696,211 @@ describe("grid_ui", function()
 
   end)
 
+  describe("extended page grid display (T048/T050/T052)", function()
+
+    describe("glide page (T048)", function()
+
+      it("displays bar graph for glide param via draw_value_page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        ctx.tracks[1].params.glide.steps[1] = 5
+        ctx.tracks[1].params.glide.loop_start = 1
+        ctx.tracks[1].params.glide.loop_end = 16
+        grid_ui.draw_value_page(ctx, g, "glide")
+        -- Value 5 at row 3 (8-5=3), brightness 10 in loop
+        assert.are.equal(led_at(g, 1, 3), 10)
+        -- Bar below: rows 4-7 at brightness 3
+        for y = 4, 7 do
+          assert.are.equal(led_at(g, 1, y), 3, "row " .. y .. " should be bar")
+        end
+        -- Above value: rows 1-2 should be off
+        assert.are.equal(led_at(g, 1, 1), 0)
+        assert.are.equal(led_at(g, 1, 2), 0)
+      end)
+
+      it("shows playhead brightness on glide page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.playing = true
+        ctx.active_track = 1
+        ctx.tracks[1].params.glide.steps[4] = 3
+        ctx.tracks[1].params.glide.pos = 4
+        grid_ui.draw_value_page(ctx, g, "glide")
+        -- Value 3 at row 5 (8-3=5), playhead -> brightness 15
+        assert.are.equal(led_at(g, 4, 5), 15)
+        -- Bar below playhead: rows 6-7 at brightness 6
+        assert.are.equal(led_at(g, 4, 6), 6)
+        assert.are.equal(led_at(g, 4, 7), 6)
+      end)
+
+      it("shows dim value outside loop on glide page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        ctx.tracks[1].params.glide.steps[10] = 4
+        ctx.tracks[1].params.glide.loop_start = 1
+        ctx.tracks[1].params.glide.loop_end = 8
+        grid_ui.draw_value_page(ctx, g, "glide")
+        -- Step 10 outside loop, value 4 at row 4 -> brightness 4
+        assert.are.equal(led_at(g, 10, 4), 4)
+      end)
+
+      it("redraw dispatches glide page correctly", function()
+        local ctx = make_ctx()
+        ctx.active_page = "glide"
+        ctx.active_track = 1
+        ctx.tracks[1].params.glide.steps[1] = 6
+        ctx.tracks[1].params.glide.loop_start = 1
+        ctx.tracks[1].params.glide.loop_end = 16
+        grid_ui.redraw(ctx)
+        -- Value 6 at row 2 (8-6=2) should be lit
+        assert.are.equal(led_at(ctx.g, 1, 2), 10)
+      end)
+
+    end)
+
+    describe("ratchet page (T050)", function()
+
+      it("displays bar graph for ratchet param via draw_value_page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        ctx.tracks[1].params.ratchet.steps[1] = 3
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 16
+        grid_ui.draw_value_page(ctx, g, "ratchet")
+        -- Value 3 at row 5 (8-3=5), brightness 10 in loop
+        assert.are.equal(led_at(g, 1, 5), 10)
+        -- Bar below: rows 6-7 at brightness 3
+        assert.are.equal(led_at(g, 1, 6), 3)
+        assert.are.equal(led_at(g, 1, 7), 3)
+        -- Above value: rows 1-4 should be off
+        for y = 1, 4 do
+          assert.are.equal(led_at(g, 1, y), 0, "row " .. y .. " should be off")
+        end
+      end)
+
+      it("shows playhead brightness on ratchet page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.playing = true
+        ctx.active_track = 2
+        ctx.tracks[2].params.ratchet.steps[7] = 5
+        ctx.tracks[2].params.ratchet.pos = 7
+        grid_ui.draw_value_page(ctx, g, "ratchet")
+        -- Value 5 at row 3 (8-5=3), playhead -> brightness 15
+        assert.are.equal(led_at(g, 7, 3), 15)
+        -- Bar below playhead: rows 4-7 at brightness 6
+        for y = 4, 7 do
+          assert.are.equal(led_at(g, 7, y), 6, "row " .. y .. " should be playhead bar")
+        end
+      end)
+
+      it("ratchet default value 1 lights only row 7", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        -- Default ratchet is 1
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 16
+        grid_ui.draw_value_page(ctx, g, "ratchet")
+        -- Value 1 at row 7, brightness 10
+        assert.are.equal(led_at(g, 1, 7), 10)
+        -- All rows above off
+        for y = 1, 6 do
+          assert.are.equal(led_at(g, 1, y), 0, "row " .. y .. " should be off for ratchet=1")
+        end
+      end)
+
+      it("redraw dispatches ratchet page correctly", function()
+        local ctx = make_ctx()
+        ctx.active_page = "ratchet"
+        ctx.active_track = 1
+        ctx.tracks[1].params.ratchet.steps[2] = 4
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 16
+        grid_ui.redraw(ctx)
+        -- Value 4 at row 4 (8-4=4) should be lit
+        assert.are.equal(led_at(ctx.g, 2, 4), 10)
+      end)
+
+    end)
+
+    describe("alt_note page (T052)", function()
+
+      it("displays bar graph for alt_note param via draw_value_page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        ctx.tracks[1].params.alt_note.steps[1] = 6
+        ctx.tracks[1].params.alt_note.loop_start = 1
+        ctx.tracks[1].params.alt_note.loop_end = 16
+        grid_ui.draw_value_page(ctx, g, "alt_note")
+        -- Value 6 at row 2 (8-6=2), brightness 10 in loop
+        assert.are.equal(led_at(g, 1, 2), 10)
+        -- Bar below: rows 3-7 at brightness 3
+        for y = 3, 7 do
+          assert.are.equal(led_at(g, 1, y), 3, "row " .. y .. " should be bar")
+        end
+        -- Above value: row 1 should be off
+        assert.are.equal(led_at(g, 1, 1), 0)
+      end)
+
+      it("shows playhead brightness on alt_note page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.playing = true
+        ctx.active_track = 1
+        ctx.tracks[1].params.alt_note.steps[3] = 2
+        ctx.tracks[1].params.alt_note.pos = 3
+        grid_ui.draw_value_page(ctx, g, "alt_note")
+        -- Value 2 at row 6 (8-2=6), playhead -> brightness 15
+        assert.are.equal(led_at(g, 3, 6), 15)
+        -- Bar below playhead: row 7 at brightness 6
+        assert.are.equal(led_at(g, 3, 7), 6)
+      end)
+
+      it("alt_note default value 1 lights only row 7", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        -- Default alt_note is 1
+        ctx.tracks[1].params.alt_note.loop_start = 1
+        ctx.tracks[1].params.alt_note.loop_end = 16
+        grid_ui.draw_value_page(ctx, g, "alt_note")
+        -- Value 1 at row 7, brightness 10
+        assert.are.equal(led_at(g, 1, 7), 10)
+        -- All rows above off
+        for y = 1, 6 do
+          assert.are.equal(led_at(g, 1, y), 0, "row " .. y .. " should be off for alt_note=1")
+        end
+      end)
+
+      it("redraw dispatches alt_note page correctly", function()
+        local ctx = make_ctx()
+        ctx.active_page = "alt_note"
+        ctx.active_track = 1
+        ctx.tracks[1].params.alt_note.steps[5] = 7
+        ctx.tracks[1].params.alt_note.loop_start = 1
+        ctx.tracks[1].params.alt_note.loop_end = 16
+        grid_ui.redraw(ctx)
+        -- Value 7 at row 1 (8-7=1) should be lit
+        assert.are.equal(led_at(ctx.g, 5, 1), 10)
+      end)
+
+      it("value editing works on alt_note page", function()
+        local ctx = make_ctx()
+        ctx.active_page = "alt_note"
+        ctx.active_track = 1
+        grid_ui.grid_key(ctx, 5, 3, 1) -- step 5, row 3 = value 5
+        assert.are.equal(ctx.tracks[1].params.alt_note.steps[5], 5)
+      end)
+
+    end)
+
+  end)
+
   describe("loop_key", function()
 
     it("first press sets loop_first_press", function()
