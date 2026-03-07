@@ -18,9 +18,9 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 -- Nav row (row 8) layout:
 -- x=1-4: track select
--- x=6: trigger page
--- x=7: note page
--- x=8: octave page
+-- x=6: trigger page (double-tap: ratchet)
+-- x=7: note page (double-tap: alt_note)
+-- x=8: octave page (double-tap: glide)
 -- x=9: duration page
 -- x=10: velocity page
 -- x=12: loop modifier (hold)
@@ -30,6 +30,11 @@ local NAV_TRACK = {1, 2, 3, 4} -- @@ unused
 local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration", [10] = "velocity"}
 local NAV_LOOP = 12
 local NAV_PLAY = 16
+
+-- Extended pages: primary -> extended mapping (double-tap toggle)
+local EXTENDED_PAGE = {trigger = "ratchet", note = "alt_note", octave = "glide"}
+-- Reverse lookup: extended -> primary
+local EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 function M.redraw(ctx)
   local g = ctx.g
