@@ -40,6 +40,14 @@ function M.new(track_num, shared_buffer)
 
     all_notes_off = function(self) end,
 
+    set_portamento = function(self, time)
+      table.insert(self.events, {
+        track = self.track_num,
+        type = "portamento",
+        time = time,
+      })
+    end,
+
     get_events = function(self)
       local result = {}
       for _, e in ipairs(self.events) do
