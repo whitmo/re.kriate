@@ -191,6 +191,27 @@ describe("recorder voice", function()
     end)
   end)
 
+  describe("set_portamento", function()
+    it("captures portamento event", function()
+      local voice = recorder.new(1)
+      voice:set_portamento(3)
+      local events = voice:get_events()
+      assert.are.equal(1, #events)
+      assert.are.equal("portamento", events[1].type)
+      assert.are.equal(3, events[1].time)
+      assert.are.equal(1, events[1].track)
+    end)
+
+    it("captures zero portamento", function()
+      local voice = recorder.new(1)
+      voice:set_portamento(0)
+      local events = voice:get_events()
+      assert.are.equal(1, #events)
+      assert.are.equal("portamento", events[1].type)
+      assert.are.equal(0, events[1].time)
+    end)
+  end)
+
 end)
 
 describe("midi voice", function()
@@ -376,6 +397,68 @@ describe("midi voice", function()
       assert.are.equal(dev.calls[1].type, "note_off")
       assert.are.equal(dev.calls[1].note, 60)
       assert.is_nil(voice.active_notes[1 * 128 + 60])
+    end)
+  end)
+
+  describe("set_portamento", function()
+    it("sends CC 65 on + CC 5 for positive time", function()
+      voice:set_portamento(4)
+      assert.are.equal(2, #dev.calls)
+      -- CC 65 = 127 (portamento on)
+      assert.are.equal("cc", dev.calls[1].type)
+      assert.are.equal(65, dev.calls[1].num)
+      assert.are.equal(127, dev.calls[1].val)
+      assert.are.equal(1, dev.calls[1].ch)
+      -- CC 5 = portamento time
+      assert.are.equal("cc", dev.calls[2].type)
+      assert.are.equal(5, dev.calls[2].num)
+      assert.are.equal(1, dev.calls[2].ch)
+    end)
+
+    it("sends CC 65 off for zero time", function()
+      voice:set_portamento(0)
+      assert.are.equal(1, #dev.calls)
+      assert.are.equal("cc", dev.calls[1].type)
+      assert.are.equal(65, dev.calls[1].num)
+      assert.are.equal(0, dev.calls[1].val)
+      assert.are.equal(1, dev.calls[1].ch)
+    end)
+
+    it("sends CC 65 off for nil time", function()
+      voice:set_portamento(nil)
+      assert.are.equal(1, #dev.calls)
+      assert.are.equal("cc", dev.calls[1].type)
+      assert.are.equal(65, dev.calls[1].num)
+      assert.are.equal(0, dev.calls[1].val)
+      assert.are.equal(1, dev.calls[1].ch)
+    end)
+
+    it("maps time values to CC range", function()
+      -- time=1 -> CC 5 = 0
+      voice:set_portamento(1)
+      assert.are.equal(0, dev.calls[2].val)
+
+      -- Clear calls
+      for i = #dev.calls, 1, -1 do table.remove(dev.calls, i) end
+
+      -- time=7 -> CC 5 = 127
+      voice:set_portamento(7)
+      assert.are.equal(127, dev.calls[2].val)
+
+      -- Clear calls
+      for i = #dev.calls, 1, -1 do table.remove(dev.calls, i) end
+
+      -- time=4 -> CC 5 = floor((4-1)*127/6) = floor(63.5) = 63
+      voice:set_portamento(4)
+      assert.are.equal(63, dev.calls[2].val)
+    end)
+
+    it("uses the configured channel", function()
+      local dev3 = mock_midi_dev()
+      local voice3 = midi_voice.new(dev3, 3)
+      voice3:set_portamento(5)
+      assert.are.equal(3, dev3.calls[1].ch)
+      assert.are.equal(3, dev3.calls[2].ch)
     end)
   end)
 
