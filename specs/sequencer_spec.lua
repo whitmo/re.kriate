@@ -457,6 +457,7 @@ describe("sequencer", function()
 
   end)
 
+<<<<<<< HEAD
   describe("alt-note", function()
 
     it("alt_note value 1 does not alter the note degree", function()
