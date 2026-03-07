@@ -7,7 +7,9 @@
 
 local app = require("lib/app")
 local midi_voice = require("lib/voices/midi")
+local sprite_voice = require("lib/voices/sprite")
 local screen_ui = require("lib/seamstress/screen_ui")
+local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
 local track_mod = require("lib/track")
 
@@ -23,6 +25,12 @@ function init()
     voices[t] = midi_voice.new(midi_dev, t)
   end
 
+  -- Sprite voices (additive visual output, one per track)
+  local sprite_voices = {}
+  for t = 1, track_mod.NUM_TRACKS do
+    sprite_voices[t] = sprite_voice.new(t)
+  end
+
   -- MIDI channel params
   params:add_separator("midi_config", "MIDI")
   for t = 1, track_mod.NUM_TRACKS do
@@ -34,6 +42,7 @@ function init()
 
   ctx = app.init({
     voices = voices,
+    sprite_voices = sprite_voices,
     screen_mod = screen_ui,
   })
 
@@ -44,7 +53,7 @@ function init()
 
   -- Screen refresh metro
   ctx.screen_metro = metro.init()
-  ctx.screen_metro.time = 1 / 15
+  ctx.screen_metro.time = 1 / 30
   ctx.screen_metro.event = function()
     redraw()
   end
@@ -52,7 +61,14 @@ function init()
 end
 
 function redraw()
-  screen_ui.redraw(ctx)
+  screen.clear()
+  -- Black canvas background
+  screen.color(0, 0, 0, 255)
+  screen.move(1, 1)
+  screen.rect_fill(256, 128)
+  -- Sprites on top
+  sprite_render.draw(ctx)
+  screen.refresh()
 end
 
 function cleanup()
