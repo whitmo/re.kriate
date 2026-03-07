@@ -30,6 +30,7 @@ function M.init(config)
     grid_dirty = true,
     scale_notes = {},
     voices = config.voices or {},
+    sprite_voices = config.sprite_voices,
     patterns = pattern.new_slots(),
   }
 
@@ -143,6 +144,11 @@ function M.cleanup(ctx)
   if ctx.voices then
     for _, voice in ipairs(ctx.voices) do
       voice:all_notes_off()
+    end
+  end
+  if ctx.sprite_voices then
+    for _, sv in ipairs(ctx.sprite_voices) do
+      sv:all_notes_off()
     end
   end
   if ctx.grid_metro then

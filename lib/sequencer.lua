@@ -61,6 +61,15 @@ function M.stop(ctx)
       end
     end
   end
+  -- clear all sprite voices
+  if ctx.sprite_voices then
+    for t = 1, track_mod.NUM_TRACKS do
+      local sv = ctx.sprite_voices[t]
+      if sv and sv.all_notes_off then
+        sv:all_notes_off()
+      end
+    end
+  end
 end
 
 function M.track_clock(ctx, track_num)
@@ -112,6 +121,9 @@ function M.step_track(ctx, track_num)
     else
       M.play_note(ctx, track_num, midi_note, velocity, duration)
     end
+
+    -- sprite voice: fire with raw kria vals (additive, alongside audio)
+    M.play_sprite(ctx, track_num, vals, duration)
   end
 
   -- request grid redraw
@@ -122,6 +134,13 @@ function M.play_note(ctx, track_num, note, velocity, duration)
   local voice = ctx.voices and ctx.voices[track_num]
   if voice then
     voice:play_note(note, velocity, duration)
+  end
+end
+
+function M.play_sprite(ctx, track_num, vals, duration)
+  local sv = ctx.sprite_voices and ctx.sprite_voices[track_num]
+  if sv then
+    sv:play(vals, duration)
   end
 end
 
