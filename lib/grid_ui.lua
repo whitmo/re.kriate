@@ -8,8 +8,13 @@ local track_mod = require("lib/track")
 
 local M = {}
 
--- Page names matching track_mod.PARAM_NAMES
-M.PAGES = {"trigger", "note", "octave", "duration", "velocity"}
+-- Page names (primary + extended)
+M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
+
+-- Extended page mappings: primary -> extended
+M.EXTENDED_PAGES = {trigger = "ratchet", note = "alt_note", octave = "glide"}
+-- Reverse: extended -> primary
+M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 -- Nav row (row 8) layout:
 -- x=1-4: track select
@@ -36,6 +41,7 @@ function M.redraw(ctx)
   if page == "trigger" then
     M.draw_trigger_page(ctx, g)
   else
+    -- All other pages (including extended: ratchet, alt_note, glide) use value display
     M.draw_value_page(ctx, g, page)
   end
 
@@ -103,9 +109,10 @@ function M.draw_nav(ctx, g)
   for i = 1, 4 do
     g:led(i, y, i == ctx.active_track and 12 or 3)
   end
-  -- page select
+  -- page select (highlight correct button even when on extended page)
+  local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
   for x, page in pairs(NAV_PAGE) do
-    g:led(x, y, page == ctx.active_page and 12 or 3)
+    g:led(x, y, page == active_primary and 12 or 3)
   end
   -- loop modifier
   g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
@@ -126,9 +133,22 @@ function M.nav_key(ctx, x, z)
   if x >= 1 and x <= 4 and z == 1 then
     ctx.active_track = x
   end
-  -- page select
+  -- page select with extended page toggle
   if NAV_PAGE[x] and z == 1 then
-    ctx.active_page = NAV_PAGE[x]
+    local target_page = NAV_PAGE[x]
+    if ctx.active_page == target_page then
+      -- Same button pressed: toggle to extended page if one exists
+      if M.EXTENDED_PAGES[target_page] then
+        ctx.active_page = M.EXTENDED_PAGES[target_page]
+      end
+      -- If no extended page (duration, velocity), stay on same page
+    elseif M.EXTENDED_REVERSE[ctx.active_page] == target_page then
+      -- Currently on extended page, pressing its primary button: toggle back
+      ctx.active_page = target_page
+    else
+      -- Different page button: switch to primary page (clear extended)
+      ctx.active_page = target_page
+    end
   end
   -- loop modifier (hold)
   if x == NAV_LOOP then
