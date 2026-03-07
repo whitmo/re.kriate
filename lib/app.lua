@@ -5,6 +5,7 @@ local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
 local sequencer = require("lib/sequencer")
 local grid_ui = require("lib/grid_ui")
+local pattern = require("lib/pattern")
 
 local M = {}
 
@@ -28,6 +29,7 @@ function M.init(config)
     grid_dirty = true,
     scale_notes = {},
     voices = config.voices or {},
+    patterns = pattern.new_slots(),
   }
 
   -- params: scale

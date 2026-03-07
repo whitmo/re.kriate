@@ -13,12 +13,14 @@ rawset(_G, "clock", {
 })
 
 local track_mod = require("lib/track")
+local pattern = require("lib/pattern")
 local keyboard = require("lib/seamstress/keyboard")
 
 -- Helper: create a minimal ctx
 local function make_ctx()
   return {
     tracks = track_mod.new_tracks(),
+    patterns = pattern.new_slots(),
     active_track = 1,
     active_page = "trigger",
     playing = false,
@@ -120,6 +122,95 @@ describe("keyboard", function()
       local ctx = make_ctx()
       keyboard.key(ctx, "y", {}, false, 1)
       assert.are.equal(ctx.active_page, "velocity")
+    end)
+
+  end)
+
+  describe("pattern save (ctrl+number)", function()
+
+    it("ctrl+1 saves current tracks to pattern slot 1", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[2].division = 5
+
+      keyboard.key(ctx, "1", {ctrl = true}, false, 1)
+
+      assert.is_true(pattern.is_populated(ctx.patterns, 1))
+      assert.are.equal(1, ctx.patterns[1].tracks[1].params.trigger.steps[1])
+      assert.are.equal(5, ctx.patterns[1].tracks[2].division)
+    end)
+
+    it("ctrl+3 saves to slot 3 without changing active_track", function()
+      local ctx = make_ctx()
+      ctx.active_track = 2
+
+      keyboard.key(ctx, "3", {ctrl = true}, false, 1)
+
+      assert.is_true(pattern.is_populated(ctx.patterns, 3))
+      assert.are.equal(2, ctx.active_track) -- unchanged
+    end)
+
+    it("ctrl+9 saves to slot 9", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].division = 7
+
+      keyboard.key(ctx, "9", {ctrl = true}, false, 1)
+
+      assert.is_true(pattern.is_populated(ctx.patterns, 9))
+      assert.are.equal(7, ctx.patterns[9].tracks[1].division)
+    end)
+
+  end)
+
+  describe("pattern load (shift+number)", function()
+
+    it("shift+1 loads tracks from pattern slot 1", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[2].division = 5
+      pattern.save(ctx, 1)
+
+      -- modify current tracks
+      ctx.tracks[1].params.trigger.steps[1] = 0
+      ctx.tracks[2].division = 1
+
+      keyboard.key(ctx, "1", {shift = true}, false, 1)
+
+      assert.are.equal(1, ctx.tracks[1].params.trigger.steps[1])
+      assert.are.equal(5, ctx.tracks[2].division)
+    end)
+
+    it("shift+5 loads from slot 5 without changing active_track", function()
+      local ctx = make_ctx()
+      ctx.active_track = 3
+      ctx.tracks[1].division = 4
+      pattern.save(ctx, 5)
+      ctx.tracks[1].division = 1
+
+      keyboard.key(ctx, "5", {shift = true}, false, 1)
+
+      assert.are.equal(4, ctx.tracks[1].division)
+      assert.are.equal(3, ctx.active_track) -- unchanged
+    end)
+
+    it("shift+2 does nothing when slot is empty", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].division = 99
+
+      keyboard.key(ctx, "2", {shift = true}, false, 1)
+
+      assert.are.equal(99, ctx.tracks[1].division) -- unchanged
+    end)
+
+  end)
+
+  describe("modifier priority", function()
+
+    it("plain number still selects track (no modifier)", function()
+      local ctx = make_ctx()
+      keyboard.key(ctx, "3", {}, false, 1)
+      assert.are.equal(3, ctx.active_track)
+      assert.is_false(pattern.is_populated(ctx.patterns, 3))
     end)
 
   end)
