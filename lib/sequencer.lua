@@ -3,6 +3,7 @@
 
 local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
+local direction = require("lib/direction")
 
 local M = {}
 
@@ -57,7 +58,7 @@ function M.step_track(ctx, track_num)
   -- advance all params independently (even when muted)
   local vals = {}
   for _, name in ipairs(track_mod.PARAM_NAMES) do
-    vals[name] = track_mod.advance(track.params[name])
+    vals[name] = direction.advance(track.params[name], track.direction)
   end
 
   -- fire note on trigger (suppress when muted)

@@ -325,4 +325,119 @@ describe("sequencer", function()
 
   end)
 
+  describe("direction integration (US8)", function()
+
+    it("uses track.direction to advance params in reverse", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.direction = "reverse"
+
+      -- Set up a short loop 1-4 with known values, start at pos 4
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        track.params[name].loop_start = 1
+        track.params[name].loop_end = 4
+        track.params[name].pos = 4
+      end
+
+      -- Step once - reverse should move pos from 4 to 3
+      sequencer.step_track(ctx, 1)
+
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        assert.are.equal(3, track.params[name].pos,
+          name .. " should be at pos 3 after reverse step from 4")
+      end
+    end)
+
+    it("reverse direction produces descending step values", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.direction = "reverse"
+
+      -- Set trigger=1 everywhere, note steps = 1,2,3,4,5,6,7,8, loop 1-8
+      track.params.trigger.loop_start = 1
+      track.params.trigger.loop_end = 8
+      track.params.trigger.pos = 8
+      for i = 1, 8 do track.params.trigger.steps[i] = 1 end
+
+      track.params.note.loop_start = 1
+      track.params.note.loop_end = 8
+      track.params.note.pos = 8
+      for i = 1, 8 do track.params.note.steps[i] = i end
+
+      -- Also set octave/duration/velocity to fixed values so notes fire
+      for _, name in ipairs({"octave", "duration", "velocity"}) do
+        track.params[name].loop_start = 1
+        track.params[name].loop_end = 8
+        track.params[name].pos = 1
+      end
+
+      -- Collect note values from 8 steps
+      local note_vals = {}
+      for _ = 1, 8 do
+        local events_before = #ctx.voices[1]:get_events()
+        sequencer.step_track(ctx, 1)
+        local events_after = ctx.voices[1]:get_events()
+        if #events_after > events_before then
+          table.insert(note_vals, events_after[#events_after].note)
+        end
+      end
+
+      -- Note degree at pos 8=8, 7=7, ..., 1=1 (reverse order)
+      -- The first note should use degree 8, second degree 7, etc.
+      -- Verify descending: each note should be >= the next
+      assert.is_true(#note_vals > 0, "should have fired some notes")
+      for i = 1, #note_vals - 1 do
+        assert.is_true(note_vals[i] >= note_vals[i+1],
+          "note " .. i .. " (" .. note_vals[i] .. ") should be >= note " ..
+          (i+1) .. " (" .. note_vals[i+1] .. ") in reverse")
+      end
+    end)
+
+    it("pendulum direction bounces at loop boundaries", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.direction = "pendulum"
+
+      -- Short loop 1-4, start at pos 1
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        track.params[name].loop_start = 1
+        track.params[name].loop_end = 4
+        track.params[name].pos = 1
+        track.params[name].advancing_forward = true
+      end
+
+      -- Collect positions of trigger param over 8 steps
+      local positions = {}
+      for _ = 1, 8 do
+        table.insert(positions, track.params.trigger.pos)
+        sequencer.step_track(ctx, 1)
+      end
+
+      -- Pendulum: 1,2,3,4,3,2,1,2
+      assert.are.same({1, 2, 3, 4, 3, 2, 1, 2}, positions)
+    end)
+
+    it("forward direction behaves the same as before", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.direction = "forward"
+
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        track.params[name].loop_start = 1
+        track.params[name].loop_end = 4
+        track.params[name].pos = 1
+      end
+
+      local positions = {}
+      for _ = 1, 5 do
+        table.insert(positions, track.params.trigger.pos)
+        sequencer.step_track(ctx, 1)
+      end
+
+      -- Forward: 1,2,3,4,1
+      assert.are.same({1, 2, 3, 4, 1}, positions)
+    end)
+
+  end)
+
 end)
