@@ -1,0 +1,7 @@
+2026-03-07T07:42:03.506055Z  INFO ralph::loop_runner: I'm Ralph. Let's do this.
+2026-03-07T07:42:03.506124Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-07T07:42:03.506133Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-07T07:42:03.506137Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-07T07:42:03.506140Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-07T07:42:03.506414Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 7 closed) into prompt
+2026-03-07T07:42:03.562406Z  INFO ralph_core::event_loop: Wrapping up: max_iterations. 1 iterations in 0s. reason=max_iterations iterations=1 duration=0s
