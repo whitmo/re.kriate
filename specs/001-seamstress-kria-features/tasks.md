@@ -202,17 +202,17 @@
 
 ### Tests for US12 (Glide)
 
-- [ ] T048 [P] [US12] Write failing test: glide page displays bar graph for glide param in specs/grid_ui_spec.lua
+- [x] T048 [P] [US12] Write failing test: glide page displays bar graph for glide param in specs/grid_ui_spec.lua
 - [x] T049 [P] [US12] Write failing test: sequencer sends portamento CC before notes with non-zero glide in specs/sequencer_spec.lua
 
 ### Tests for US13 (Ratchet)
 
-- [ ] T050 [P] [US13] Write failing test: ratchet page displays bar graph for ratchet param in specs/grid_ui_spec.lua
+- [x] T050 [P] [US13] Write failing test: ratchet page displays bar graph for ratchet param in specs/grid_ui_spec.lua
 - [x] T051 [P] [US13] Write failing test: ratchet value 3 produces 3 evenly-spaced notes per step in specs/sequencer_spec.lua
 
 ### Tests for US14 (Alt-Note)
 
-- [ ] T052 [P] [US14] Write failing test: alt_note page displays bar graph for alt_note param in specs/grid_ui_spec.lua
+- [x] T052 [P] [US14] Write failing test: alt_note page displays bar graph for alt_note param in specs/grid_ui_spec.lua
 - [x] T053 [P] [US14] Write failing test: alt_note combines additively with note degree modulo scale length in specs/sequencer_spec.lua
 
 ### Implementation for US12-14
@@ -220,10 +220,10 @@
 - [x] T054 [US12] Add glide value handling to sequencer.step_track: call voice:set_portamento before play_note in lib/sequencer.lua
 - [x] T055 [US13] Add ratchet subdivision logic to sequencer.step_track: fire N notes via nested clock.run in lib/sequencer.lua (depends on T054)
 - [x] T056 [US14] Add alt_note additive pitch computation to sequencer.step_track in lib/sequencer.lua (depends on T055)
-- [ ] T057 [US12] Add draw_glide_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua
-- [ ] T058 [US13] Add draw_ratchet_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua
-- [ ] T059 [US14] Add draw_alt_note_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua
-- [ ] T060 [US12] Update grid_key to handle value editing on extended pages (ratchet, alt_note, glide) in lib/grid_ui.lua
+- [x] T057 [US12] Add draw_glide_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua — handled generically by draw_value_page
+- [x] T058 [US13] Add draw_ratchet_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua — handled generically by draw_value_page
+- [x] T059 [US14] Add draw_alt_note_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua — handled generically by draw_value_page
+- [x] T060 [US12] Update grid_key to handle value editing on extended pages (ratchet, alt_note, glide) in lib/grid_ui.lua — handled generically by value_key
 
 **Checkpoint**: All extended pages display, edit, and produce correct sequencer output.
 
@@ -243,9 +243,9 @@
 ### Implementation
 
 - [x] T063 [US11] Add extended page toggle logic (track last key, double-press detection) to lib/seamstress/keyboard.lua
-- [ ] T064 Run full integration test suite: init -> start -> step -> verify all features in specs/integration_spec.lua
-- [ ] T065 Verify 100% public function coverage: every public function in lib/ has at least one test
-- [ ] T066 Run quickstart.md validation: follow quickstart steps, verify app loads and operates correctly
+- [x] T064 Run full integration test suite: init -> start -> step -> verify all features in specs/integration_spec.lua
+- [x] T065 Verify 100% public function coverage: every public function in lib/ has at least one test
+- [x] T066 Run quickstart.md validation: follow quickstart steps, verify app loads and operates correctly
 
 **Checkpoint**: All features working. Full test coverage. Ready for merge.
 
