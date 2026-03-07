@@ -79,17 +79,17 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T021 [P] [US11] Write failing test: press trigger page key twice toggles to ratchet in specs/grid_ui_spec.lua
-- [ ] T022 [P] [US11] Write failing test: press ratchet key again toggles back to trigger in specs/grid_ui_spec.lua
-- [ ] T023 [P] [US11] Write failing test: switching to different page clears extended state in specs/grid_ui_spec.lua
-- [ ] T024 [P] [US11] Write failing test: note double-press toggles to alt_note, octave to glide in specs/grid_ui_spec.lua
-- [ ] T025 [P] [US11] Write failing test: duration/velocity have no extended page (no toggle) in specs/grid_ui_spec.lua
+- [x] T021 [P] [US11] Write failing test: press trigger page key twice toggles to ratchet in specs/grid_ui_spec.lua
+- [x] T022 [P] [US11] Write failing test: press ratchet key again toggles back to trigger in specs/grid_ui_spec.lua
+- [x] T023 [P] [US11] Write failing test: switching to different page clears extended state in specs/grid_ui_spec.lua
+- [x] T024 [P] [US11] Write failing test: note double-press toggles to alt_note, octave to glide in specs/grid_ui_spec.lua
+- [x] T025 [P] [US11] Write failing test: duration/velocity have no extended page (no toggle) in specs/grid_ui_spec.lua
 
 ### Implementation for US11
 
-- [ ] T026 [US11] Add EXTENDED_PAGES map and extended_page toggle logic to nav_key in lib/grid_ui.lua
-- [ ] T027 [US11] Add extended_page field to ctx initialization in lib/app.lua
-- [ ] T028 [US11] Update redraw() to dispatch to extended page draw functions in lib/grid_ui.lua
+- [x] T026 [US11] Add EXTENDED_PAGES map and extended_page toggle logic to nav_key in lib/grid_ui.lua
+- [x] T027 [US11] Add extended_page field to ctx initialization in lib/app.lua
+- [x] T028 [US11] Update redraw() to dispatch to extended page draw functions in lib/grid_ui.lua
 
 **Checkpoint**: Extended page toggle works on grid. Root cause of "secondary pages don't work" resolved.
 
@@ -143,13 +143,13 @@
 
 ### Tests for US8
 
-- [ ] T037 [P] [US8] Write failing test: sequencer uses direction.advance for non-forward tracks in specs/sequencer_spec.lua
-- [ ] T038 [P] [US8] Write failing test: reverse direction produces 8,7,6,5,4,3,2,1 sequence in specs/sequencer_spec.lua
-- [ ] T039 [P] [US8] Write failing test: pendulum direction bounces at loop boundaries in specs/sequencer_spec.lua
+- [x] T037 [P] [US8] Write failing test: sequencer uses direction.advance for non-forward tracks in specs/sequencer_spec.lua
+- [x] T038 [P] [US8] Write failing test: reverse direction produces 8,7,6,5,4,3,2,1 sequence in specs/sequencer_spec.lua
+- [x] T039 [P] [US8] Write failing test: pendulum direction bounces at loop boundaries in specs/sequencer_spec.lua
 
 ### Implementation for US8
 
-- [ ] T040 [US8] Integrate direction.advance() into sequencer.step_track for all param advances in lib/sequencer.lua
+- [x] T040 [US8] Integrate direction.advance() into sequencer.step_track for all param advances in lib/sequencer.lua
 - [ ] T041 [US8] Add direction mode selection to params (per-track) in lib/app.lua
 
 **Checkpoint**: Direction modes work end-to-end. Forward/reverse/pendulum/drunk/random all verified.
@@ -203,23 +203,23 @@
 ### Tests for US12 (Glide)
 
 - [ ] T048 [P] [US12] Write failing test: glide page displays bar graph for glide param in specs/grid_ui_spec.lua
-- [ ] T049 [P] [US12] Write failing test: sequencer sends portamento CC before notes with non-zero glide in specs/sequencer_spec.lua
+- [x] T049 [P] [US12] Write failing test: sequencer sends portamento CC before notes with non-zero glide in specs/sequencer_spec.lua
 
 ### Tests for US13 (Ratchet)
 
 - [ ] T050 [P] [US13] Write failing test: ratchet page displays bar graph for ratchet param in specs/grid_ui_spec.lua
-- [ ] T051 [P] [US13] Write failing test: ratchet value 3 produces 3 evenly-spaced notes per step in specs/sequencer_spec.lua
+- [x] T051 [P] [US13] Write failing test: ratchet value 3 produces 3 evenly-spaced notes per step in specs/sequencer_spec.lua
 
 ### Tests for US14 (Alt-Note)
 
 - [ ] T052 [P] [US14] Write failing test: alt_note page displays bar graph for alt_note param in specs/grid_ui_spec.lua
-- [ ] T053 [P] [US14] Write failing test: alt_note combines additively with note degree modulo scale length in specs/sequencer_spec.lua
+- [x] T053 [P] [US14] Write failing test: alt_note combines additively with note degree modulo scale length in specs/sequencer_spec.lua
 
 ### Implementation for US12-14
 
-- [ ] T054 [US12] Add glide value handling to sequencer.step_track: call voice:set_portamento before play_note in lib/sequencer.lua
-- [ ] T055 [US13] Add ratchet subdivision logic to sequencer.step_track: fire N notes via nested clock.run in lib/sequencer.lua (depends on T054)
-- [ ] T056 [US14] Add alt_note additive pitch computation to sequencer.step_track in lib/sequencer.lua (depends on T055)
+- [x] T054 [US12] Add glide value handling to sequencer.step_track: call voice:set_portamento before play_note in lib/sequencer.lua
+- [x] T055 [US13] Add ratchet subdivision logic to sequencer.step_track: fire N notes via nested clock.run in lib/sequencer.lua (depends on T054)
+- [x] T056 [US14] Add alt_note additive pitch computation to sequencer.step_track in lib/sequencer.lua (depends on T055)
 - [ ] T057 [US12] Add draw_glide_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua
 - [ ] T058 [US13] Add draw_ratchet_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua
 - [ ] T059 [US14] Add draw_alt_note_page to grid_ui.lua and wire into redraw dispatch in lib/grid_ui.lua
@@ -237,12 +237,12 @@
 
 ### Tests
 
-- [ ] T061 [P] [US11] Write failing test: keyboard double-press 'q' toggles to ratchet in specs/keyboard_spec.lua
-- [ ] T062 [P] [US11] Write failing test: keyboard pressing different page key clears extended in specs/keyboard_spec.lua
+- [x] T061 [P] [US11] Write failing test: keyboard double-press 'q' toggles to ratchet in specs/keyboard_spec.lua
+- [x] T062 [P] [US11] Write failing test: keyboard pressing different page key clears extended in specs/keyboard_spec.lua
 
 ### Implementation
 
-- [ ] T063 [US11] Add extended page toggle logic (track last key, double-press detection) to lib/seamstress/keyboard.lua
+- [x] T063 [US11] Add extended page toggle logic (track last key, double-press detection) to lib/seamstress/keyboard.lua
 - [ ] T064 Run full integration test suite: init -> start -> step -> verify all features in specs/integration_spec.lua
 - [ ] T065 Verify 100% public function coverage: every public function in lib/ has at least one test
 - [ ] T066 Run quickstart.md validation: follow quickstart steps, verify app loads and operates correctly

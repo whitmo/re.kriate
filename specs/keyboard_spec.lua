@@ -215,6 +215,66 @@ describe("keyboard", function()
 
   end)
 
+  describe("extended page toggle", function()
+
+    it("q on trigger toggles to ratchet", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      keyboard.key(ctx, "q", {}, false, 1)
+      assert.are.equal("ratchet", ctx.active_page)
+    end)
+
+    it("q on ratchet toggles back to trigger", function()
+      local ctx = make_ctx()
+      ctx.active_page = "ratchet"
+      keyboard.key(ctx, "q", {}, false, 1)
+      assert.are.equal("trigger", ctx.active_page)
+    end)
+
+    it("w on note toggles to alt_note", function()
+      local ctx = make_ctx()
+      ctx.active_page = "note"
+      keyboard.key(ctx, "w", {}, false, 1)
+      assert.are.equal("alt_note", ctx.active_page)
+    end)
+
+    it("e on octave toggles to glide", function()
+      local ctx = make_ctx()
+      ctx.active_page = "octave"
+      keyboard.key(ctx, "e", {}, false, 1)
+      assert.are.equal("glide", ctx.active_page)
+    end)
+
+    it("pressing different page key clears extended state", function()
+      local ctx = make_ctx()
+      ctx.active_page = "ratchet"
+      keyboard.key(ctx, "w", {}, false, 1)
+      assert.are.equal("note", ctx.active_page)
+    end)
+
+    it("q from note goes to trigger (primary, not extended)", function()
+      local ctx = make_ctx()
+      ctx.active_page = "note"
+      keyboard.key(ctx, "q", {}, false, 1)
+      assert.are.equal("trigger", ctx.active_page)
+    end)
+
+    it("duration has no extended page (stays on duration)", function()
+      local ctx = make_ctx()
+      ctx.active_page = "duration"
+      keyboard.key(ctx, "t", {}, false, 1)
+      assert.are.equal("duration", ctx.active_page)
+    end)
+
+    it("velocity has no extended page (stays on velocity)", function()
+      local ctx = make_ctx()
+      ctx.active_page = "velocity"
+      keyboard.key(ctx, "y", {}, false, 1)
+      assert.are.equal("velocity", ctx.active_page)
+    end)
+
+  end)
+
   describe("input filtering", function()
 
     it("ignores key up events (state ~= 1)", function()
