@@ -148,6 +148,43 @@ describe("integration", function()
 
   end)
 
+  describe("direction params (T041)", function()
+
+    it("all tracks default to forward direction after init", function()
+      local ctx = make_app()
+      for t = 1, track_mod.NUM_TRACKS do
+        assert.are.equal("forward", ctx.tracks[t].direction)
+      end
+    end)
+
+    it("setting direction param changes track direction", function()
+      local ctx = make_app()
+      params:set("direction_1", 2)  -- 2 = reverse
+      assert.are.equal("reverse", ctx.tracks[1].direction)
+    end)
+
+    it("each track has independent direction param", function()
+      local ctx = make_app()
+      params:set("direction_1", 3)  -- pendulum
+      params:set("direction_3", 5)  -- random
+      assert.are.equal("pendulum", ctx.tracks[1].direction)
+      assert.are.equal("forward", ctx.tracks[2].direction)
+      assert.are.equal("random", ctx.tracks[3].direction)
+      assert.are.equal("forward", ctx.tracks[4].direction)
+    end)
+
+    it("direction param maps to correct mode names", function()
+      local ctx = make_app()
+      local expected = {"forward", "reverse", "pendulum", "drunk", "random"}
+      for i, mode in ipairs(expected) do
+        params:set("direction_1", i)
+        assert.are.equal(mode, ctx.tracks[1].direction,
+          "index " .. i .. " should map to " .. mode)
+      end
+    end)
+
+  end)
+
   describe("full sequencer cycle", function()
 
     it("step_track fires notes into recorder voices", function()

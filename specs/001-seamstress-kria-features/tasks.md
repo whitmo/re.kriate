@@ -150,7 +150,7 @@
 ### Implementation for US8
 
 - [x] T040 [US8] Integrate direction.advance() into sequencer.step_track for all param advances in lib/sequencer.lua
-- [ ] T041 [US8] Add direction mode selection to params (per-track) in lib/app.lua
+- [x] T041 [US8] Add direction mode selection to params (per-track) in lib/app.lua
 
 **Checkpoint**: Direction modes work end-to-end. Forward/reverse/pendulum/drunk/random all verified.
 

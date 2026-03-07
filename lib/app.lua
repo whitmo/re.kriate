@@ -6,6 +6,7 @@ local scale_mod = require("lib/scale")
 local sequencer = require("lib/sequencer")
 local grid_ui = require("lib/grid_ui")
 local pattern = require("lib/pattern")
+local direction = require("lib/direction")
 
 local M = {}
 
@@ -47,6 +48,14 @@ function M.init(config)
     params:add_option("division_" .. t, "track " .. t .. " division", div_names, 1)
     params:set_action("division_" .. t, function(val)
       ctx.tracks[t].division = val
+    end)
+  end
+
+  -- params: per-track direction
+  for t = 1, track_mod.NUM_TRACKS do
+    params:add_option("direction_" .. t, "track " .. t .. " direction", direction.MODES, 1)
+    params:set_action("direction_" .. t, function(val)
+      ctx.tracks[t].direction = direction.MODES[val]
     end)
   end
 
