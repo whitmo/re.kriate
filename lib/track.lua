@@ -6,6 +6,8 @@ local M = {}
 M.NUM_TRACKS = 4
 M.NUM_STEPS = 16
 M.PARAM_NAMES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
+M.CORE_PARAMS = {"trigger", "note", "octave", "duration", "velocity"}
+M.EXTENDED_PARAMS = {"ratchet", "alt_note", "glide"}
 
 -- Step value ranges (1-indexed, matching grid rows 1-7)
 -- trigger: 0 or 1
