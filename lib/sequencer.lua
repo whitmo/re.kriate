@@ -3,6 +3,7 @@
 
 local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
+local direction_mod = require("lib/direction")
 
 local M = {}
 
@@ -17,6 +18,9 @@ M.DIVISION_MAP = {
   [6] = 2,     -- half
   [7] = 4,     -- whole
 }
+
+-- Number of scale degrees in a heptatonic scale
+local SCALE_DEGREES = 7
 
 function M.start(ctx)
   if ctx.playing then return end
@@ -46,31 +50,65 @@ function M.track_clock(ctx, track_num)
   while ctx.playing do
     local div = M.DIVISION_MAP[track.division] or M.DIVISION_MAP[1]
     clock.sync(div)
-    if ctx.playing and not track.muted then
-      M.step_track(ctx, track_num)
+    if ctx.playing then
+      M.step_track(ctx, track_num)  -- always advance, mute checked inside
     end
   end
 end
 
 function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
-  -- advance all params independently (primary + extended)
-  local trig = track_mod.advance(track.params.trigger)
-  local note_deg = track_mod.advance(track.params.note)
-  local octave = track_mod.advance(track.params.octave)
-  local dur_val = track_mod.advance(track.params.duration)
-  local vel_val = track_mod.advance(track.params.velocity)
-  -- advance extended params (values used for future features)
-  for _, name in ipairs(track_mod.EXTENDED_PARAMS) do
-    track_mod.advance(track.params[name])
+  local dir = track.direction  -- nil defaults to "forward" inside direction.advance
+
+  -- advance all params independently using direction
+  local vals = {}
+  for _, name in ipairs(track_mod.PARAM_NAMES) do
+    vals[name] = direction_mod.advance(track.params[name], dir)
+  end
+
+  -- if muted, advance happened but skip note output
+  if track.muted then
+    ctx.grid_dirty = true
+    return
   end
 
   -- fire note on trigger
-  if trig == 1 then
-    local midi_note = scale_mod.to_midi(note_deg, octave, ctx.scale_notes)
-    local duration = track_mod.DURATION_MAP[dur_val] or track_mod.DURATION_MAP[3]
-    local velocity = track_mod.VELOCITY_MAP[vel_val] or track_mod.VELOCITY_MAP[4]
-    M.play_note(ctx, track_num, midi_note, velocity, duration)
+  if vals.trigger == 1 then
+    -- compute effective note degree with alt_note
+    local note_deg = vals.note
+    if vals.alt_note and vals.alt_note > 1 then
+      note_deg = ((vals.note - 1) + (vals.alt_note - 1)) % SCALE_DEGREES + 1
+    end
+
+    local midi_note = scale_mod.to_midi(note_deg, vals.octave, ctx.scale_notes)
+    local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
+    local velocity = track_mod.VELOCITY_MAP[vals.velocity] or track_mod.VELOCITY_MAP[4]
+
+    -- apply glide/portamento
+    local voice = ctx.voices and ctx.voices[track_num]
+    if voice and voice.set_portamento then
+      if vals.glide and vals.glide > 1 then
+        voice:set_portamento(vals.glide)
+      else
+        voice:set_portamento(0)
+      end
+    end
+
+    -- handle ratchet
+    local ratchet_count = vals.ratchet or 1
+    if ratchet_count > 1 then
+      local sub_dur = duration / ratchet_count
+      clock.run(function()
+        for i = 1, ratchet_count do
+          M.play_note(ctx, track_num, midi_note, velocity, sub_dur)
+          if i < ratchet_count then
+            clock.sync(sub_dur)
+          end
+        end
+      end)
+    else
+      M.play_note(ctx, track_num, midi_note, velocity, duration)
+    end
   end
 
   -- request grid redraw
