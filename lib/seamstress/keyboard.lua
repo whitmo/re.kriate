@@ -6,8 +6,15 @@
 
 local sequencer = require("lib/sequencer")
 local pattern = require("lib/pattern")
+local grid_ui = require("lib/grid_ui")
 
 local M = {}
+
+-- Keyboard-to-page mapping
+local KEY_PAGE = {q = "trigger", w = "note", e = "octave", t = "duration", y = "velocity"}
+
+-- Reverse lookup: extended -> primary
+local EXTENDED_TO_PRIMARY = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 function M.key(ctx, char, modifiers, is_repeat, state)
   if state ~= 1 then return end
@@ -27,16 +34,15 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     pattern.load(ctx, tonumber(char))
   elseif char >= "1" and char <= "4" then
     ctx.active_track = tonumber(char)
-  elseif char == "q" then
-    ctx.active_page = "trigger"
-  elseif char == "w" then
-    ctx.active_page = "note"
-  elseif char == "e" then
-    ctx.active_page = "octave"
-  elseif char == "t" then
-    ctx.active_page = "duration"
-  elseif char == "y" then
-    ctx.active_page = "velocity"
+  elseif KEY_PAGE[char] then
+    local target = KEY_PAGE[char]
+    if ctx.active_page == target and grid_ui.EXTENDED_PAGES[target] then
+      ctx.active_page = grid_ui.EXTENDED_PAGES[target]
+    elseif EXTENDED_TO_PRIMARY[ctx.active_page] == target then
+      ctx.active_page = target
+    else
+      ctx.active_page = target
+    end
   end
 
   ctx.grid_dirty = true
