@@ -103,13 +103,13 @@
 
 ### Tests for US5
 
-- [ ] T029 [P] [US5] Write failing tests for screen_ui.redraw showing per-track step positions in specs/screen_ui_spec.lua
-- [ ] T030 [P] [US5] Write failing test for extended page indicator display in specs/screen_ui_spec.lua
+- [x] T029 [P] [US5] Write failing tests for screen_ui.redraw showing per-track step positions in specs/screen_ui_spec.lua
+- [x] T030 [P] [US5] Write failing test for extended page indicator display in specs/screen_ui_spec.lua
 
 ### Implementation for US5
 
-- [ ] T031 [US5] Enhance lib/seamstress/screen_ui.lua: per-track step positions (step N/loop_end), extended page indicator, color coding
-- [ ] T032 [US5] Update lib/app.lua M.redraw to call screen_ui.redraw for seamstress platform
+- [x] T031 [US5] Enhance lib/seamstress/screen_ui.lua: per-track step positions (step N/loop_end), extended page indicator, color coding
+- [x] T032 [US5] Update lib/app.lua M.redraw to call screen_ui.redraw for seamstress platform
 
 **Checkpoint**: Screen UI shows comprehensive sequencer state.
 
