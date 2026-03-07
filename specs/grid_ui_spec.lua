@@ -606,6 +606,96 @@ describe("grid_ui", function()
 
   end)
 
+  describe("extended page toggle (US11)", function()
+
+    it("press trigger page key twice toggles to ratchet", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      grid_ui.nav_key(ctx, 6, 1) -- press trigger key when already on trigger
+      assert.are.equal(ctx.active_page, "ratchet")
+    end)
+
+    it("press ratchet key again toggles back to trigger", function()
+      local ctx = make_ctx()
+      ctx.active_page = "ratchet"
+      grid_ui.nav_key(ctx, 6, 1) -- press trigger key when on ratchet
+      assert.are.equal(ctx.active_page, "trigger")
+    end)
+
+    it("switching to different page from extended clears to primary", function()
+      local ctx = make_ctx()
+      ctx.active_page = "ratchet"
+      grid_ui.nav_key(ctx, 7, 1) -- press note key
+      assert.are.equal(ctx.active_page, "note")
+    end)
+
+    it("note double-press toggles to alt_note", function()
+      local ctx = make_ctx()
+      ctx.active_page = "note"
+      grid_ui.nav_key(ctx, 7, 1)
+      assert.are.equal(ctx.active_page, "alt_note")
+    end)
+
+    it("octave double-press toggles to glide", function()
+      local ctx = make_ctx()
+      ctx.active_page = "octave"
+      grid_ui.nav_key(ctx, 8, 1)
+      assert.are.equal(ctx.active_page, "glide")
+    end)
+
+    it("duration has no extended page (stays on duration)", function()
+      local ctx = make_ctx()
+      ctx.active_page = "duration"
+      grid_ui.nav_key(ctx, 9, 1)
+      assert.are.equal(ctx.active_page, "duration")
+    end)
+
+    it("velocity has no extended page (stays on velocity)", function()
+      local ctx = make_ctx()
+      ctx.active_page = "velocity"
+      grid_ui.nav_key(ctx, 10, 1)
+      assert.are.equal(ctx.active_page, "velocity")
+    end)
+
+    it("nav highlight follows extended page to its primary key", function()
+      local ctx = make_ctx()
+      local g = mock_grid()
+      ctx.active_page = "ratchet"
+      grid_ui.draw_nav(ctx, g)
+      -- Trigger button (x=6) should be highlighted since ratchet is extended trigger
+      assert.are.equal(led_at(g, 6, 8), 12)
+    end)
+
+    it("redraw dispatches extended pages to draw_value_page", function()
+      local ctx = make_ctx()
+      ctx.active_page = "ratchet"
+      ctx.active_track = 1
+      ctx.tracks[1].params.ratchet.steps[1] = 5
+      grid_ui.redraw(ctx)
+      -- Value 5 at row 3 (8-5=3) should be lit
+      assert.is_true(led_at(ctx.g, 1, 3) > 0)
+    end)
+
+    it("grid_key edits extended page params", function()
+      local ctx = make_ctx()
+      ctx.active_page = "ratchet"
+      ctx.active_track = 1
+      grid_ui.grid_key(ctx, 3, 2, 1) -- step 3, row 2 = value 6
+      assert.are.equal(ctx.tracks[1].params.ratchet.steps[3], 6)
+    end)
+
+    it("loop_key works on extended pages", function()
+      local ctx = make_ctx()
+      ctx.active_page = "ratchet"
+      ctx.active_track = 1
+      ctx.loop_first_press = 3
+      grid_ui.loop_key(ctx, 8, "ratchet")
+      assert.are.equal(ctx.tracks[1].params.ratchet.loop_start, 3)
+      assert.are.equal(ctx.tracks[1].params.ratchet.loop_end, 8)
+    end)
+
+  end)
+
   describe("loop_key", function()
 
     it("first press sets loop_first_press", function()

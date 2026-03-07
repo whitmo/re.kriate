@@ -8,8 +8,14 @@ local track_mod = require("lib/track")
 
 local M = {}
 
--- Page names matching track_mod.PARAM_NAMES
+-- Page names matching track_mod.CORE_PARAMS
 M.PAGES = {"trigger", "note", "octave", "duration", "velocity"}
+
+-- Extended page pairings: primary -> extended
+M.EXTENDED_PAGES = {trigger = "ratchet", note = "alt_note", octave = "glide"}
+
+-- Reverse lookup: extended -> primary
+local EXTENDED_TO_PRIMARY = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 -- Nav row (row 8) layout:
 -- x=1-4: track select
@@ -103,9 +109,10 @@ function M.draw_nav(ctx, g)
   for i = 1, 4 do
     g:led(i, y, i == ctx.active_track and 12 or 3)
   end
-  -- page select
+  -- page select (highlight extended pages on their primary key)
   for x, page in pairs(NAV_PAGE) do
-    g:led(x, y, page == ctx.active_page and 12 or 3)
+    local active = (page == ctx.active_page) or (M.EXTENDED_PAGES[page] == ctx.active_page)
+    g:led(x, y, active and 12 or 3)
   end
   -- loop modifier
   g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
@@ -126,9 +133,19 @@ function M.nav_key(ctx, x, z)
   if x >= 1 and x <= 4 and z == 1 then
     ctx.active_track = x
   end
-  -- page select
+  -- page select (with extended page toggle)
   if NAV_PAGE[x] and z == 1 then
-    ctx.active_page = NAV_PAGE[x]
+    local target = NAV_PAGE[x]
+    if ctx.active_page == target and M.EXTENDED_PAGES[target] then
+      -- double-press: toggle to extended page
+      ctx.active_page = M.EXTENDED_PAGES[target]
+    elseif EXTENDED_TO_PRIMARY[ctx.active_page] == target then
+      -- on extended page, press same key: toggle back to primary
+      ctx.active_page = target
+    else
+      -- different page: switch to primary
+      ctx.active_page = target
+    end
   end
   -- loop modifier (hold)
   if x == NAV_LOOP then
