@@ -1,0 +1,10 @@
+2026-03-07T07:42:55.949530Z  INFO ralph::loop_runner: I'm Ralph. Let's do this.
+2026-03-07T07:42:55.950226Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-07T07:42:55.950286Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-07T07:42:55.950303Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-07T07:42:55.950310Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-07T07:42:56.121499Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-07T07:42:56.121550Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-07T07:42:56.121566Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-07T07:42:56.121574Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-07T07:42:56.248683Z  INFO ralph_core::event_loop: Wrapping up: max_iterations. 2 iterations in 0s. reason=max_iterations iterations=2 duration=0s

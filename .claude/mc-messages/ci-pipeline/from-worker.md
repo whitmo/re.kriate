@@ -1,0 +1,1 @@
+[2026-03-06 23:30] DONE: Created GitHub Actions CI workflow at .github/workflows/test.yml. Runs on every push/PR: installs Lua 5.4 + luarocks + busted on ubuntu-latest, syntax-checks all Lua files with luac -p, then runs busted specs/. All 87 tests pass locally, lint clean on all 17 Lua files. PR: https://github.com/whitmo/re.kriate/pull/1
