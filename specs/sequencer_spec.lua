@@ -430,6 +430,31 @@ describe("sequencer", function()
       assert.is_true(ctx.grid_dirty)
     end)
 
+    it("resumes at correct position after unmute", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+
+      -- Step while muted 4 times
+      track.muted = true
+      for _ = 1, 4 do
+        sequencer.step_track(ctx, 1)
+      end
+
+      -- Record positions after muted advancement
+      local muted_positions = {}
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        muted_positions[name] = track.params[name].pos
+      end
+
+      -- Unmute and step - should fire from current position
+      track.muted = false
+      track.params.trigger.steps[muted_positions.trigger] = 1
+      sequencer.step_track(ctx, 1)
+
+      local events = ctx.voices[1]:get_events()
+      assert.are.equal(#events, 1, "unmuted track should fire notes")
+    end)
+
   end)
 
   describe("alt-note", function()
