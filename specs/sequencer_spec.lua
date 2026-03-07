@@ -774,4 +774,291 @@ describe("sequencer", function()
 
   end)
 
+  describe("clock division per track (US6)", function()
+
+    it("DIVISION_MAP covers all 7 division values", function()
+      for i = 1, 7 do
+        assert.is_not_nil(sequencer.DIVISION_MAP[i],
+          "DIVISION_MAP[" .. i .. "] should be defined")
+        assert.are.equal("number", type(sequencer.DIVISION_MAP[i]),
+          "DIVISION_MAP[" .. i .. "] should be a number")
+      end
+    end)
+
+    it("DIVISION_MAP values increase (slower divisions)", function()
+      for i = 2, 7 do
+        assert.is_true(sequencer.DIVISION_MAP[i] > sequencer.DIVISION_MAP[i - 1],
+          "DIVISION_MAP[" .. i .. "] should be > DIVISION_MAP[" .. (i - 1) .. "]")
+      end
+    end)
+
+    it("DIVISION_MAP[1] is 1/16 note (1/4 beat)", function()
+      assert.are.equal(1/4, sequencer.DIVISION_MAP[1])
+    end)
+
+    it("DIVISION_MAP[5] is 1/4 note (1 beat)", function()
+      assert.are.equal(1, sequencer.DIVISION_MAP[5])
+    end)
+
+    it("DIVISION_MAP[7] is whole note (4 beats)", function()
+      assert.are.equal(4, sequencer.DIVISION_MAP[7])
+    end)
+
+    it("track_clock passes correct division to clock.sync", function()
+      local ctx = make_ctx()
+      ctx.playing = true
+      local track = ctx.tracks[1]
+      track.division = 3  -- eighth note
+
+      -- Capture clock.sync calls
+      local sync_args = {}
+      local orig_sync = clock.sync
+      local step_count = 0
+      clock.sync = function(div)
+        table.insert(sync_args, div)
+        step_count = step_count + 1
+        if step_count >= 2 then ctx.playing = false end
+      end
+
+      sequencer.track_clock(ctx, 1)
+
+      clock.sync = orig_sync
+
+      assert.is_true(#sync_args >= 1, "clock.sync should have been called")
+      assert.are.equal(sequencer.DIVISION_MAP[3], sync_args[1],
+        "track_clock should sync with DIVISION_MAP[track.division]")
+    end)
+
+    it("default division=1 uses fastest rate (1/16)", function()
+      local ctx = make_ctx()
+      ctx.playing = true
+      local track = ctx.tracks[1]
+      assert.are.equal(1, track.division, "default division should be 1")
+
+      local sync_args = {}
+      local orig_sync = clock.sync
+      local step_count = 0
+      clock.sync = function(div)
+        table.insert(sync_args, div)
+        step_count = step_count + 1
+        if step_count >= 1 then ctx.playing = false end
+      end
+
+      sequencer.track_clock(ctx, 1)
+      clock.sync = orig_sync
+
+      assert.are.equal(1/4, sync_args[1], "default division should be 1/16 (0.25 beats)")
+    end)
+
+    it("different tracks can have different divisions", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].division = 1  -- 1/16
+      ctx.tracks[2].division = 5  -- 1/4
+
+      -- Capture sync calls per track
+      local sync_args_1, sync_args_2 = {}, {}
+      local orig_sync = clock.sync
+
+      -- Run track 1
+      ctx.playing = true
+      local count = 0
+      clock.sync = function(div)
+        table.insert(sync_args_1, div)
+        count = count + 1
+        if count >= 1 then ctx.playing = false end
+      end
+      sequencer.track_clock(ctx, 1)
+
+      -- Run track 2
+      ctx.playing = true
+      count = 0
+      clock.sync = function(div)
+        table.insert(sync_args_2, div)
+        count = count + 1
+        if count >= 1 then ctx.playing = false end
+      end
+      sequencer.track_clock(ctx, 2)
+
+      clock.sync = orig_sync
+
+      assert.are.equal(sequencer.DIVISION_MAP[1], sync_args_1[1])
+      assert.are.equal(sequencer.DIVISION_MAP[5], sync_args_2[1])
+      -- Division 5 (1/4 note) should be 4x slower than division 1 (1/16)
+      assert.are.equal(4, sync_args_2[1] / sync_args_1[1],
+        "1/4 note should be 4x the duration of 1/16 note")
+    end)
+
+  end)
+
+  describe("scale quantization (US7)", function()
+
+    it("C4 Major degree=1 octave=4 produces MIDI 60 (C4)", function()
+      local ctx = make_ctx()
+      -- The mock scale: generate_scale(24, "Major", 8)
+      -- 4th octave (idx base = 3*7 = 21): 24+21*2=66... no wait, the mock uses diatonic intervals
+      -- Actually let's check: build_test_scale() uses 24 + (i-1)*2
+      -- So idx 22 = 24 + 21*2 = 66. That's the whole-tone mock, not a real major scale.
+      -- The scale_spec.lua mock uses musicutil which produces proper diatonic intervals.
+      -- For this test, we should build the scale from the mock musicutil used in scale_spec.
+      -- BUT sequencer_spec uses build_test_scale() which is whole-tone.
+      --
+      -- Let's just verify using the actual scale module with the mock:
+      -- The sequencer calls scale_mod.to_midi(degree, octave, ctx.scale_notes)
+      -- So if we build a proper scale, we get the right answer.
+
+      -- Use scale_mod.build_scale which requires musicutil mock
+      -- But sequencer_spec doesn't mock musicutil. Let's use scale_mod.to_midi directly
+      -- with a manually-constructed correct C Major scale.
+
+      -- C Major from C1 (root=60, build_scale(60) => generate_scale(24, Major, 8)):
+      -- Oct 0: C1=24, D1=26, E1=28, F1=29, G1=31, A1=33, B1=35
+      -- Oct 1: C2=36, D2=38, E2=40, F2=41, G2=43, A2=45, B2=47
+      -- Oct 2: C3=48, D3=50, E3=52, F3=53, G3=55, A3=57, B3=59
+      -- Oct 3: C4=60, D4=62, E4=64, F4=65, G4=67, A4=69, B4=71  (center octave, octave=4)
+      local c_major = {}
+      local intervals = {0, 2, 4, 5, 7, 9, 11}
+      for oct = 0, 7 do
+        for _, iv in ipairs(intervals) do
+          table.insert(c_major, 24 + oct * 12 + iv)
+        end
+      end
+      table.insert(c_major, 24 + 8 * 12) -- final root
+
+      ctx.scale_notes = c_major
+
+      -- Set trigger=1, note=1, octave=4
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.note.steps[1] = 1
+      track.params.note.pos = 1
+      track.params.octave.steps[1] = 4
+      track.params.octave.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local notes = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #notes)
+      assert.are.equal(60, notes[1].note,
+        "degree=1, octave=4, C Major should produce MIDI 60 (C4)")
+    end)
+
+    it("C4 Major degree=3 octave=4 produces MIDI 64 (E4)", function()
+      local ctx = make_ctx()
+
+      local c_major = {}
+      local intervals = {0, 2, 4, 5, 7, 9, 11}
+      for oct = 0, 7 do
+        for _, iv in ipairs(intervals) do
+          table.insert(c_major, 24 + oct * 12 + iv)
+        end
+      end
+      table.insert(c_major, 24 + 8 * 12)
+
+      ctx.scale_notes = c_major
+
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.note.steps[1] = 3
+      track.params.note.pos = 1
+      track.params.octave.steps[1] = 4
+      track.params.octave.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      local notes = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #notes)
+      assert.are.equal(64, notes[1].note,
+        "degree=3, octave=4, C Major should produce MIDI 64 (E4)")
+    end)
+
+    it("different root produces different MIDI notes for same degree", function()
+      local ctx = make_ctx()
+
+      -- C Major scale
+      local c_major = {}
+      local intervals = {0, 2, 4, 5, 7, 9, 11}
+      for oct = 0, 7 do
+        for _, iv in ipairs(intervals) do
+          table.insert(c_major, 24 + oct * 12 + iv)
+        end
+      end
+
+      -- D Major scale (root=62, generate from D1=26)
+      local d_major = {}
+      for oct = 0, 7 do
+        for _, iv in ipairs(intervals) do
+          table.insert(d_major, 26 + oct * 12 + iv)
+        end
+      end
+
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.note.steps[1] = 1
+      track.params.note.pos = 1
+      track.params.octave.steps[1] = 4
+      track.params.octave.pos = 1
+
+      -- Play with C Major
+      ctx.scale_notes = c_major
+      sequencer.step_track(ctx, 1)
+      local c_notes = note_events_for(ctx.voices[1])
+
+      -- Reset and play with D Major
+      track.params.trigger.pos = 1
+      track.params.note.pos = 1
+      track.params.octave.pos = 1
+      ctx.voices[1]:clear()
+      ctx.scale_notes = d_major
+      sequencer.step_track(ctx, 1)
+      local d_notes = note_events_for(ctx.voices[1])
+
+      assert.are_not.equal(c_notes[1].note, d_notes[1].note,
+        "different root should produce different MIDI notes")
+    end)
+
+    it("all output notes are members of the selected scale", function()
+      local ctx = make_ctx()
+
+      -- Build C Major scale
+      local c_major = {}
+      local scale_set = {}
+      local intervals = {0, 2, 4, 5, 7, 9, 11}
+      for oct = 0, 7 do
+        for _, iv in ipairs(intervals) do
+          local n = 24 + oct * 12 + iv
+          table.insert(c_major, n)
+          scale_set[n] = true
+        end
+      end
+      local final = 24 + 8 * 12
+      table.insert(c_major, final)
+      scale_set[final] = true
+
+      ctx.scale_notes = c_major
+
+      -- Step through all 7 degrees at center octave
+      for deg = 1, 7 do
+        local track = ctx.tracks[1]
+        track.params.trigger.steps[1] = 1
+        track.params.trigger.pos = 1
+        track.params.note.steps[1] = deg
+        track.params.note.pos = 1
+        track.params.octave.steps[1] = 4
+        track.params.octave.pos = 1
+        ctx.voices[1]:clear()
+
+        sequencer.step_track(ctx, 1)
+
+        local notes = note_events_for(ctx.voices[1])
+        assert.are.equal(1, #notes, "degree " .. deg .. " should produce a note")
+        assert.is_true(scale_set[notes[1].note],
+          "degree " .. deg .. " note " .. notes[1].note .. " should be in C Major scale")
+      end
+    end)
+
+  end)
+
 end)

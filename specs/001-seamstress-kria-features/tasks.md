@@ -123,13 +123,13 @@
 
 ### Tests for US6+7
 
-- [ ] T033 [P] [US6] Write failing tests for per-track clock division affecting step rate in specs/sequencer_spec.lua
-- [ ] T034 [P] [US7] Write failing tests for scale quantization: root + scale -> correct MIDI notes in specs/scale_spec.lua
+- [x] T033 [P] [US6] Write failing tests for per-track clock division affecting step rate in specs/sequencer_spec.lua
+- [x] T034 [P] [US7] Write failing tests for scale quantization: root + scale -> correct MIDI notes in specs/scale_spec.lua
 
 ### Implementation for US6+7
 
-- [ ] T035 [US6] Fix any test failures found in T033 (clock division) in lib/sequencer.lua
-- [ ] T036 [US7] Fix any test failures found in T034 (scale quantization) in lib/scale.lua
+- [x] T035 [US6] Fix any test failures found in T033 (clock division) in lib/sequencer.lua — no fixes needed, already passing
+- [x] T036 [US7] Fix any test failures found in T034 (scale quantization) in lib/scale.lua — no fixes needed, already passing
 
 **Checkpoint**: Clock division and scale quantization fully tested.
 
