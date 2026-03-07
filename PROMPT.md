@@ -1,45 +1,41 @@
-# re.kriate
+# Pass #2: Seamstress Entrypoint
 
-Build a clean kria sequencer for norns and seamstress.
+## Objective
 
-## What is kria?
+Add seamstress as a first-class platform for re.kriate. Success = `seamstress re_kriate_seamstress.lua` loads, grid works, MIDI notes play, keyboard controls function, clean stop.
 
-Kria is a multi-track step sequencer originally from the monome Ansible eurorack module. Its defining feature is per-parameter loop lengths — each track's note, octave, duration, trigger, and velocity sequences can have independent lengths, creating polymetric patterns.
+## Spec
 
-## Goal
+Full design, research, and plan at `specs/seamstress-entrypoint/`. Read `design.md` first, then `plan.md`.
 
-A simple, working kria implementation that:
-- Runs on seamstress (primary dev target) and norns
-- Uses nb for voice output
-- Supports monome grid for the primary UI
-- Can coexist with other norns scripts (e.g. timeparty)
-- Follows the conventions in CLAUDE.md (ctx pattern, no custom globals, modular)
+## Key Requirements
 
-## References
+- Voice abstraction: `ctx.voices[track]:play_note(note, vel, dur)` interface
+- MIDI voice backend with `clock.run` + `clock.sync` note-off timing
+- Recorder voice for tests (captures events into a buffer)
+- Refactor `lib/sequencer.lua` to use `ctx.voices` instead of nb
+- Refactor `lib/app.lua` to accept config (voices injected by entrypoint)
+- nb voice wrapper (`lib/norns/nb_voice.lua`) so norns entrypoint still works
+- Seamstress entrypoint with minimal screen UI and keyboard fallback (space=play, r=reset, 1-4=track, qwety=pages)
+- Tests: unit (voice, sequencer, keyboard), integration (script loads, ctx valid)
 
-See README.md for links to:
-- monome/ansible — original kria firmware (C)
-- zjb-s/n.kria — existing norns kria port
-- Dewb/monome-rack — VCV Rack port
-- monome.org kria docs — behavioral descriptions
+## Acceptance Criteria
 
-## Key norns/seamstress libraries
+1. `seamstress re_kriate_seamstress.lua` opens without errors, shows status display
+2. Grid interaction works identically to norns version
+3. MIDI note_on/note_off sent on configured channels with correct timing
+4. Keyboard fallback: play/stop, reset, track select, page select
+5. Clean stop: all notes off, CC 123, no hanging notes
+6. Norns entrypoint (`re_kriate.lua`) still works with nb voices
+7. `seamstress --test --test-dir specs` passes all tests
 
-- **sequins** — pattern sequencing with variable-length loops (natural fit for kria's per-parameter lengths)
-- **timelines** — event scheduling
-- **nb** — note/voice output system (required)
-- **musicutil** — scales, note names, intervals
+## Implementation
 
-## Dev environment
+Follow the 8-step plan in `specs/seamstress-entrypoint/plan.md`. Steps build incrementally — each ends with working tests. Steps 4+5 should be one commit (app refactor + norns entrypoint update).
 
-- seamstress 2.0.0-alpha is installed locally
-- `seamstress --test` runs busted tests
-- Target both seamstress and norns compatibility
+## Constraints
 
-## Priorities
-
-1. Simple and correct over feature-rich
-2. Working code a human can understand and fix
-3. nb voice support (non-negotiable)
-4. Grid UI that makes musical sense
-5. Composability — don't hog globals or resources
+- Follow CLAUDE.md conventions (ctx pattern, no custom globals, modules)
+- Do not implement future work (drum tracks, recording, piano roll, plugin system, OSC voice)
+- Keep `lib/track.lua`, `lib/scale.lua`, `lib/grid_ui.lua` unchanged unless necessary
+- Seamstress 2.0.0-alpha is the target — all needed APIs confirmed available (see `research/seamstress-v2-api.md`)

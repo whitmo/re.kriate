@@ -1,4 +1,4 @@
--- re_kriate: a kria sequencer for norns and seamstress
+-- re_kriate: a kria sequencer for norns
 -- inspired by monome ansible's kria
 --
 -- E1: select track
@@ -13,11 +13,29 @@
 --   16: play/stop
 
 local app = require("lib/app")
+local nb_voice = require("lib/norns/nb_voice")
+local track_mod = require("lib/track")
 
 local ctx
 
 function init()
-  ctx = app.init()
+  local nb = require("nb")
+  nb.voice_count = track_mod.NUM_TRACKS
+  nb:init()
+
+  -- nb voice params
+  for t = 1, track_mod.NUM_TRACKS do
+    nb:add_param("voice_" .. t, "voice " .. t)
+  end
+  nb:add_player_params()
+
+  -- Create voice wrappers
+  local voices = {}
+  for t = 1, track_mod.NUM_TRACKS do
+    voices[t] = nb_voice.new("voice_" .. t)
+  end
+
+  ctx = app.init({ voices = voices })
 end
 
 function redraw()

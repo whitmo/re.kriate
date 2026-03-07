@@ -15,8 +15,8 @@ local SCALE_NAMES = {
   "Blues Scale", "Whole Tone", "Chromatic",
 }
 
-function M.init()
-  local nb = require("nb")
+function M.init(config)
+  config = config or {}
 
   local ctx = {
     tracks = track_mod.new_tracks(),
@@ -27,11 +27,8 @@ function M.init()
     loop_first_press = nil,
     grid_dirty = true,
     scale_notes = {},
+    voices = config.voices or {},
   }
-
-  -- nb voice setup
-  nb.voice_count = track_mod.NUM_TRACKS
-  nb:init()
 
   -- params: scale
   params:add_separator("re_kriate", "re.kriate")
@@ -51,11 +48,8 @@ function M.init()
     end)
   end
 
-  -- nb voice params
-  for t = 1, track_mod.NUM_TRACKS do
-    nb:add_param("voice_" .. t, "voice " .. t)
-  end
-  nb:add_player_params()
+  -- voice params are set up by the entrypoint
+  -- (nb params for norns, MIDI channel params for seamstress)
 
   -- build initial scale
   M.rebuild_scale(ctx)
@@ -135,6 +129,11 @@ end
 
 function M.cleanup(ctx)
   sequencer.stop(ctx)
+  if ctx.voices then
+    for _, voice in ipairs(ctx.voices) do
+      voice:all_notes_off()
+    end
+  end
   if ctx.grid_metro then
     ctx.grid_metro:stop()
   end
