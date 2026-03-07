@@ -105,6 +105,17 @@ local function make_app()
   return ctx, buffer
 end
 
+-- Helper: filter note events from shared buffer (exclude portamento/other CC)
+local function note_events(buffer)
+  local result = {}
+  for _, e in ipairs(buffer) do
+    if e.note and e.type ~= "portamento" then
+      table.insert(result, e)
+    end
+  end
+  return result
+end
+
 describe("integration", function()
 
   describe("app.init with recorder voices", function()
@@ -147,11 +158,12 @@ describe("integration", function()
 
       sequencer.step_track(ctx, 1)
 
-      assert.are.equal(#buffer, 1)
-      assert.are.equal(buffer[1].track, 1)
-      assert.is_number(buffer[1].note)
-      assert.is_number(buffer[1].vel)
-      assert.is_number(buffer[1].dur)
+      local notes = note_events(buffer)
+      assert.are.equal(1, #notes)
+      assert.are.equal(1, notes[1].track)
+      assert.is_number(notes[1].note)
+      assert.is_number(notes[1].vel)
+      assert.is_number(notes[1].dur)
     end)
 
     it("multiple tracks produce events in shared buffer", function()
@@ -165,9 +177,10 @@ describe("integration", function()
         sequencer.step_track(ctx, t)
       end
 
-      assert.are.equal(#buffer, track_mod.NUM_TRACKS)
+      local notes = note_events(buffer)
+      assert.are.equal(track_mod.NUM_TRACKS, #notes)
       for t = 1, track_mod.NUM_TRACKS do
-        assert.are.equal(buffer[t].track, t)
+        assert.are.equal(t, notes[t].track)
       end
     end)
 
@@ -182,7 +195,8 @@ describe("integration", function()
 
       sequencer.step_track(ctx, 1)
 
-      local note = buffer[1].note
+      local notes = note_events(buffer)
+      local note = notes[1].note
       -- Note should be in the scale_notes table
       local found = false
       for _, sn in ipairs(ctx.scale_notes) do
