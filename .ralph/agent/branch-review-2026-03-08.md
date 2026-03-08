@@ -38,8 +38,9 @@
 
 - `origin/work/proud-eagle`
   - Delta: CI coverage workflow and `scripts/coverage.sh`
-  - Hypothesis: low-risk tooling improvement
-  - Next step: verify workflow assumptions and local script portability
+  - Verified status: already merged on `main` as commit `526ba0c` / PR `#13`
+  - Review notes: `git cherry -v main origin/work/proud-eagle` reports the branch patch as already applied; local verification with `./scripts/coverage.sh --summary --check 80` passed at `92.87%` total coverage with `195` specs passing
+  - Follow-up: no merge needed; treat future tooling-branch reviews like remote docs branches and check patch identity before considering merge mechanics
 
 - `origin/work/proud-wolf`
   - Delta: `docs/voices.html`
@@ -60,7 +61,7 @@
 
 ## Proposed Order
 
-1. Review docs/tooling-only branches still unique to `main`: `origin/work/proud-eagle`, `origin/work/proud-wolf`
+1. Review docs-only branches still unique to `main`: `origin/work/proud-wolf`
 2. Check whether `origin/multiclaude/witty-badger` still has any unique content after `main`
 3. Review `origin/multiclaude/calm-hawk` as the first code-bearing merge candidate
 4. Perform a decomposition review for PR `#11`

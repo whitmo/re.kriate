@@ -1,70 +1,77 @@
-# Seamstress Entrypoint - Scratchpad
+# Scratchpad
 
-## Understanding
+## 2026-03-08T18:20:00Z
 
-The objective is to add seamstress as a first-class platform for re.kriate. The codebase currently has a norns-only implementation with nb voice integration hardcoded into `lib/app.lua` and `lib/sequencer.lua`.
+Current objective: review all local/remote branches and open PRs, merge low-hanging fruit, and document simplification/gap work instead of treating the repo as one undifferentiated backlog.
 
-The plan has 8 steps that build incrementally:
-1. Voice interface + recorder voice (test foundation)
-2. MIDI voice backend
-3. Refactor sequencer to use ctx.voices
-4. Refactor app.lua to accept config
-5. nb voice wrapper + norns entrypoint update (commit with step 4)
-6. Seamstress screen UI + keyboard input
-7. Seamstress entrypoint script
-8. Integration tests + manual verification
+Observations from initial inventory:
+- `main` is at `189b773` and has several Ralph runtime file modifications in the worktree that should not be mixed into branch review commits.
+- Open PR `#11` (`pdd/seamstress-entrypoint`) is a large dual-platform seamstress port touching runtime code, tests, docs, and Ralph metadata. It is not a low-friction merge without review cleanup.
+- Local branch `002-modifiers-meta-config-presets` is a bigger omnibus feature line on top of older history and needs a dedicated simplification/split review.
+- Remote branches `origin/multiclaude/calm-hawk`, `origin/multiclaude/clever-deer`, `origin/work/proud-eagle`, and `origin/work/proud-wolf` are smaller focused deltas and likely next merge candidates after targeted review.
 
-## Key architectural decisions
-- Voice abstraction via `ctx.voices[track]:play_note(note, vel, dur)` interface
-- Separate entrypoints per platform (proven community pattern)
-- Recorder voice doubles as test tool and future piano roll data source
-- `clock.get_beats()` for timestamps in recorder (mock in tests)
+Plan narrative:
+1. Recreate Ralph scratchpad state and publish a branch review artifact that captures current branch/PR shape, mergeability hypotheses, and identified gaps.
+2. Turn that artifact into runtime tasks so later iterations can review one branch at a time and merge only after verification.
+3. Use the first completed task for documentation and visualization only; defer actual merges until a branch-specific review proves low risk.
 
-## Iteration 1 plan
-Starting with Step 1: recorder voice + voice_spec tests. This is the foundation everything else builds on, has no dependencies, and is fully testable standalone.
+Chosen atomic task for this iteration:
+- Produce a dated branch/PR review note plus visual gap map, then create follow-up tasks for the targeted review/merge passes.
 
-## Iteration 1 result
-Step 1 complete. Recorder voice at `lib/voices/recorder.lua`, 11 tests pass in `specs/voice_spec.lua`. Key learning: busted requires `rawset(_G, "clock", ...)` for mocking globals visible to required modules. Next up: Step 2 (MIDI voice) and Step 3 (sequencer refactor) are now unblocked.
+## 2026-03-08T18:26:00Z
 
-## Iteration 2 result
-Step 2 complete. MIDI voice at `lib/voices/midi.lua`, 17 new tests (28 total in voice_spec). Mock strategy: clock.run captures the coroutine function for later execution, clock.cancel records cancellation, mock midi device records all calls. This lets us test retrigger, velocity mapping, all_notes_off, and even the note-off coroutine behavior without needing a real clock runtime. All 42 tests across all specs pass. Next up: Step 3 (sequencer refactor) is the critical path — it unblocks Steps 4-8.
+Iteration result:
+- Added `.ralph/agent/branch-review-2026-03-08.md` as the durable inventory of local branches, remote branches, PR `#11`, and the proposed review order.
+- Generated `/Users/whit/.agent/diagrams/re-kriate-branch-gap-map-2026-03-08.html` to visualize mergeable branches versus decomposition candidates.
+- Created runtime tasks for docs/tooling review branches, remote API review, and decomposition of the two large mixed branches.
 
-## Iteration 3 result
-Step 3 complete. Refactored `lib/sequencer.lua` — replaced `params:lookup_param("voice_N"):get_player()` with `ctx.voices[track_num]:play_note()`. The change was 4 lines in play_note(). Added `specs/sequencer_spec.lua` with 16 tests covering step_track (trigger/no-trigger, param advancement, grid_dirty, correct MIDI note/duration/velocity mapping, multi-track routing), play_note delegation, reset, start/stop, and nil voice edge cases. All 58 tests pass across all specs. The sequencer is now platform-agnostic. Next up: Steps 4+5 (app.lua refactor + nb voice wrapper + norns entrypoint) are unblocked.
+Most important learned constraint:
+- Branch review must explicitly separate product changes from Ralph runtime/session files; otherwise even documentation-heavy branches will appear noisier and riskier than they are.
 
-## Iteration 4 result
-Steps 4+5 complete. Refactored `lib/app.lua` — `M.init(config)` now accepts a config table with `{ voices }`. Removed nb dependency from app.lua entirely. Created `lib/norns/nb_voice.lua` that wraps nb player into the voice interface. Updated `re_kriate.lua` to do nb setup (init, params, player_params) and inject nb_voice wrappers. Added `all_notes_off` call in `app.cleanup` for clean shutdown. All 58 tests pass unchanged. The shared core (app, sequencer, track, scale, grid_ui) is now fully platform-agnostic. Next up: Step 6 (seamstress screen UI + keyboard input) is unblocked.
+## 2026-03-08T18:34:00Z
 
-### HUMAN GUIDANCE (2026-03-06 05:33:58 UTC)
+Current atomic task:
+- Review `origin/multiclaude/clever-deer` (`task-1772989801-ac5b`) and merge it if the documentation matches current behavior.
 
-it is ok to vendor musicutil or timeline
+Branch read:
+- Single commit `4975154` updates `README.md` and adds `docs/grid-interface.html`.
+- The branch is documentation-only, but the HTML guide is substantial enough that accuracy matters more than merge conflict risk.
 
-## Iteration 5 result
-Step 6 complete. Created `lib/seamstress/screen_ui.lua` (minimal status display with color: title, track/page, play state, per-track step positions) and `lib/seamstress/keyboard.lua` (space=play/stop, r=reset, 1-4=track, qwety=pages). Added `specs/keyboard_spec.lua` with 16 tests covering play/stop toggle, reset, track/page select, input filtering (key up, repeats, unmapped keys), and grid_dirty behavior. All 74 tests pass. Next up: Step 7 (seamstress entrypoint script) and Step 8 (integration tests) are unblocked.
+Plan for this iteration:
+1. Inspect the README and grid guide diff against `main`.
+2. Verify the documented grid/key behavior against the current code and any existing docs.
+3. If accurate, merge the remote branch into `main` without touching unrelated Ralph runtime files; if not, document the gap and leave the task open.
 
-### HUMAN GUIDANCE (2026-03-06 05:35:46 UTC)
+Iteration result:
+- `origin/multiclaude/clever-deer` does not need a merge: `git cherry -v main origin/multiclaude/clever-deer` shows its patch is already present on `main` as commit `4125f5e` (`#12`).
+- Focused verification passed with `busted specs/grid_ui_spec.lua specs/keyboard_spec.lua` (`49 successes / 0 failures / 0 errors / 0 pending`).
+- Updated the branch review artifact to mark `clever-deer` as already merged and removed it from the remaining "unique branch" review order.
 
-the monome 128 is hooked up if you need to test against it
+Most important learned constraint:
+- For remote branch review, check `git cherry` before spending time on merge mechanics; some branch names remain open even after their patch landed through another PR path.
 
-## Iteration 6 plan
-Step 7: Create `re_kriate_seamstress.lua` entrypoint. Thin script (~40 lines) wiring MIDI voices, screen UI, keyboard input, and app.init. Follows design doc reference implementation. Key details:
-- Connect MIDI device via `midi.connect(1)`
-- Create 4 MIDI voices (channel = track number, configurable via params)
-- Add MIDI channel params before calling `app.init`
-- Set up `screen.key` callback for keyboard input
-- Start screen refresh metro at 15fps
-- `cleanup()` delegates to `app.cleanup` (which already handles all_notes_off + grid metro stop) plus stops screen metro
+### HUMAN GUIDANCE (2026-03-08 17:14:31 UTC)
 
-## Iteration 6 result
-Step 7 complete. Created `re_kriate_seamstress.lua` (63 lines) — thin wiring script following the design doc reference. All 74 tests pass. Next up: Step 8 (integration tests + manual verification) is the final step.
+use the spec-kit constitution where available
 
-## Iteration 7 result
-Step 8 complete. Created `specs/integration_spec.lua` with 13 integration tests covering:
-- app.init with recorder voices produces valid ctx (all fields, scale_notes)
-- Full sequencer cycle: step_track fires into recorder, multi-track shared buffer, scale quantization
-- Start/stop via sequencer and keyboard on real app ctx
-- Keyboard track/page select and reset on app ctx
-- Cleanup stops sequencer and doesn't error
-- screen_ui.redraw works on real app ctx (playing/stopped)
+## 2026-03-08T17:15:18Z
 
-Mock strategy: full params system (store+actions), grid, metro, screen, and musicutil mocked at global/package level. All 87 tests pass (74 existing + 13 new). All 8 implementation steps complete.
+Current atomic task:
+- Review `origin/work/proud-eagle` (`task-1772989801-ba12`) and merge it if the tooling change is still unique and valid.
+
+Branch read:
+- `origin/work/proud-eagle` is a single commit branch (`d40d080`) on top of `12aac7a`.
+- A direct `main..origin/work/proud-eagle` diff is misleading because the branch predates later docs and remote API merges; the actual branch delta from merge-base is only `.github/workflows/test.yml`, `.gitignore`, `.luacov`, and `scripts/coverage.sh`.
+
+Plan for this iteration:
+1. Check `git cherry` before any merge attempt to see whether the patch is already present on `main`.
+2. If the patch is unique, review the workflow/script for portability and merge risk.
+3. Verify the local coverage path on `main` so the task closes on actual behavior, not just commit metadata.
+
+Iteration result:
+- `origin/work/proud-eagle` does not need a merge: `git cherry -v main origin/work/proud-eagle` shows its patch is already present on `main` as commit `526ba0c` (`#13`).
+- Local verification passed with `./scripts/coverage.sh --summary --check 80`, yielding `195 successes / 0 failures / 0 errors / 0 pending` and `92.87%` total coverage.
+- Updated the branch review artifact to mark `proud-eagle` as already merged and removed it from the remaining docs/tooling review order.
+
+Most important learned constraint:
+- When a focused remote branch sits on an old base, use `git merge-base` plus `git cherry` before interpreting a raw diff; otherwise stale-base deletions can masquerade as branch intent.
