@@ -5,6 +5,7 @@ local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
 local sequencer = require("lib/sequencer")
 local grid_ui = require("lib/grid_ui")
+local grid_provider = require("lib/grid_provider")
 
 local M = {}
 
@@ -54,8 +55,8 @@ function M.init(config)
   -- build initial scale
   M.rebuild_scale(ctx)
 
-  -- grid
-  ctx.g = grid.connect()
+  -- grid (pluggable: config.grid_provider selects backend)
+  ctx.g = grid_provider.connect(config.grid_provider, config.grid_opts)
   ctx.g.key = function(x, y, z)
     grid_ui.key(ctx, x, y, z)
     ctx.grid_dirty = true
@@ -136,6 +137,9 @@ function M.cleanup(ctx)
   end
   if ctx.grid_metro then
     ctx.grid_metro:stop()
+  end
+  if ctx.g and ctx.g.cleanup then
+    ctx.g:cleanup()
   end
 end
 
