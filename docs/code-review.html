@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate — Adversarial Code Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Fragment+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-body: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-mono: 'Fragment Mono', 'SF Mono', Consolas, monospace;
+
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface2: #f5f0e8;
+  --surface-elevated: #fffdf8;
+  --border: rgba(0,0,0,0.07);
+  --border-bright: rgba(0,0,0,0.14);
+  --text: #2c2a25;
+  --text-dim: #8a8477;
+
+  --teal: #0d7377;
+  --teal-dim: rgba(13,115,119,0.08);
+  --amber: #b57614;
+  --amber-dim: rgba(181,118,20,0.08);
+  --sage: #3d7c4f;
+  --sage-dim: rgba(61,124,79,0.08);
+  --terracotta: #b44d2d;
+  --terracotta-dim: rgba(180,77,45,0.08);
+  --cranberry: #a13252;
+  --cranberry-dim: rgba(161,50,82,0.08);
+  --slate: #4a5568;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1814;
+    --surface: #242119;
+    --surface2: #2e2a22;
+    --surface-elevated: #33302a;
+    --border: rgba(255,255,255,0.06);
+    --border-bright: rgba(255,255,255,0.12);
+    --text: #e8e4dc;
+    --text-dim: #9a9488;
+    --teal: #4fd1c5;
+    --teal-dim: rgba(79,209,197,0.1);
+    --amber: #f6c95e;
+    --amber-dim: rgba(246,201,94,0.1);
+    --sage: #68d391;
+    --sage-dim: rgba(104,211,145,0.1);
+    --terracotta: #f6845b;
+    --terracotta-dim: rgba(246,132,91,0.1);
+    --cranberry: #f687b3;
+    --cranberry-dim: rgba(246,135,179,0.1);
+    --slate: #a0aec0;
+  }
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 20% 0%, var(--teal-dim) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, var(--amber-dim) 0%, transparent 40%);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  padding: 40px;
+}
+
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(12px); }
+  to { opacity:1; transform:translateY(0); }
+}
+@keyframes fadeScale {
+  from { opacity:0; transform:scale(0.95); }
+  to { opacity:1; transform:scale(1); }
+}
+.anim { animation: fadeUp 0.4s ease-out both; animation-delay: calc(var(--i,0)*0.06s); }
+.anim-s { animation: fadeScale 0.35s ease-out both; animation-delay: calc(var(--i,0)*0.06s); }
+@media (prefers-reduced-motion:reduce) { .anim,.anim-s { animation:none; opacity:1; } }
+
+.wrap {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 0 40px;
+}
+.main { min-width:0; }
+
+/* TOC */
+.toc {
+  position:sticky; top:24px; align-self:start;
+  padding:14px 0; grid-row:1/-1;
+  max-height:calc(100dvh - 48px); overflow-y:auto;
+}
+.toc::-webkit-scrollbar { width:3px; }
+.toc::-webkit-scrollbar-thumb { background:var(--surface-elevated); border-radius:2px; }
+.toc-title {
+  font-family:var(--font-mono); font-size:9px; font-weight:700;
+  text-transform:uppercase; letter-spacing:2px; color:var(--text-dim);
+  padding:0 0 10px; margin-bottom:8px; border-bottom:1px solid var(--border);
+}
+.toc a {
+  display:block; font-size:11px; color:var(--text-dim); text-decoration:none;
+  padding:4px 8px; border-radius:5px; border-left:2px solid transparent;
+  transition:all 0.15s; line-height:1.4; margin-bottom:1px;
+}
+.toc a:hover { color:var(--text); background:var(--surface2); }
+.toc a.active { color:var(--text); border-left-color:var(--teal); }
+
+@media (max-width:1000px) {
+  .wrap { grid-template-columns:1fr; padding-top:0; }
+  body { padding-top:0; }
+  .toc {
+    position:sticky; top:0; z-index:200; max-height:none;
+    display:flex; gap:4px; align-items:center; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--bg);
+    border-bottom:1px solid var(--border); padding:10px 0;
+    margin:0 -40px; padding-left:40px; padding-right:40px; grid-row:auto;
+  }
+  .toc::-webkit-scrollbar { display:none; }
+  .toc-title { display:none; }
+  .toc a { white-space:nowrap; flex-shrink:0; border-left:none; border-bottom:2px solid transparent; border-radius:4px 4px 0 0; padding:6px 10px; font-size:10px; }
+  .toc a.active { border-left:none; border-bottom-color:var(--teal); background:var(--surface); }
+  .main { padding-top:20px; }
+  .sec-head { scroll-margin-top:52px; }
+}
+
+/* Headings */
+h1 { font-size:2.4rem; font-weight:800; line-height:1.1; margin-bottom:8px; letter-spacing:-0.02em; }
+.subtitle { font-size:1.05rem; color:var(--text-dim); margin-bottom:32px; max-width:700px; line-height:1.5; }
+
+.sec-head {
+  font-family:var(--font-mono); font-size:11px; font-weight:600;
+  text-transform:uppercase; letter-spacing:1.5px;
+  padding:20px 0 12px; margin-top:40px; margin-bottom:16px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:8px;
+}
+.sec-head .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.dot-teal { background:var(--teal); }
+.dot-amber { background:var(--amber); }
+.dot-sage { background:var(--sage); }
+.dot-terracotta { background:var(--terracotta); }
+.dot-cranberry { background:var(--cranberry); }
+
+/* Cards */
+.ve-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:16px 20px; position:relative; margin-bottom:12px;
+}
+.ve-card--hero {
+  background:color-mix(in srgb, var(--surface) 92%, var(--teal) 8%);
+  box-shadow:0 4px 20px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.03);
+  border-color:color-mix(in srgb, var(--border) 50%, var(--teal) 50%);
+}
+.ve-card--elevated {
+  background:var(--surface-elevated);
+  box-shadow:0 2px 8px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.03);
+}
+.ve-card--recessed {
+  background:color-mix(in srgb, var(--bg) 70%, var(--surface) 30%);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.04); border-color:var(--border);
+}
+
+.ve-card__label {
+  font-family:var(--font-mono); font-size:10px; font-weight:600;
+  text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;
+  display:flex; align-items:center; gap:6px;
+}
+
+/* KPI row */
+.kpi-grid {
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr));
+  gap:12px; margin-bottom:24px;
+}
+.kpi { text-align:center; padding:16px 12px; }
+.kpi-num { font-size:2rem; font-weight:800; line-height:1; margin-bottom:4px; }
+.kpi-label { font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); }
+
+/* Tables */
+.table-wrap { overflow-x:auto; border-radius:10px; border:1px solid var(--border); margin-bottom:16px; }
+table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+thead th {
+  position:sticky; top:0; background:var(--surface2); z-index:2;
+  font-family:var(--font-mono); font-size:10px; text-transform:uppercase;
+  letter-spacing:1px; padding:10px 14px; text-align:left; color:var(--text-dim);
+  border-bottom:1px solid var(--border-bright);
+}
+td {
+  padding:10px 14px; border-bottom:1px solid var(--border);
+  vertical-align:top; line-height:1.5;
+}
+tr:nth-child(even) td { background:color-mix(in srgb, var(--surface) 95%, var(--bg) 5%); }
+tr:hover td { background:var(--surface2); }
+code { font-family:var(--font-mono); font-size:0.82em; background:var(--surface2); padding:1px 5px; border-radius:3px; }
+
+/* Badges */
+.badge { display:inline-block; font-family:var(--font-mono); font-size:10px; font-weight:600; padding:2px 8px; border-radius:4px; letter-spacing:0.5px; text-transform:uppercase; }
+.badge-good { background:var(--sage-dim); color:var(--sage); }
+.badge-warn { background:var(--amber-dim); color:var(--amber); }
+.badge-bad { background:var(--cranberry-dim); color:var(--cranberry); }
+.badge-info { background:var(--teal-dim); color:var(--teal); }
+.badge-neutral { background:var(--surface2); color:var(--text-dim); }
+
+/* Severity indicators */
+.sev { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono); font-size:11px; font-weight:600; }
+.sev::before { content:''; width:6px; height:6px; border-radius:50%; }
+.sev-crit::before { background:var(--cranberry); }
+.sev-high::before { background:var(--terracotta); }
+.sev-med::before { background:var(--amber); }
+.sev-low::before { background:var(--sage); }
+.sev-info::before { background:var(--teal); }
+
+/* Prose */
+p { line-height:1.65; margin-bottom:12px; }
+strong { font-weight:700; }
+ul, ol { padding-left:20px; margin-bottom:12px; }
+li { line-height:1.6; margin-bottom:4px; }
+li code { font-size:0.82em; }
+
+/* Collapsible */
+details { margin-bottom:12px; }
+details summary {
+  cursor:pointer; font-family:var(--font-mono); font-size:11px;
+  font-weight:600; text-transform:uppercase; letter-spacing:1px;
+  color:var(--text-dim); padding:8px 0;
+}
+details summary:hover { color:var(--text); }
+details[open] summary { margin-bottom:8px; }
+
+/* Rating bar */
+.rating-bar { display:flex; gap:3px; align-items:center; }
+.rating-bar .bar { width:28px; height:10px; border-radius:3px; background:var(--border); }
+.rating-bar .bar.filled { background:var(--teal); }
+.rating-bar .bar.half { background:linear-gradient(to right, var(--teal) 50%, var(--border) 50%); }
+
+/* Code blocks */
+pre.code-block {
+  font-family:var(--font-mono); font-size:12px; line-height:1.5;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:14px; overflow-x:auto;
+  white-space:pre-wrap; word-break:break-word; max-height:300px; overflow-y:auto;
+}
+
+/* Grid layouts */
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:700px) { .two-col { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc" id="toc">
+  <div class="toc-title">Review</div>
+  <a href="#s0">Overview</a>
+  <a href="#s1">1. Architecture</a>
+  <a href="#s2">2. Modularity</a>
+  <a href="#s3">3. Readability</a>
+  <a href="#s4">4. Performance</a>
+  <a href="#s5">5. Reliability</a>
+  <a href="#s6">6. Musicality</a>
+  <a href="#s7">7. Playability</a>
+  <a href="#s8">8. Test Coverage</a>
+  <a href="#s9">9. Recommendations</a>
+</nav>
+
+<div class="main">
+
+<h1 class="anim" style="--i:0">re.kriate Adversarial Code Review</h1>
+<p class="subtitle anim" style="--i:1">Multi-perspective analysis of the norns kria sequencer port. Modularity, readability, performance, musicality, and playability evaluated through adversarial review lenses.</p>
+
+<!-- KPIs -->
+<div class="kpi-grid anim-s" style="--i:2">
+  <div class="ve-card kpi" style="border-left:3px solid var(--teal)">
+    <div class="kpi-num" style="color:var(--teal)">~1,200</div>
+    <div class="kpi-label">Lines of Lua (source)</div>
+  </div>
+  <div class="ve-card kpi" style="border-left:3px solid var(--sage)">
+    <div class="kpi-num" style="color:var(--sage)">195</div>
+    <div class="kpi-label">Tests (0 failures)</div>
+  </div>
+  <div class="ve-card kpi" style="border-left:3px solid var(--amber)">
+    <div class="kpi-num" style="color:var(--amber)">14</div>
+    <div class="kpi-label">Source Files</div>
+  </div>
+  <div class="ve-card kpi" style="border-left:3px solid var(--terracotta)">
+    <div class="kpi-num" style="color:var(--terracotta)">0.12s</div>
+    <div class="kpi-label">Test Suite Time</div>
+  </div>
+</div>
+
+<!-- ======================== S0: OVERVIEW ======================== -->
+<div id="s0" class="sec-head anim" style="--i:3"><span class="dot dot-teal"></span>Executive Summary</div>
+
+<div class="ve-card ve-card--hero anim" style="--i:4">
+  <p><strong>Verdict: Clean, well-structured early-stage sequencer with strong foundations and several concrete areas for improvement.</strong></p>
+  <p>The codebase follows the project's own CLAUDE.md conventions consistently: thin global hooks, context-object state management, modular decomposition. The architecture is sound for a norns script of this complexity. However, there are meaningful gaps in musicality features, some performance concerns in the step engine, and several modularity opportunities that would pay dividends as the project grows.</p>
+  <p style="margin-bottom:0">The review below is organized by concern: architecture, modularity, readability, performance, reliability, musicality, playability, test coverage, and prioritized recommendations.</p>
+</div>
+
+<!-- ======================== S1: ARCHITECTURE ======================== -->
+<div id="s1" class="sec-head anim" style="--i:5"><span class="dot dot-teal"></span>1 &mdash; Architecture Assessment</div>
+
+<div class="ve-card ve-card--elevated anim" style="--i:6">
+  <div class="ve-card__label" style="color:var(--sage)">Strengths</div>
+  <ul>
+    <li><strong>Context object pattern</strong> is consistently applied. All state flows through <code>ctx</code>, making the code testable and free of hidden globals.</li>
+    <li><strong>Thin entrypoints</strong> &mdash; <code>re_kriate.lua</code> (55 lines) and <code>re_kriate_seamstress.lua</code> (63 lines) are exactly what CLAUDE.md prescribes: only global hooks, delegation to modules.</li>
+    <li><strong>Voice abstraction</strong> is clean: <code>nb_voice</code>, <code>midi</code>, and <code>recorder</code> all conform to the same <code>play_note</code>/<code>note_on</code>/<code>note_off</code>/<code>all_notes_off</code> interface without a formal class system.</li>
+    <li><strong>Dual-platform support</strong> &mdash; norns and seamstress share the core (<code>app</code>, <code>sequencer</code>, <code>track</code>, <code>grid_ui</code>) and only diverge at entrypoint/voice/screen layers.</li>
+    <li><strong>Remote API</strong> is well-designed: transport-agnostic dispatch, validation helpers, OSC transport as a separate layer. The <code>list_paths()</code> introspection is a nice touch.</li>
+  </ul>
+</div>
+
+<div class="ve-card anim" style="--i:7">
+  <div class="ve-card__label" style="color:var(--terracotta)">Concerns</div>
+  <ul>
+    <li><strong>app.lua couples UI + init + params</strong>: It creates params, connects grid, sets up metro, AND handles screen redraw. This is the single file most likely to become unmaintainable.</li>
+    <li><strong>No formal voice interface contract</strong>: The duck-typed interface works now but has no documentation or validation. A voice missing <code>play_note</code> would fail silently at runtime deep in sequencer.lua.</li>
+    <li><strong>grid_ui.lua mixes rendering + input + nav logic</strong> in one 233-line file. The nav_key function requires a delayed <code>require</code> of sequencer to toggle play/stop, which is a code smell.</li>
+    <li><strong>Sequencer creates unbounded coroutines</strong>: ratchet spawns a new <code>clock.run</code> for each ratcheted step with no cancellation tracking. Fast sequences can accumulate zombie coroutines.</li>
+  </ul>
+</div>
+
+<!-- ======================== S2: MODULARITY ======================== -->
+<div id="s2" class="sec-head anim" style="--i:8"><span class="dot dot-amber"></span>2 &mdash; Modularity Review</div>
+
+<div class="table-wrap anim" style="--i:9">
+<table>
+<thead>
+  <tr><th style="width:130px">Module</th><th style="width:50px">Lines</th><th style="width:90px">Coupling</th><th>Assessment</th><th style="width:80px">Grade</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td><code>track.lua</code></td><td>188</td><td><span class="badge badge-good">None</span></td>
+    <td>Pure data model, zero dependencies. Well-factored: new/advance/set/toggle/loop. Default patterns are musically sensible. <strong>Best module in the codebase.</strong></td>
+    <td><span class="badge badge-good">A</span></td>
+  </tr>
+  <tr>
+    <td><code>direction.lua</code></td><td>93</td><td><span class="badge badge-good">None</span></td>
+    <td>Clean strategy pattern. All 5 modes work correctly. Pendulum handles single-step edge case. No dependencies.</td>
+    <td><span class="badge badge-good">A</span></td>
+  </tr>
+  <tr>
+    <td><code>scale.lua</code></td><td>34</td><td><span class="badge badge-info">musicutil</span></td>
+    <td>Minimal and correct. The hardcoded <code>7</code> in <code>to_midi</code> assumes heptatonic scales &mdash; breaks for pentatonic/chromatic. See musicality section.</td>
+    <td><span class="badge badge-warn">B-</span></td>
+  </tr>
+  <tr>
+    <td><code>sequencer.lua</code></td><td>134</td><td><span class="badge badge-warn">track, scale, direction</span></td>
+    <td>Core engine. Clean step logic, but ratchet coroutine management is a concern (see Performance). The DIVISION_MAP is well thought out.</td>
+    <td><span class="badge badge-warn">B+</span></td>
+  </tr>
+  <tr>
+    <td><code>grid_ui.lua</code></td><td>233</td><td><span class="badge badge-warn">track, sequencer</span></td>
+    <td>Largest module. Mixes three concerns (render, input, navigation). The delayed <code>require("lib/sequencer")</code> in <code>nav_key</code> is a circular dependency workaround. Duplicated <code>EXTENDED_PAGES</code> / <code>EXTENDED_REVERSE</code> tables (exported AND local).</td>
+    <td><span class="badge badge-warn">B-</span></td>
+  </tr>
+  <tr>
+    <td><code>app.lua</code></td><td>142</td><td><span class="badge badge-bad">track, scale, sequencer, grid_ui, params, grid, metro, screen</span></td>
+    <td>God-module risk. Handles init, params, grid connection, metro setup, screen redraw, key/enc input, and cleanup. Should be decomposed.</td>
+    <td><span class="badge badge-bad">C+</span></td>
+  </tr>
+  <tr>
+    <td><code>voices/midi.lua</code></td><td>48</td><td><span class="badge badge-info">clock</span></td>
+    <td>Clean implementation. Retrigger logic is correct. <code>all_notes_off</code> sends CC 123 as a safety net.</td>
+    <td><span class="badge badge-good">A-</span></td>
+  </tr>
+  <tr>
+    <td><code>voices/recorder.lua</code></td><td>76</td><td><span class="badge badge-info">clock</span></td>
+    <td>Useful test utility. <code>clear_all</code> uses O(n) <code>table.remove</code> in a loop (O(n&sup2;) total). Minor but worth noting.</td>
+    <td><span class="badge badge-warn">B+</span></td>
+  </tr>
+  <tr>
+    <td><code>remote/api.lua</code></td><td>367</td><td><span class="badge badge-warn">track, sequencer, direction</span></td>
+    <td>Well-structured handler registry. Validation is consistent. No state snapshot diffing &mdash; every snapshot copies everything. Fine for now.</td>
+    <td><span class="badge badge-good">A-</span></td>
+  </tr>
+  <tr>
+    <td><code>remote/osc.lua</code></td><td>103</td><td><span class="badge badge-info">api</span></td>
+    <td>Clean transport layer. Chains with previous handler correctly. Reply format is reasonable.</td>
+    <td><span class="badge badge-good">A-</span></td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<div class="ve-card anim" style="--i:10">
+  <div class="ve-card__label" style="color:var(--amber)">Key Modularity Recommendations</div>
+  <ol>
+    <li><strong>Split <code>app.lua</code></strong> into: <code>app/init.lua</code> (params, grid, metro setup), <code>app/screen.lua</code> (norns screen redraw), <code>app/input.lua</code> (key/enc handlers). The init function is doing too much &mdash; it should orchestrate, not implement.</li>
+    <li><strong>Split <code>grid_ui.lua</code></strong> into: <code>grid/render.lua</code>, <code>grid/input.lua</code>, <code>grid/nav.lua</code>. The delayed require of sequencer in nav_key would resolve naturally if nav delegates to a callback on ctx.</li>
+    <li><strong>Remove duplicated extended page tables</strong> in grid_ui.lua &mdash; <code>EXTENDED_PAGES</code>/<code>EXTENDED_REVERSE</code> are defined both as <code>M.EXTENDED_*</code> and as <code>local EXTENDED_*</code>. Use only the module exports.</li>
+    <li><strong>Define a voice interface spec</strong> as a comment or small validation function. Current duck-typing relies on convention alone.</li>
+  </ol>
+</div>
+
+<!-- ======================== S3: READABILITY ======================== -->
+<div id="s3" class="sec-head anim" style="--i:11"><span class="dot dot-sage"></span>3 &mdash; Readability Review</div>
+
+<div class="two-col anim" style="--i:12">
+  <div class="ve-card" style="border-left:3px solid var(--sage)">
+    <div class="ve-card__label" style="color:var(--sage)">Well Done</div>
+    <ul>
+      <li>Consistent naming: <code>snake_case</code> everywhere, no abbreviation soup</li>
+      <li>Module pattern is uniform: <code>local M = {} ... return M</code></li>
+      <li>Comments explain "why" not "what" (e.g., the SCALE_DEGREES constant)</li>
+      <li>Map tables (<code>DURATION_MAP</code>, <code>VELOCITY_MAP</code>, <code>DIVISION_MAP</code>) are clearly laid out with inline comments</li>
+      <li>Default patterns in track.lua are formatted as a visual grid &mdash; easy to read rhythmically</li>
+    </ul>
+  </div>
+  <div class="ve-card" style="border-left:3px solid var(--terracotta)">
+    <div class="ve-card__label" style="color:var(--terracotta)">Issues</div>
+    <ul>
+      <li><code>NAV_TRACK</code> in grid_ui.lua is declared with a <code>-- @@ unused</code> comment but still present. Dead code.</li>
+      <li>Magic numbers in <code>scale.lua:27</code>: <code>(3 + oct_offset) * 7 + degree</code> &mdash; the <code>3</code> and <code>7</code> need named constants or a comment explaining the scale geometry</li>
+      <li><code>sequencer.lua:84</code>: <code>DURATION_MAP[3]</code> as fallback &mdash; why 3 specifically? Should be a named constant like <code>DEFAULT_DURATION</code></li>
+      <li>Inconsistent indentation in <code>app.lua:85-95</code> &mdash; redraw uses 3-space indent while the rest uses 2-space</li>
+      <li><code>grid_ui.lua:167-173</code>: play/stop toggle in nav_key does a delayed require of sequencer &mdash; jarring when reading the module top-to-bottom</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ======================== S4: PERFORMANCE ======================== -->
+<div id="s4" class="sec-head anim" style="--i:13"><span class="dot dot-terracotta"></span>4 &mdash; Performance Analysis</div>
+
+<div class="ve-card ve-card--elevated anim" style="--i:14">
+  <div class="ve-card__label" style="color:var(--teal)">Timing Context</div>
+  <p>At 120 BPM with 1/16th division, <code>step_track</code> fires every 125ms. At 180 BPM, every ~83ms. The step function must complete well under this to avoid clock drift. The norns Lua runtime is single-threaded &mdash; any blocking in a clock coroutine delays all other coroutines.</p>
+</div>
+
+<div class="table-wrap anim" style="--i:15">
+<table>
+<thead>
+  <tr><th>Issue</th><th style="width:80px">Severity</th><th>Details</th><th>Recommendation</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td><strong>Ratchet coroutine leak</strong></td>
+    <td><span class="sev sev-high">High</span></td>
+    <td><code>sequencer.lua:101-108</code>: Each ratchet spawns a <code>clock.run</code> but the coroutine ID is never stored or cancelled. If the sequencer is stopped mid-ratchet, these coroutines linger until they naturally complete. At high ratchet counts (7) with fast divisions, coroutines accumulate.</td>
+    <td>Store ratchet coroutine IDs on the track/ctx. Cancel them in <code>sequencer.stop()</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>Per-step table creation in step_track</strong></td>
+    <td><span class="sev sev-med">Medium</span></td>
+    <td><code>sequencer.lua:64-67</code>: Creates a new <code>vals = {}</code> table every step, populating it via loop. On norns (LuaJIT), this is fast but generates GC pressure at high step rates.</td>
+    <td>Pre-allocate a vals table per track on ctx, reuse it each step. Eliminates allocation in the hot path.</td>
+  </tr>
+  <tr>
+    <td><strong>Grid metro fires at 30fps unconditionally</strong></td>
+    <td><span class="sev sev-low">Low</span></td>
+    <td><code>app.lua:66-73</code>: The grid metro runs at 30fps even when nothing changes. The <code>grid_dirty</code> flag prevents unnecessary redraws, but the metro itself still ticks.</td>
+    <td>This is standard norns practice and acceptable. The dirty check makes it O(1) when idle.</td>
+  </tr>
+  <tr>
+    <td><strong>Seamstress screen metro at 15fps</strong></td>
+    <td><span class="sev sev-low">Low</span></td>
+    <td><code>re_kriate_seamstress.lua:47</code>: Redraws every frame regardless of changes. No dirty check.</td>
+    <td>Add a <code>screen_dirty</code> flag similar to <code>grid_dirty</code>.</td>
+  </tr>
+  <tr>
+    <td><strong>recorder.clear uses O(n&sup2;) algorithm</strong></td>
+    <td><span class="sev sev-low">Low</span></td>
+    <td><code>recorder.lua:60-68</code>: <code>table.remove</code> in a forward-scan loop shifts all subsequent elements on each removal. O(n&sup2;) worst case.</td>
+    <td>Test-only code, so not critical. Could be fixed with a reverse scan or filter-copy approach.</td>
+  </tr>
+  <tr>
+    <td><strong>Linear param name validation in remote API</strong></td>
+    <td><span class="sev sev-low">Low</span></td>
+    <td><code>api.lua:29-33</code>: <code>check_param</code> does a linear scan of PARAM_NAMES (8 entries) for every API call that involves a param.</td>
+    <td>Convert to a hash set. Marginal gain but trivial to implement.</td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<div class="ve-card anim" style="--i:16">
+  <div class="ve-card__label" style="color:var(--terracotta)">Load Time Assessment</div>
+  <p><strong>Startup</strong>: The script loads approximately 14 Lua modules via <code>require</code>. Each is small (&lt;400 lines). On norns hardware (ARM Cortex-A72), this completes in well under 100ms. <code>musicutil.generate_scale</code> is the heaviest operation at init and it runs once.</p>
+  <p><strong>Grid connection</strong>: <code>grid.connect()</code> is async on norns. The metro starts immediately. Grid display appears within one metro tick (33ms) after connection.</p>
+  <p style="margin-bottom:0"><strong>Overall</strong>: Init performance is excellent for a norns script. No concerns about load time.</p>
+</div>
+
+<!-- ======================== S5: RELIABILITY ======================== -->
+<div id="s5" class="sec-head anim" style="--i:17"><span class="dot dot-cranberry"></span>5 &mdash; Reliability Assessment</div>
+
+<div class="table-wrap anim" style="--i:18">
+<table>
+<thead>
+  <tr><th>Scenario</th><th style="width:80px">Risk</th><th>Current Behavior</th><th>Recommendation</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td>Grid disconnects mid-performance</td>
+    <td><span class="sev sev-med">Medium</span></td>
+    <td>Grid metro keeps ticking, <code>g:all(0)</code> and <code>g:refresh()</code> calls may error if the grid object becomes invalid</td>
+    <td>Wrap grid_ui.redraw in a pcall or check <code>g.device</code> presence</td>
+  </tr>
+  <tr>
+    <td>Voice throws error during play_note</td>
+    <td><span class="sev sev-med">Medium</span></td>
+    <td>Error propagates up through clock coroutine, potentially crashing the track clock</td>
+    <td>Wrap <code>play_note</code> call in pcall in <code>sequencer.play_note</code></td>
+  </tr>
+  <tr>
+    <td>Scale with &lt;7 degrees per octave (pentatonic, blues)</td>
+    <td><span class="sev sev-high">High</span></td>
+    <td><code>scale.lua:to_midi</code> assumes 7 degrees per octave. Pentatonic (5) will produce wrong notes; blues (6) and chromatic (12) will be off by octaves</td>
+    <td>Derive degree count from scale length: <code>degrees_per_oct = #scale_notes / octaves</code></td>
+  </tr>
+  <tr>
+    <td>Loop start > loop end (set via API)</td>
+    <td><span class="sev sev-low">Low</span></td>
+    <td><code>track.set_loop</code> correctly rejects this</td>
+    <td>Already handled</td>
+  </tr>
+  <tr>
+    <td>Rapid start/stop toggle</td>
+    <td><span class="sev sev-low">Low</span></td>
+    <td><code>sequencer.start</code> guards with <code>if ctx.playing then return end</code>. Safe.</td>
+    <td>Already handled</td>
+  </tr>
+  <tr>
+    <td>Missing voice for a track</td>
+    <td><span class="sev sev-low">Low</span></td>
+    <td><code>sequencer.play_note</code> checks <code>ctx.voices and ctx.voices[track_num]</code>. Safe.</td>
+    <td>Already handled</td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<!-- ======================== S6: MUSICALITY ======================== -->
+<div id="s6" class="sec-head anim" style="--i:19"><span class="dot dot-teal"></span>6 &mdash; Musicality Review</div>
+
+<div class="ve-card ve-card--hero anim" style="--i:20">
+  <p><strong>Core question: Does this sound and feel like kria?</strong></p>
+  <p style="margin-bottom:0">Kria's musical identity comes from: independent per-parameter loop lengths creating polymetric patterns, intuitive scale quantization, smooth clock division, and the interplay between tracks. Let's evaluate each aspect.</p>
+</div>
+
+<div class="table-wrap anim" style="--i:21">
+<table>
+<thead>
+  <tr><th style="width:160px">Feature</th><th style="width:80px">Status</th><th>Assessment</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td>Per-param loop lengths</td>
+    <td><span class="badge badge-good">Done</span></td>
+    <td>Each of the 8 params (trigger, note, octave, duration, velocity, ratchet, alt_note, glide) has independent <code>loop_start</code>/<code>loop_end</code>. This is the heart of kria and it works correctly. Polymetric sequences emerge naturally.</td>
+  </tr>
+  <tr>
+    <td>Direction modes</td>
+    <td><span class="badge badge-good">Done</span></td>
+    <td>5 modes (forward, reverse, pendulum, drunk, random). Applied per-track but <strong>not per-param</strong>. In original kria, each param lane can have its own direction. This limits polymetric possibilities.</td>
+  </tr>
+  <tr>
+    <td>Scale quantization</td>
+    <td><span class="badge badge-warn">Partial</span></td>
+    <td>14 scales available. Root note is configurable. <strong>However</strong>: the <code>to_midi</code> function hardcodes 7 degrees per octave. Pentatonic Major/Minor (5 degrees), Blues (6), Whole Tone (6), and Chromatic (12) will produce incorrect note mapping. The degree selector (1-7 on grid) doesn't match these scales.</td>
+  </tr>
+  <tr>
+    <td>Clock division</td>
+    <td><span class="badge badge-good">Done</span></td>
+    <td>7 divisions from 1/16 to whole note, per-track. Uses <code>clock.sync</code> for tight timing. Division is a param, not per-step &mdash; matches original kria.</td>
+  </tr>
+  <tr>
+    <td>Ratchet</td>
+    <td><span class="badge badge-good">Done</span></td>
+    <td>Per-step ratchet count (1-7) subdivides the note duration evenly. Musically effective for adding rhythmic intensity. Coroutine management is the only concern.</td>
+  </tr>
+  <tr>
+    <td>Glide/Portamento</td>
+    <td><span class="badge badge-warn">Partial</span></td>
+    <td>Grid UI for setting glide values exists. <code>sequencer.lua</code> calls <code>voice:set_portamento()</code>. But <strong>neither nb_voice nor midi voice implements set_portamento</strong>. It's a no-op in practice. The MIDI voice would need CC 5 (portamento time) + CC 65 (portamento on/off).</td>
+  </tr>
+  <tr>
+    <td>Alt-note</td>
+    <td><span class="badge badge-good">Done</span></td>
+    <td>Adds a secondary note degree offset. Wraps around the scale correctly via modular arithmetic. Good for creating melodic variation without changing the base pattern.</td>
+  </tr>
+  <tr>
+    <td>Velocity expression</td>
+    <td><span class="badge badge-warn">Basic</span></td>
+    <td>7 velocity levels (0.15-1.0). Mapped linearly. The jump from 0.15 to 0.30 at the bottom is proportionally large, making subtle dynamics at low velocity hard to achieve. An exponential curve would feel more natural.</td>
+  </tr>
+  <tr>
+    <td>Pattern storage</td>
+    <td><span class="badge badge-bad">Missing</span></td>
+    <td>No pattern save/recall. Original kria has multiple pattern slots. This is a significant musical limitation &mdash; you lose everything on script reload.</td>
+  </tr>
+  <tr>
+    <td>Pattern morphing / probability</td>
+    <td><span class="badge badge-bad">Missing</span></td>
+    <td>No trigger probability, no pattern interpolation. These are common in modern sequencers and would add musical depth.</td>
+  </tr>
+  <tr>
+    <td>Swing / groove</td>
+    <td><span class="badge badge-bad">Missing</span></td>
+    <td>No swing parameter. All divisions are quantized to straight time. Even a simple swing amount (delay even-numbered steps) would significantly improve groove feel.</td>
+  </tr>
+  <tr>
+    <td>Transposition</td>
+    <td><span class="badge badge-bad">Missing</span></td>
+    <td>No per-track or global transposition. The root note param changes the scale globally, but there's no way to transpose a pattern up/down by scale degrees during performance.</td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<div class="ve-card anim" style="--i:22">
+  <div class="ve-card__label" style="color:var(--teal)">Scale Quantization Bug Detail</div>
+  <p>The <code>SCALE_NAMES</code> in <code>app.lua</code> include "Pentatonic Major", "Pentatonic Minor", "Blues Scale", "Whole Tone", and "Chromatic". But <code>scale.lua:to_midi</code> does:</p>
+  <pre class="code-block">local idx = (3 + oct_offset) * 7 + degree</pre>
+  <p>That <code>7</code> is hardcoded. For pentatonic scales (5 degrees per octave), this formula skips notes and wraps incorrectly. For chromatic (12 degrees per octave), the grid's 7-row display can only access 7 of 12 pitches anyway.</p>
+  <p style="margin-bottom:0"><strong>Fix</strong>: Either (a) restrict scale choices to 7-degree scales only, or (b) compute degrees per octave dynamically and adjust the grid display row count. Option (a) is simpler and arguably more kria-like.</p>
+</div>
+
+<!-- ======================== S7: PLAYABILITY ======================== -->
+<div id="s7" class="sec-head anim" style="--i:23"><span class="dot dot-amber"></span>7 &mdash; Playability Review</div>
+
+<div class="ve-card ve-card--elevated anim" style="--i:24">
+  <div class="ve-card__label" style="color:var(--amber)">Grid Interaction Quality</div>
+  <p>The grid UI is functional but has several playability gaps compared to original kria:</p>
+</div>
+
+<div class="table-wrap anim" style="--i:25">
+<table>
+<thead>
+  <tr><th style="width:180px">Interaction</th><th style="width:80px">Quality</th><th>Notes</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td>Step toggle (trigger page)</td>
+    <td><span class="badge badge-good">Good</span></td>
+    <td>Toggle on press, 4-track view, playhead at brightness 15. Standard kria behavior.</td>
+  </tr>
+  <tr>
+    <td>Value editing (note/oct/dur/vel)</td>
+    <td><span class="badge badge-good">Good</span></td>
+    <td>Bar graph display with 7 rows. Press sets value directly. In-loop steps have distinct brightness. Playhead highlights well.</td>
+  </tr>
+  <tr>
+    <td>Loop editing</td>
+    <td><span class="badge badge-warn">Decent</span></td>
+    <td>Hold loop button + press start + press end. Works but <strong>no visual feedback</strong> showing the current loop region while editing. User can't see what they're changing until they release the loop button.</td>
+  </tr>
+  <tr>
+    <td>Extended page toggle</td>
+    <td><span class="badge badge-good">Good</span></td>
+    <td>Double-tap page button to access ratchet/alt_note/glide. Nav highlights the primary button when on extended page. Intuitive.</td>
+  </tr>
+  <tr>
+    <td>Track select</td>
+    <td><span class="badge badge-good">Good</span></td>
+    <td>Grid buttons 1-4 on nav row. Encoder E1 on norns. Immediate feedback.</td>
+  </tr>
+  <tr>
+    <td>Mute per track</td>
+    <td><span class="badge badge-bad">Missing UI</span></td>
+    <td>Mute is implemented in sequencer (and available via remote API) but <strong>there's no grid button or norns key to toggle mute</strong>. Users must use the remote API or modify code.</td>
+  </tr>
+  <tr>
+    <td>Direction per track</td>
+    <td><span class="badge badge-bad">Missing UI</span></td>
+    <td>Direction is implemented in sequencer but <strong>no grid or norns UI to change it</strong>. Only accessible via remote API.</td>
+  </tr>
+  <tr>
+    <td>Loop region visibility</td>
+    <td><span class="badge badge-warn">Partial</span></td>
+    <td>On trigger page: loop region shown at brightness 2. On value pages: steps outside loop are dimmer. <strong>But</strong>: when loop is shorter than 16, the out-of-loop area is just "dark" with no indication of where the loop boundaries are.</td>
+  </tr>
+  <tr>
+    <td>Screen UI (norns)</td>
+    <td><span class="badge badge-warn">Minimal</span></td>
+    <td>Shows title, track/page, play state. <strong>No step position visualization</strong>, no parameter values, no track overview. The screen is dramatically underutilized &mdash; most of the 128x64 display is empty.</td>
+  </tr>
+  <tr>
+    <td>Keyboard (seamstress)</td>
+    <td><span class="badge badge-warn">Basic</span></td>
+    <td>Space/r/1-4/qwety for essential controls. No keys for extended pages, mute, direction, or loop editing.</td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<!-- ======================== S8: TEST COVERAGE ======================== -->
+<div id="s8" class="sec-head anim" style="--i:26"><span class="dot dot-sage"></span>8 &mdash; Test Coverage</div>
+
+<div class="ve-card anim" style="--i:27">
+  <p><strong>195 tests, 0 failures, 0.12s</strong>. Excellent test suite for a norns script &mdash; most norns scripts have zero tests.</p>
+</div>
+
+<div class="table-wrap anim" style="--i:28">
+<table>
+<thead>
+  <tr><th>Spec File</th><th style="width:60px">Tests</th><th style="width:90px">Coverage</th><th>Gaps</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td><code>sequencer_spec.lua</code></td><td>~40</td><td><span class="badge badge-good">High</span></td>
+    <td>Direction integration, mute, alt-note, glide, ratchet all covered. Missing: ratchet coroutine cancellation, edge case of ratchet with very short divisions.</td>
+  </tr>
+  <tr>
+    <td><code>track_spec.lua</code></td><td>~12</td><td><span class="badge badge-good">High</span></td>
+    <td>Core data model well tested. Missing: edge cases of set_step with boundary values (0, values > 7).</td>
+  </tr>
+  <tr>
+    <td><code>grid_ui_spec.lua</code></td><td>~30</td><td><span class="badge badge-good">High</span></td>
+    <td>Extended pages, nav toggle, value editing, loop editing all covered. Missing: out-of-bounds grid coordinates.</td>
+  </tr>
+  <tr>
+    <td><code>direction_spec.lua</code></td><td>~15</td><td><span class="badge badge-good">High</span></td>
+    <td>All 5 modes tested including edge cases. Pendulum single-step loop covered. Strong.</td>
+  </tr>
+  <tr>
+    <td><code>voice_spec.lua</code></td><td>~25</td><td><span class="badge badge-good">High</span></td>
+    <td>Both recorder and MIDI voice well tested. Retrigger, all_notes_off, multi-channel covered.</td>
+  </tr>
+  <tr>
+    <td><code>remote_api_spec.lua</code></td><td>~30</td><td><span class="badge badge-good">High</span></td>
+    <td>All endpoints tested. Validation, error cases, snapshot structure. Missing: concurrent API calls, rapid-fire dispatches.</td>
+  </tr>
+  <tr>
+    <td><code>integration_spec.lua</code></td><td>~15</td><td><span class="badge badge-warn">Medium</span></td>
+    <td>Tests full wiring from app.init through sequencer to voices. Missing: full clock cycle simulation (currently clock.sync is a no-op in tests).</td>
+  </tr>
+  <tr>
+    <td><code>keyboard_spec.lua</code></td><td>~15</td><td><span class="badge badge-good">High</span></td>
+    <td>All keys mapped, input filtering (release, repeat, unmapped) covered. Missing: extended page shortcuts.</td>
+  </tr>
+  <tr>
+    <td colspan="2"><strong>Not tested</strong></td><td><span class="badge badge-bad">None</span></td>
+    <td><code>scale.lua</code> (requires musicutil mock, covered indirectly via integration), <code>osc.lua</code> (requires osc global mock), <code>nb_voice.lua</code> (requires params system), norns screen <code>app.redraw</code></td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<!-- ======================== S9: RECOMMENDATIONS ======================== -->
+<div id="s9" class="sec-head anim" style="--i:29"><span class="dot dot-cranberry"></span>9 &mdash; Prioritized Recommendations</div>
+
+<div class="ve-card ve-card--hero anim" style="--i:30">
+  <div class="ve-card__label" style="color:var(--cranberry)">Priority 1 &mdash; Bugs / Correctness</div>
+  <p>These should be fixed before adding features.</p>
+</div>
+
+<div class="table-wrap anim" style="--i:31">
+<table>
+<thead>
+  <tr><th style="width:40px">#</th><th style="width:100px">Priority</th><th>Issue</th><th>Effort</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td>1</td><td><span class="sev sev-crit">Critical</span></td>
+    <td><strong>Fix scale.lua for non-heptatonic scales</strong>: Either restrict SCALE_NAMES to 7-degree scales or compute degrees_per_octave dynamically. Currently Pentatonic, Blues, Whole Tone, and Chromatic produce wrong notes.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>2</td><td><span class="sev sev-high">High</span></td>
+    <td><strong>Track ratchet coroutine IDs</strong>: Store IDs from <code>clock.run</code> in ratchet handler. Cancel them on stop/reset. Prevents zombie coroutines.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>3</td><td><span class="sev sev-med">Medium</span></td>
+    <td><strong>Guard grid callbacks against disconnection</strong>: Wrap <code>grid_ui.redraw</code> content in a pcall or check grid validity. Prevents crash on unplug.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>4</td><td><span class="sev sev-med">Medium</span></td>
+    <td><strong>Protect voice calls in sequencer</strong>: Wrap <code>voice:play_note</code> in pcall so a voice error doesn't crash the track clock coroutine.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<div class="ve-card ve-card--elevated anim" style="--i:32">
+  <div class="ve-card__label" style="color:var(--amber)">Priority 2 &mdash; Musicality</div>
+</div>
+<div class="table-wrap anim" style="--i:33">
+<table>
+<thead>
+  <tr><th style="width:40px">#</th><th style="width:100px">Priority</th><th>Feature</th><th>Effort</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td>5</td><td><span class="sev sev-high">High</span></td>
+    <td><strong>Pattern save/recall</strong>: Store track state (all params, loops, divisions, directions) in pattern slots. Load via grid or params. Without this, the sequencer can't be used in real performance.</td>
+    <td><span class="badge badge-warn">Medium</span></td>
+  </tr>
+  <tr>
+    <td>6</td><td><span class="sev sev-high">High</span></td>
+    <td><strong>Implement glide for MIDI voice</strong>: Send CC 5 (portamento time) and CC 65 (portamento on/off). Currently <code>set_portamento</code> is only checked, never implemented in any voice.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>7</td><td><span class="sev sev-med">Medium</span></td>
+    <td><strong>Per-param direction</strong>: Allow each param lane (trigger, note, octave, etc.) to have its own direction mode, not just per-track. This is a defining kria feature for polymetric complexity.</td>
+    <td><span class="badge badge-warn">Medium</span></td>
+  </tr>
+  <tr>
+    <td>8</td><td><span class="sev sev-med">Medium</span></td>
+    <td><strong>Swing parameter</strong>: Delay even-numbered steps by a configurable amount (0-70%). Adds groove to otherwise rigid sequences. Could be per-track.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>9</td><td><span class="sev sev-med">Medium</span></td>
+    <td><strong>Velocity curve</strong>: Replace linear velocity map with exponential curve. Current 0.15-1.0 linear spread makes soft dynamics (pp to mp) hard to control. Suggest: <code>0.05, 0.12, 0.25, 0.45, 0.65, 0.85, 1.0</code></td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>10</td><td><span class="sev sev-low">Low</span></td>
+    <td><strong>Trigger probability</strong>: Per-step probability that a trigger fires (100% default). Adds organic variation. Could share a page with trigger via the extended page mechanism.</td>
+    <td><span class="badge badge-warn">Medium</span></td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<div class="ve-card ve-card--elevated anim" style="--i:34">
+  <div class="ve-card__label" style="color:var(--sage)">Priority 3 &mdash; Playability</div>
+</div>
+<div class="table-wrap anim" style="--i:35">
+<table>
+<thead>
+  <tr><th style="width:40px">#</th><th style="width:100px">Priority</th><th>Feature</th><th>Effort</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td>11</td><td><span class="sev sev-high">High</span></td>
+    <td><strong>Grid mute buttons</strong>: Add mute toggles on the nav row (e.g., hold track button to mute). The feature exists in the engine but users can't access it.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>12</td><td><span class="sev sev-high">High</span></td>
+    <td><strong>Grid direction selector</strong>: Add a grid gesture (e.g., hold track + press direction) to change track direction. Currently only accessible via remote API.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>13</td><td><span class="sev sev-med">Medium</span></td>
+    <td><strong>Richer norns screen UI</strong>: Show step positions, current notes, active params for the selected track. The 128x64 display can fit much more information than the current 3-line display.</td>
+    <td><span class="badge badge-warn">Medium</span></td>
+  </tr>
+  <tr>
+    <td>14</td><td><span class="sev sev-low">Low</span></td>
+    <td><strong>Loop region visual feedback during editing</strong>: While loop button is held and first press is set, highlight the potential loop region on the grid as the user considers the end point.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<div class="ve-card ve-card--elevated anim" style="--i:36">
+  <div class="ve-card__label" style="color:var(--teal)">Priority 4 &mdash; Code Quality</div>
+</div>
+<div class="table-wrap anim" style="--i:37">
+<table>
+<thead>
+  <tr><th style="width:40px">#</th><th style="width:100px">Priority</th><th>Item</th><th>Effort</th></tr>
+</thead>
+<tbody>
+  <tr>
+    <td>15</td><td><span class="sev sev-med">Medium</span></td>
+    <td><strong>Split app.lua</strong>: Separate init/params, screen rendering, and input handling into distinct modules.</td>
+    <td><span class="badge badge-warn">Medium</span></td>
+  </tr>
+  <tr>
+    <td>16</td><td><span class="sev sev-med">Medium</span></td>
+    <td><strong>Split grid_ui.lua</strong>: Separate render, input, and nav into distinct modules. Remove the delayed require of sequencer.</td>
+    <td><span class="badge badge-warn">Medium</span></td>
+  </tr>
+  <tr>
+    <td>17</td><td><span class="sev sev-low">Low</span></td>
+    <td><strong>Remove dead code</strong>: <code>NAV_TRACK</code> table (marked unused), duplicate <code>EXTENDED_PAGES</code>/<code>EXTENDED_REVERSE</code> locals, <code>track.advance()</code> (superseded by <code>direction.advance()</code>).</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+  <tr>
+    <td>18</td><td><span class="sev sev-low">Low</span></td>
+    <td><strong>Fix indentation inconsistency</strong>: <code>app.lua:85-95</code> uses 3-space indent. Standardize on 2-space.</td>
+    <td><span class="badge badge-info">Trivial</span></td>
+  </tr>
+  <tr>
+    <td>19</td><td><span class="sev sev-low">Low</span></td>
+    <td><strong>Name magic numbers</strong>: <code>DIVISION_MAP[1]</code> fallback, <code>DURATION_MAP[3]</code> fallback, <code>VELOCITY_MAP[4]</code> fallback should be named constants.</td>
+    <td><span class="badge badge-info">Trivial</span></td>
+  </tr>
+  <tr>
+    <td>20</td><td><span class="sev sev-low">Low</span></td>
+    <td><strong>Add scale.lua tests</strong>: Direct unit tests for <code>build_scale</code> and <code>to_midi</code> with mocked musicutil. Currently only tested indirectly.</td>
+    <td><span class="badge badge-info">Small</span></td>
+  </tr>
+</tbody>
+</table>
+</div>
+
+<div class="ve-card ve-card--recessed anim" style="--i:38">
+  <div class="ve-card__label" style="color:var(--text-dim)">Overall Scores</div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:16px; margin-top:8px;">
+    <div>
+      <div style="font-size:0.85rem; margin-bottom:6px;"><strong>Modularity</strong></div>
+      <div class="rating-bar">
+        <span class="bar filled"></span><span class="bar filled"></span><span class="bar filled"></span><span class="bar half"></span><span class="bar"></span>
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-left:4px;">3.5/5</span>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; margin-bottom:6px;"><strong>Readability</strong></div>
+      <div class="rating-bar">
+        <span class="bar filled"></span><span class="bar filled"></span><span class="bar filled"></span><span class="bar filled"></span><span class="bar"></span>
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-left:4px;">4/5</span>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; margin-bottom:6px;"><strong>Performance</strong></div>
+      <div class="rating-bar">
+        <span class="bar filled"></span><span class="bar filled"></span><span class="bar filled"></span><span class="bar half"></span><span class="bar"></span>
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-left:4px;">3.5/5</span>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; margin-bottom:6px;"><strong>Reliability</strong></div>
+      <div class="rating-bar">
+        <span class="bar filled"></span><span class="bar filled"></span><span class="bar filled"></span><span class="bar"></span><span class="bar"></span>
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-left:4px;">3/5</span>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; margin-bottom:6px;"><strong>Musicality</strong></div>
+      <div class="rating-bar">
+        <span class="bar filled"></span><span class="bar filled"></span><span class="bar half"></span><span class="bar"></span><span class="bar"></span>
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-left:4px;">2.5/5</span>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; margin-bottom:6px;"><strong>Playability</strong></div>
+      <div class="rating-bar">
+        <span class="bar filled"></span><span class="bar filled"></span><span class="bar filled"></span><span class="bar"></span><span class="bar"></span>
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-left:4px;">3/5</span>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.85rem; margin-bottom:6px;"><strong>Test Coverage</strong></div>
+      <div class="rating-bar">
+        <span class="bar filled"></span><span class="bar filled"></span><span class="bar filled"></span><span class="bar filled"></span><span class="bar half"></span>
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-left:4px;">4.5/5</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:40px; padding:16px 0; border-top:1px solid var(--border); text-align:center;">
+  <span style="font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:1px;">
+    GENERATED 2026-03-08 &mdash; ADVERSARIAL MULTI-MODEL REVIEW &mdash; 14 SOURCE FILES &bull; 195 TESTS &bull; ~1200 LOC
+  </span>
+</div>
+
+</div><!-- /main -->
+</div><!-- /wrap -->
+
+<script>
+(function(){
+  const toc=document.getElementById('toc');
+  const links=toc.querySelectorAll('a');
+  const sections=[];
+  links.forEach(link=>{
+    const id=link.getAttribute('href').slice(1);
+    const el=document.getElementById(id);
+    if(el) sections.push({id,el,link});
+  });
+  const obs=new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{
+      if(entry.isIntersecting){
+        links.forEach(l=>l.classList.remove('active'));
+        const m=sections.find(s=>s.el===entry.target);
+        if(m){m.link.classList.add('active');
+          if(window.innerWidth<=1000) m.link.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+        }
+      }
+    });
+  },{rootMargin:'-10% 0px -80% 0px'});
+  sections.forEach(s=>obs.observe(s.el));
+  links.forEach(link=>{
+    link.addEventListener('click',e=>{
+      e.preventDefault();
+      const id=link.getAttribute('href').slice(1);
+      const el=document.getElementById(id);
+      if(el){el.scrollIntoView({behavior:'smooth',block:'start'});history.replaceState(null,'','#'+id);}
+    });
+  });
+})();
+</script>
+</body>
+</html>
