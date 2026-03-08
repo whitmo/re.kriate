@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate Grid Interface Guide</title>
+<style>
+  :root {
+    --bg: #0a0a14;
+    --surface: #12121f;
+    --border: #2a2a3f;
+    --text: #c8c8e0;
+    --text-dim: #7a7a9a;
+    --accent: #6a6aff;
+    --accent-dim: #3a3a80;
+    --led-off: #1a1a2a;
+    --led-dim: #2a3a3a;
+    --led-loop: #2a4a3a;
+    --led-val: #4a8a5a;
+    --led-bright: #80cc90;
+    --led-head: #ffffff;
+    --led-trig: #5a9a6a;
+    --nav-active: #90a0ff;
+    --nav-dim: #3a4a6a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: #e0e0ff;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin: 2rem 0 1rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.3rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 1.5rem 0 0.5rem;
+    color: #a0a0d0;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 2rem;
+  }
+
+  p { margin: 0.5rem 0; font-size: 0.9rem; }
+
+  .grid-container {
+    display: inline-block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 4px;
+  }
+
+  .cell {
+    width: 38px;
+    height: 32px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 500;
+    transition: all 0.15s;
+    cursor: default;
+    position: relative;
+  }
+
+  .cell.off { background: var(--led-off); color: transparent; }
+  .cell.dim { background: var(--led-dim); color: var(--text-dim); }
+  .cell.loop { background: var(--led-loop); color: #5a8a6a; }
+  .cell.val { background: var(--led-val); color: #90cc90; }
+  .cell.bright { background: var(--led-bright); color: #1a2a1a; }
+  .cell.head { background: var(--led-head); color: #000; font-weight: 700; }
+  .cell.trig-on { background: var(--led-trig); color: #c0f0c0; }
+  .cell.nav-active { background: var(--nav-active); color: #000; font-weight: 600; }
+  .cell.nav-dim { background: var(--nav-dim); color: #8090c0; }
+  .cell.nav-gap { background: transparent; }
+  .cell.bar-fill { background: #2a5a3a; color: transparent; }
+
+  .row-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    min-width: 60px;
+  }
+
+  .grid-with-labels {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 0;
+    align-items: start;
+  }
+
+  .annotation {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    font-style: italic;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1rem 0;
+    font-size: 0.8rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .legend-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  .section {
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 900px) {
+    .columns { grid-template-columns: 1fr; }
+  }
+
+  .nav-diagram {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 3px;
+    margin: 1rem 0;
+  }
+
+  .nav-cell {
+    height: 36px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 500;
+    text-align: center;
+    line-height: 1.1;
+  }
+
+  .bracket {
+    border-top: 2px solid var(--accent-dim);
+    margin-top: 2px;
+    padding-top: 2px;
+    text-align: center;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    grid-column: span 1;
+  }
+
+  .bracket-wide { grid-column: span 4; }
+  .bracket-page { grid-column: span 5; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.85rem;
+    margin: 0.5rem 0;
+  }
+
+  th, td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    color: var(--accent);
+    font-weight: 500;
+    font-size: 0.8rem;
+  }
+
+  td { color: var(--text); }
+  td:first-child { font-weight: 500; }
+
+  .toggle-diagram {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+    font-size: 0.85rem;
+  }
+
+  .toggle-arrow {
+    color: var(--accent);
+    font-size: 1.1rem;
+  }
+
+  .toggle-label {
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+
+  .toggle-primary { background: var(--nav-dim); color: #a0b0e0; }
+  .toggle-extended { background: var(--accent-dim); color: #b0b0ff; }
+
+  .flow-diagram {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 1rem 0;
+    font-size: 0.8rem;
+  }
+
+  .flow-box {
+    padding: 0.4rem 0.7rem;
+    border-radius: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .flow-arrow { color: var(--accent); font-size: 1.2rem; }
+
+  .tab-bar {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 0;
+  }
+
+  .tab {
+    padding: 0.5rem 1rem;
+    background: var(--led-off);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .tab:hover { background: var(--border); }
+  .tab.active {
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .tab-content {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0 8px 8px 8px;
+    padding: 1.5rem;
+  }
+
+  .tab-content.active { display: block; }
+
+  .direction-vis {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    margin: 0.5rem 0;
+  }
+
+  .dir-cell {
+    width: 28px;
+    height: 22px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+  }
+
+  .dir-active { background: var(--led-bright); color: #000; }
+  .dir-loop { background: var(--led-loop); color: #7aa; }
+  .dir-arrow { font-size: 0.8rem; color: var(--accent); margin: 0 2px; }
+</style>
+</head>
+<body>
+
+<h1>re.kriate</h1>
+<p class="subtitle">Grid Interface Guide &mdash; a kria-inspired polymetric sequencer</p>
+
+<!-- ===== OVERVIEW ===== -->
+<h2>Grid Overview (16&times;8)</h2>
+
+<p>The grid is divided into two zones: the <strong>step data area</strong> (rows 1&ndash;7) and the <strong>navigation row</strong> (row 8).</p>
+
+<div class="grid-with-labels">
+  <div class="row-label">rows 1-7<br><span style="font-size:0.6rem">step data</span></div>
+  <div>
+    <div class="grid" id="overview-grid"></div>
+  </div>
+  <div class="row-label">row 8<br><span style="font-size:0.6rem">navigation</span></div>
+  <div>
+    <div class="grid" id="overview-nav"></div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch" style="background:var(--led-off)"></span> off</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:var(--led-loop)"></span> in loop</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:var(--led-val)"></span> value</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:var(--led-bright)"></span> bright value</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:var(--led-head)"></span> playhead</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:var(--nav-active)"></span> nav active</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:var(--nav-dim)"></span> nav inactive</div>
+</div>
+
+<!-- ===== NAVIGATION ROW ===== -->
+<h2>Navigation Row (Row 8)</h2>
+
+<div class="nav-diagram" id="nav-detail"></div>
+<div class="nav-diagram" style="margin-top:-0.5rem">
+  <div class="bracket bracket-wide" style="grid-column: 1 / span 4;">tracks 1-4</div>
+  <div class="bracket" style="grid-column:5"></div>
+  <div class="bracket bracket-page" style="grid-column: 6 / span 5;">pages</div>
+  <div class="bracket" style="grid-column:11"></div>
+  <div class="bracket" style="grid-column:12">loop</div>
+  <div class="bracket" style="grid-column:13 / span 3"></div>
+  <div class="bracket" style="grid-column:16">play</div>
+</div>
+
+<div class="section">
+  <h3>Extended Page Toggle (double-tap)</h3>
+  <p>Three page buttons have extended pages. Tap once for the primary page; tap the same button again to toggle the extended page.</p>
+  <div style="margin:1rem 0">
+    <div class="toggle-diagram">
+      <span class="toggle-label toggle-primary">trigger</span>
+      <span class="toggle-arrow">&harr;</span>
+      <span class="toggle-label toggle-extended">ratchet</span>
+      <span style="color:var(--text-dim);margin-left:0.5rem;font-size:0.8rem">(button x=6)</span>
+    </div>
+    <div class="toggle-diagram">
+      <span class="toggle-label toggle-primary">note</span>
+      <span class="toggle-arrow">&harr;</span>
+      <span class="toggle-label toggle-extended">alt note</span>
+      <span style="color:var(--text-dim);margin-left:0.5rem;font-size:0.8rem">(button x=7)</span>
+    </div>
+    <div class="toggle-diagram">
+      <span class="toggle-label toggle-primary">octave</span>
+      <span class="toggle-arrow">&harr;</span>
+      <span class="toggle-label toggle-extended">glide</span>
+      <span style="color:var(--text-dim);margin-left:0.5rem;font-size:0.8rem">(button x=8)</span>
+    </div>
+  </div>
+  <p class="annotation">Duration and velocity have no extended pages &mdash; pressing them again stays on the same page.</p>
+</div>
+
+<!-- ===== PAGES ===== -->
+<h2>Page Displays</h2>
+
+<div class="tab-bar">
+  <button class="tab active" onclick="showTab('trigger')">Trigger</button>
+  <button class="tab" onclick="showTab('value')">Value Pages</button>
+  <button class="tab" onclick="showTab('loop')">Loop Edit</button>
+</div>
+
+<div class="tab-content active" id="tab-trigger">
+  <h3>Trigger Page</h3>
+  <p>Shows all 4 tracks at once. Rows 1-4 = tracks 1-4. Each column is a step (1-16). Press to toggle triggers on/off.</p>
+
+  <div class="grid-with-labels" style="margin:1rem 0">
+    <div class="row-label">trk 1</div>
+    <div><div class="grid" id="trig-row-1"></div></div>
+    <div class="row-label">trk 2</div>
+    <div><div class="grid" id="trig-row-2"></div></div>
+    <div class="row-label">trk 3</div>
+    <div><div class="grid" id="trig-row-3"></div></div>
+    <div class="row-label">trk 4</div>
+    <div><div class="grid" id="trig-row-4"></div></div>
+    <div class="row-label" style="color:transparent">-</div>
+    <div style="height:8px"></div>
+    <div class="row-label" style="color:transparent">-</div>
+    <div style="height:8px"></div>
+    <div class="row-label" style="color:transparent">-</div>
+    <div style="height:8px"></div>
+  </div>
+  <p class="annotation">Playhead shown at full brightness. Active triggers are medium bright. Loop region is dim.</p>
+</div>
+
+<div class="tab-content" id="tab-value">
+  <h3>Value Pages (note, octave, duration, velocity, ratchet, alt note, glide)</h3>
+  <p>Shows the <strong>active track only</strong>. Rows 1-7 represent values 7 down to 1. The current value for each step is highlighted.</p>
+
+  <div class="grid-with-labels" style="margin:1rem 0">
+    <div class="row-label">val 7</div>
+    <div><div class="grid" id="val-row-1"></div></div>
+    <div class="row-label">val 6</div>
+    <div><div class="grid" id="val-row-2"></div></div>
+    <div class="row-label">val 5</div>
+    <div><div class="grid" id="val-row-3"></div></div>
+    <div class="row-label">val 4</div>
+    <div><div class="grid" id="val-row-4"></div></div>
+    <div class="row-label">val 3</div>
+    <div><div class="grid" id="val-row-5"></div></div>
+    <div class="row-label">val 2</div>
+    <div><div class="grid" id="val-row-6"></div></div>
+    <div class="row-label">val 1</div>
+    <div><div class="grid" id="val-row-7"></div></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-swatch" style="background:var(--led-val)"></span> value (in loop)</div>
+    <div class="legend-item"><span class="legend-swatch" style="background:#2a3a2a"></span> value (outside loop)</div>
+    <div class="legend-item"><span class="legend-swatch" style="background:#2a5a3a"></span> bar fill (below value)</div>
+    <div class="legend-item"><span class="legend-swatch" style="background:var(--led-head)"></span> playhead column</div>
+  </div>
+  <p class="annotation">Press any cell to set the step value. Row 1 = highest (7), row 7 = lowest (1). Bar fills from bottom to the value row.</p>
+</div>
+
+<div class="tab-content" id="tab-loop">
+  <h3>Loop Editing</h3>
+  <p>Hold the <strong>loop button</strong> (x=12 on row 8), then press two columns in the step area to set the loop start and end for the current page/track.</p>
+
+  <div class="flow-diagram">
+    <div class="flow-box">Hold x=12</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-box">Press column A</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-box">Press column B</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-box">Loop = min(A,B) &hellip; max(A,B)</div>
+  </div>
+
+  <p>Example: set loop from step 3 to step 10</p>
+  <div class="grid" id="loop-example" style="margin:1rem 0"></div>
+  <p class="annotation">Brighter cells are within the loop. The loop applies to the current page's parameter on the active track. Each parameter has its own independent loop &mdash; this is the core of polymetric sequencing.</p>
+</div>
+
+<!-- ===== PARAMETERS ===== -->
+<h2>Parameter Reference</h2>
+
+<div class="columns">
+  <div>
+    <h3>Primary Parameters</h3>
+    <table>
+      <tr><th>Parameter</th><th>Range</th><th>Meaning</th></tr>
+      <tr><td>trigger</td><td>0 / 1</td><td>note fires or not</td></tr>
+      <tr><td>note</td><td>1-7</td><td>scale degree</td></tr>
+      <tr><td>octave</td><td>1-7</td><td>octave (4 = center)</td></tr>
+      <tr><td>duration</td><td>1-7</td><td>note length</td></tr>
+      <tr><td>velocity</td><td>1-7</td><td>loudness</td></tr>
+    </table>
+  </div>
+  <div>
+    <h3>Extended Parameters</h3>
+    <table>
+      <tr><th>Parameter</th><th>Range</th><th>Meaning</th></tr>
+      <tr><td>ratchet</td><td>1-7</td><td>note repeats per step</td></tr>
+      <tr><td>alt note</td><td>1-7</td><td>degree offset added to note</td></tr>
+      <tr><td>glide</td><td>1-7</td><td>portamento amount</td></tr>
+    </table>
+    <p class="annotation" style="margin-top:0.5rem">1 = off/none for all extended params</p>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Duration Mapping</h3>
+  <table>
+    <tr><th>Value</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr>
+    <tr><td>Beats</td><td>1/16</td><td>1/8</td><td>1/4</td><td>1/2</td><td>1</td><td>2</td><td>4</td></tr>
+  </table>
+
+  <h3>Velocity Mapping</h3>
+  <table>
+    <tr><th>Value</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr>
+    <tr><td>Level</td><td>0.15</td><td>0.30</td><td>0.45</td><td>0.60</td><td>0.75</td><td>0.90</td><td>1.0</td></tr>
+  </table>
+
+  <h3>Clock Divisions</h3>
+  <table>
+    <tr><th>Setting</th><th>1/16</th><th>1/12</th><th>1/8</th><th>1/6</th><th>1/4</th><th>1/2</th><th>1/1</th></tr>
+    <tr><td>Sync</td><td>1/4</td><td>1/3</td><td>1/2</td><td>2/3</td><td>1</td><td>2</td><td>4</td></tr>
+  </table>
+</div>
+
+<!-- ===== DIRECTION MODES ===== -->
+<h2>Direction Modes</h2>
+<p>Each track has a direction mode controlling how all its parameters advance through their loops.</p>
+
+<div class="section">
+  <div id="direction-demos"></div>
+</div>
+
+<!-- ===== POLYMETRIC ===== -->
+<h2>Polymetric Sequencing</h2>
+
+<div class="section">
+  <p>The key concept: <strong>each parameter has its own independent loop length</strong>. When different parameters have different loop lengths, they cycle at different rates, creating evolving patterns.</p>
+
+  <h3>Example</h3>
+  <p>A single track with different loop lengths per parameter:</p>
+
+  <div style="margin: 1rem 0">
+    <div style="display:flex;align-items:center;gap:0.5rem;margin:0.3rem 0">
+      <span style="width:80px;font-size:0.8rem;color:var(--text-dim)">trigger</span>
+      <div class="direction-vis" id="poly-trigger"></div>
+      <span style="font-size:0.75rem;color:var(--text-dim)">loop: 1-16</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.5rem;margin:0.3rem 0">
+      <span style="width:80px;font-size:0.8rem;color:var(--text-dim)">note</span>
+      <div class="direction-vis" id="poly-note"></div>
+      <span style="font-size:0.75rem;color:var(--text-dim)">loop: 1-8</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.5rem;margin:0.3rem 0">
+      <span style="width:80px;font-size:0.8rem;color:var(--text-dim)">octave</span>
+      <div class="direction-vis" id="poly-octave"></div>
+      <span style="font-size:0.75rem;color:var(--text-dim)">loop: 1-5</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.5rem;margin:0.3rem 0">
+      <span style="width:80px;font-size:0.8rem;color:var(--text-dim)">velocity</span>
+      <div class="direction-vis" id="poly-vel"></div>
+      <span style="font-size:0.75rem;color:var(--text-dim)">loop: 1-3</span>
+    </div>
+  </div>
+
+  <p class="annotation">After 16 steps, trigger has cycled once, note twice, octave 3+ times, and velocity 5+ times &mdash; the combination doesn't repeat for 240 steps (LCM of 16, 8, 5, 3).</p>
+</div>
+
+<!-- ===== ARCHITECTURE ===== -->
+<h2>Signal Flow</h2>
+
+<div class="section">
+  <div class="flow-diagram" style="justify-content:center">
+    <div class="flow-box" style="background:var(--accent-dim)">grid / keyboard</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-box">grid_ui / keyboard</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-box" style="background:var(--accent-dim)">ctx</div>
+    <span class="flow-arrow">&larr;</span>
+    <div class="flow-box">sequencer</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-box">scale</div>
+    <span class="flow-arrow">&rarr;</span>
+    <div class="flow-box" style="background:var(--accent-dim)">voice</div>
+  </div>
+  <p style="text-align:center;margin-top:0.5rem" class="annotation">All state flows through the ctx table. The sequencer reads track data, quantizes to scale, and sends to voices (nb or MIDI).</p>
+</div>
+
+<p style="margin-top:3rem;color:var(--text-dim);font-size:0.75rem;text-align:center">
+  re.kriate &mdash; a kria-inspired polymetric sequencer for norns and seamstress
+</p>
+
+<script>
+// Helper to create grid cells
+function cell(cls, text) {
+  const d = document.createElement('div');
+  d.className = 'cell ' + cls;
+  d.textContent = text || '';
+  return d;
+}
+
+// === Overview grid ===
+const overviewGrid = document.getElementById('overview-grid');
+// Example trigger page overview - 4 rows of triggers, 3 empty rows
+const trigPatterns = [
+  [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,1],
+  [0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0],
+  [0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0],
+];
+const playheadCol = 4; // 0-indexed
+for (let y = 0; y < 7; y++) {
+  for (let x = 0; x < 16; x++) {
+    if (y < 4) {
+      const isTrig = trigPatterns[y][x] === 1;
+      const isHead = x === playheadCol;
+      if (isHead) overviewGrid.appendChild(cell('head', x+1));
+      else if (isTrig) overviewGrid.appendChild(cell('trig-on', ''));
+      else overviewGrid.appendChild(cell('loop', ''));
+    } else {
+      overviewGrid.appendChild(cell('off', ''));
+    }
+  }
+}
+
+// Overview nav
+const overviewNav = document.getElementById('overview-nav');
+const navLabels = ['1','2','3','4','','trg','nte','oct','dur','vel','','lp','','','','play'];
+const navClasses = ['nav-active','nav-dim','nav-dim','nav-dim',
+                    'nav-gap',
+                    'nav-active','nav-dim','nav-dim','nav-dim','nav-dim',
+                    'nav-gap',
+                    'nav-dim',
+                    'nav-gap','nav-gap','nav-gap',
+                    'nav-dim'];
+for (let i = 0; i < 16; i++) {
+  overviewNav.appendChild(cell(navClasses[i], navLabels[i]));
+}
+
+// === Nav detail ===
+const navDetail = document.getElementById('nav-detail');
+const navDetailLabels = ['T1','T2','T3','T4','','trig','note','oct','dur','vel','','loop','','','','play'];
+const navDetailClasses = [
+  'nav-active','nav-dim','nav-dim','nav-dim',
+  'nav-gap',
+  'nav-active','nav-dim','nav-dim','nav-dim','nav-dim',
+  'nav-gap',
+  'nav-dim',
+  'nav-gap','nav-gap','nav-gap',
+  'nav-dim'
+];
+for (let i = 0; i < 16; i++) {
+  const c = cell(navDetailClasses[i], navDetailLabels[i]);
+  c.className = 'nav-cell ' + navDetailClasses[i];
+  navDetail.appendChild(c);
+}
+
+// === Trigger page rows ===
+for (let t = 0; t < 4; t++) {
+  const row = document.getElementById('trig-row-' + (t+1));
+  for (let x = 0; x < 16; x++) {
+    const isTrig = trigPatterns[t][x] === 1;
+    const isHead = x === playheadCol;
+    if (isHead) row.appendChild(cell('head', ''));
+    else if (isTrig) row.appendChild(cell('trig-on', ''));
+    else row.appendChild(cell('loop', ''));
+  }
+}
+
+// === Value page example (note page) ===
+const noteValues = [1,2,3,4,5,4,3,2,1,3,5,3,1,2,4,5];
+const noteLoopEnd = 8; // 1-indexed
+const notePlayhead = 3; // 0-indexed
+
+for (let y = 0; y < 7; y++) {
+  const row = document.getElementById('val-row-' + (y+1));
+  const rowVal = 7 - y; // row 0 -> val 7, row 6 -> val 1
+  for (let x = 0; x < 16; x++) {
+    const stepVal = noteValues[x];
+    const inLoop = x < noteLoopEnd;
+    const isHead = x === notePlayhead;
+
+    if (isHead) {
+      if (rowVal === stepVal) row.appendChild(cell('head', ''));
+      else if (rowVal < stepVal) row.appendChild(cell('bright', ''));
+      else row.appendChild(cell('off', ''));
+    } else if (rowVal === stepVal) {
+      row.appendChild(cell(inLoop ? 'val' : 'dim', ''));
+    } else if (rowVal < stepVal && inLoop) {
+      row.appendChild(cell('bar-fill', ''));
+    } else {
+      row.appendChild(cell('off', ''));
+    }
+  }
+}
+
+// === Loop example ===
+const loopExample = document.getElementById('loop-example');
+for (let x = 0; x < 16; x++) {
+  const inLoop = x >= 2 && x <= 9; // steps 3-10 (0-indexed: 2-9)
+  loopExample.appendChild(cell(inLoop ? 'loop' : 'off', x+1));
+}
+
+// === Direction demos ===
+const directionDemos = document.getElementById('direction-demos');
+const directions = [
+  { name: 'Forward', desc: 'Left to right, wrap at end', steps: [0,1,2,3,4,5,6,7,0,1,2] },
+  { name: 'Reverse', desc: 'Right to left, wrap at start', steps: [7,6,5,4,3,2,1,0,7,6,5] },
+  { name: 'Pendulum', desc: 'Bounce back and forth at boundaries', steps: [0,1,2,3,4,5,6,7,6,5,4] },
+  { name: 'Drunk', desc: 'Random walk: -1, 0, or +1 each step', steps: [3,4,4,3,2,3,4,5,4,3,4] },
+  { name: 'Random', desc: 'Jump to any position in loop', steps: [5,1,7,3,0,6,2,4,7,1,3] },
+];
+
+directions.forEach(dir => {
+  const wrapper = document.createElement('div');
+  wrapper.style.marginBottom = '1rem';
+
+  const label = document.createElement('div');
+  label.style.fontSize = '0.85rem';
+  label.style.fontWeight = '500';
+  label.style.marginBottom = '0.3rem';
+  label.innerHTML = `<span style="color:var(--accent)">${dir.name}</span> <span style="color:var(--text-dim);font-size:0.8rem">&mdash; ${dir.desc}</span>`;
+  wrapper.appendChild(label);
+
+  const vis = document.createElement('div');
+  vis.className = 'direction-vis';
+  // Show 8 cells, highlight the sequence
+  for (let i = 0; i < 8; i++) {
+    const c = document.createElement('div');
+    c.className = 'dir-cell dir-loop';
+    c.textContent = i + 1;
+    vis.appendChild(c);
+  }
+
+  // Show step sequence as numbers
+  const seq = document.createElement('span');
+  seq.style.fontSize = '0.75rem';
+  seq.style.color = 'var(--text-dim)';
+  seq.style.marginLeft = '0.5rem';
+  seq.textContent = 'sequence: ' + dir.steps.map(s => s+1).join(' → ');
+  vis.appendChild(seq);
+
+  wrapper.appendChild(vis);
+  directionDemos.appendChild(wrapper);
+});
+
+// === Polymetric example ===
+function polyRow(id, loopEnd, activeStep) {
+  const el = document.getElementById(id);
+  for (let i = 0; i < 16; i++) {
+    const c = document.createElement('div');
+    c.className = 'dir-cell';
+    if (i < loopEnd) {
+      c.className += i === activeStep ? ' dir-active' : ' dir-loop';
+    } else {
+      c.style.background = 'var(--led-off)';
+      c.style.color = 'transparent';
+    }
+    c.textContent = i + 1;
+    el.appendChild(c);
+  }
+}
+
+polyRow('poly-trigger', 16, 4);
+polyRow('poly-note', 8, 4);
+polyRow('poly-octave', 5, 4);
+polyRow('poly-vel', 3, 1); // step 5 mod 3 = 2, so position 1 (0-indexed)
+
+// === Tab switching ===
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  // Find matching tab button
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.textContent.toLowerCase().includes(name.substring(0, 4))) t.classList.add('active');
+  });
+}
+</script>
+
+</body>
+</html>
