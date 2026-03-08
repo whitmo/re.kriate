@@ -44,8 +44,9 @@
 
 - `origin/work/proud-wolf`
   - Delta: `docs/voices.html`
-  - Hypothesis: docs-only visual explainer
-  - Next step: sanity check accuracy against current voice system, then merge if clean
+  - Verified status: not merged; review found behavior drift that should be corrected before landing
+  - Review notes: `git cherry -v main origin/work/proud-wolf` reports one unique docs commit (`86e5a29`). Focused verification passed with `busted specs/voice_spec.lua specs/sequencer_spec.lua specs/grid_ui_spec.lua` (`103 successes / 0 failures / 0 errors / 0 pending`), but the explainer misstates extended-page activation as a "double-tap" even though `lib/grid_ui.lua` toggles on a second press of the same nav key with no timing window, and its default-pattern prose compresses duration behavior for tracks 2 and 4 beyond what `lib/track.lua` actually ships.
+  - Follow-up: keep the branch unmerged until the explainer is reconciled with current grid and pattern behavior
 
 - `origin/multiclaude/witty-badger`
   - Delta: one commit for spec-kit templates and remote API spec
@@ -61,9 +62,9 @@
 
 ## Proposed Order
 
-1. Review docs-only branches still unique to `main`: `origin/work/proud-wolf`
-2. Check whether `origin/multiclaude/witty-badger` still has any unique content after `main`
-3. Review `origin/multiclaude/calm-hawk` as the first code-bearing merge candidate
+1. Check whether `origin/multiclaude/witty-badger` still has any unique content after `main`
+2. Review `origin/multiclaude/calm-hawk` as the first code-bearing merge candidate
+3. Correct `origin/work/proud-wolf` doc drift, then re-evaluate it as a low-risk docs merge
 4. Perform a decomposition review for PR `#11`
 5. Perform a decomposition review for `002-modifiers-meta-config-presets`
 

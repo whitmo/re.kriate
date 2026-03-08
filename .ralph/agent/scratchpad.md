@@ -75,3 +75,26 @@ Iteration result:
 
 Most important learned constraint:
 - When a focused remote branch sits on an old base, use `git merge-base` plus `git cherry` before interpreting a raw diff; otherwise stale-base deletions can masquerade as branch intent.
+
+## 2026-03-08T17:18:03Z
+
+Current atomic task:
+- Review `origin/work/proud-wolf` (`task-1772989801-b2e6`) and merge it only if the voice explainer matches current behavior.
+
+Branch read:
+- `origin/work/proud-wolf` is a single unique commit branch (`86e5a29`) adding `docs/voices.html`.
+- The branch is docs-only, but the file is large and duplicates behavior-sensitive UI/voice details, so accuracy matters more than merge mechanics.
+
+Plan for this iteration:
+1. Confirm the branch is still unique with `git cherry` before spending time on merge flow.
+2. Validate the explainer against `lib/grid_ui.lua`, `lib/track.lua`, `lib/sequencer.lua`, and the voice specs.
+3. If the doc drifts from current behavior, record the gaps, create a follow-up task, and leave the branch unmerged.
+
+Iteration result:
+- `origin/work/proud-wolf` is unique to `main`: `git cherry -v main origin/work/proud-wolf` reports commit `86e5a29`.
+- Focused verification passed with `busted specs/voice_spec.lua specs/sequencer_spec.lua specs/grid_ui_spec.lua` (`103 successes / 0 failures / 0 errors / 0 pending`).
+- The branch should not merge yet. `docs/voices.html` describes extended-page activation as "double-tap" (`origin/work/proud-wolf:docs/voices.html` lines 856-858 and 1110-1112), but `lib/grid_ui.lua` implements a second-press toggle with no timing threshold (`lib/grid_ui.lua` lines 142-155). The default-pattern prose also drifts from shipped data: track 2 implies uniform duration 5 despite `lib/track.lua` using `4,4,4,4` for the last four steps, and track 4 describes duration 2 throughout although steps 5-8 use duration 3.
+- Updated the branch review artifact to mark `proud-wolf` as reviewed-but-not-merged and queued a correction follow-up instead of forcing a docs merge.
+
+Most important learned constraint:
+- Large visual docs branches are only "low hanging fruit" if every user-visible behavior claim survives a code check; duplicated UI prose can drift even when the branch is docs-only.
