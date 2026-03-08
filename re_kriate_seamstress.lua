@@ -5,6 +5,10 @@
 --
 -- Requires MIDI device on port 1 (configurable via params)
 
+-- seamstress doesn't add the script dir to package.path (norns does)
+local script_dir = debug.getinfo(1, "S").source:match("@(.*/)") or "./"
+package.path = script_dir .. "?.lua;" .. script_dir .. "?/init.lua;" .. package.path
+
 local app = require("lib/app")
 local midi_voice = require("lib/voices/midi")
 local sprite_voice = require("lib/voices/sprite")
