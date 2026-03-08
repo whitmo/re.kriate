@@ -20,6 +20,7 @@ event_loop:
 #   specs_dir: ".ralph/specs/"
 
 # Custom hats for multi-agent workflows:
+# Keep hat `triggers` and `publishes` consistent with specs/tasks for the same feature.
 # hats:
 #   builder:
 #     name: "Builder"

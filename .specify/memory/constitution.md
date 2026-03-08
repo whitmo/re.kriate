@@ -1,21 +1,17 @@
 <!--
 Sync Impact Report
-- Version change: 0.0.0 -> 1.0.0
+- Version change: 1.0.0 -> 1.1.0
 - Modified principles:
-  - Template Principle 1 -> I. Context-Centric Architecture
-  - Template Principle 2 -> II. Platform-Parity Behavior
-  - Template Principle 3 -> III. Test-First Sequencing Correctness (NON-NEGOTIABLE)
-  - Template Principle 4 -> IV. Deterministic Timing and Safe Degradation
-  - Template Principle 5 -> V. Spec-Driven Delivery and Documentation
+  - V. Spec-Driven Delivery and Documentation -> V. Spec-Driven Delivery, Automation, and Documentation
 - Added sections:
-  - Operational Constraints
-  - Delivery Workflow & Quality Gates
+  - None
 - Removed sections:
   - None
 - Templates requiring updates:
   - ✅ updated: .specify/templates/plan-template.md
   - ✅ updated: .specify/templates/spec-template.md
   - ✅ updated: .specify/templates/tasks-template.md
+  - ✅ updated: README.md
   - ⚠ pending (not present in repository): .specify/templates/commands/*.md
 - Follow-up TODOs:
   - None
@@ -31,6 +27,11 @@ be scattered across custom globals or hidden module state. Entry-point globals a
 to host runtime hooks (`init`, `redraw`, `key`, `enc`, `cleanup`) and must delegate to
 modules. Rationale: this preserves testability, predictable ownership, and easier porting
 between norns and seamstress.
+
+Host-provided globals from norns or seamstress SHOULD be wrapped behind `ctx` adapters
+unless direct runtime hook access is required. Rationale: adapter boundaries improve
+modularity and isolation while preserving platform integration.
+
 
 ### II. Platform-Parity Behavior
 User-facing sequencing behavior MUST remain functionally consistent across norns and
@@ -53,11 +54,14 @@ gracefully under load (no crashes, no corrupted track state, bounded missed/late
 Any intentional timing tradeoff MUST be explicitly documented with rationale. Rationale:
 musical trust depends on stable timing even when resources are constrained.
 
-### V. Spec-Driven Delivery and Documentation
+### V. Spec-Driven Delivery, Automation, and Documentation
 Each material feature change MUST be tracked in `specs/<feature>/` with clear requirements,
 design, and an implementation plan before merge. Public-facing behavior changes MUST update
-`README.md` and relevant docs in the same change set. Rationale: shared understanding and
-operational continuity depend on current specs and docs.
+`README.md` and relevant docs in the same change set. When Ralph orchestrator automation is
+used, orchestration behavior MUST be defined in `ralph.yml`, and hats MUST be explicitly
+defined with consistent event contracts (`triggers` and `publishes`) that match the feature
+spec and task plan. Rationale: shared understanding and operational continuity depend on
+current specs, docs, and reproducible automation contracts.
 
 ## Operational Constraints
 
@@ -67,6 +71,8 @@ operational continuity depend on current specs and docs.
   patterns unless a deliberate breaking change is approved under Governance.
 - UI and control mappings MUST preserve the current interaction model unless explicitly
   versioned and documented as a behavioral change.
+- `ralph.yml` is the source of truth for orchestrator behavior; if hats are used, hat names,
+  triggers, and published events MUST be unique, documented, and kept consistent with specs.
 
 ## Delivery Workflow & Quality Gates
 
@@ -74,8 +80,10 @@ operational continuity depend on current specs and docs.
 2. Add or update failing tests first for behavior-changing work.
 3. Implement minimal change to satisfy tests and constraints.
 4. Validate platform parity for shared behavior (norns + seamstress where applicable).
-5. Update operator/user documentation in the same PR.
-6. Record any accepted constitutional violations in plan complexity tracking.
+5. If automation is in scope, update `ralph.yml` and verify hat event contracts align with
+   spec requirements and implementation tasks.
+6. Update operator/user documentation in the same PR.
+7. Record any accepted constitutional violations in plan complexity tracking.
 
 ## Governance
 
@@ -100,4 +108,4 @@ Compliance review expectations:
   complete or explicitly deferred with rationale.
 - Periodic compliance audits SHOULD occur at least once per release cycle.
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-03-08
+**Version**: 1.1.0 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-03-08

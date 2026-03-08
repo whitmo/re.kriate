@@ -70,6 +70,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] T009 Setup environment configuration management
 - [ ] T010 Define platform-parity validation approach for shared behavior (norns + seamstress)
 - [ ] T011 Define timing/jitter validation approach for sequencing updates
+- [ ] T012 Define `ralph.yml` orchestration updates and hat event contracts (if in scope)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -85,18 +86,18 @@ Examples of foundational tasks (adjust based on your project):
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T012 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T013 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
-- [ ] T014 [P] [US1] Sequencing determinism/loop-boundary test in tests/unit/test_[name].py
+- [ ] T013 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T014 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T015 [P] [US1] Sequencing determinism/loop-boundary test in tests/unit/test_[name].py
 
 ### Implementation for User Story 1
 
-- [ ] T015 [P] [US1] Create [Entity1] model in src/models/[entity1].py
-- [ ] T016 [P] [US1] Create [Entity2] model in src/models/[entity2].py
-- [ ] T017 [US1] Implement [Service] in src/services/[service].py (depends on T015, T016)
-- [ ] T018 [US1] Implement [endpoint/feature] in src/[location]/[file].py
-- [ ] T019 [US1] Add validation and error handling
-- [ ] T020 [US1] Add logging for user story 1 operations
+- [ ] T016 [P] [US1] Create [Entity1] model in src/models/[entity1].py
+- [ ] T017 [P] [US1] Create [Entity2] model in src/models/[entity2].py
+- [ ] T018 [US1] Implement [Service] in src/services/[service].py (depends on T016, T017)
+- [ ] T019 [US1] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T020 [US1] Add validation and error handling
+- [ ] T021 [US1] Add logging for user story 1 operations
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -110,15 +111,15 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
 
-- [ ] T021 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T022 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T022 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T023 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
 
 ### Implementation for User Story 2
 
-- [ ] T023 [P] [US2] Create [Entity] model in src/models/[entity].py
-- [ ] T024 [US2] Implement [Service] in src/services/[service].py
-- [ ] T025 [US2] Implement [endpoint/feature] in src/[location]/[file].py
-- [ ] T026 [US2] Integrate with User Story 1 components (if needed)
+- [ ] T024 [P] [US2] Create [Entity] model in src/models/[entity].py
+- [ ] T025 [US2] Implement [Service] in src/services/[service].py
+- [ ] T026 [US2] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T027 [US2] Integrate with User Story 1 components (if needed)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -132,14 +133,14 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
 
-- [ ] T027 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T028 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T028 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T029 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
 
 ### Implementation for User Story 3
 
-- [ ] T029 [P] [US3] Create [Entity] model in src/models/[entity].py
-- [ ] T030 [US3] Implement [Service] in src/services/[service].py
-- [ ] T031 [US3] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T030 [P] [US3] Create [Entity] model in src/models/[entity].py
+- [ ] T031 [US3] Implement [Service] in src/services/[service].py
+- [ ] T032 [US3] Implement [endpoint/feature] in src/[location]/[file].py
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -160,6 +161,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
 - [ ] TXXX Validate parity behavior on both runtimes for changed features
+- [ ] TXXX Validate `ralph.yml` and hat trigger/publish consistency with shipped behavior
 
 ---
 

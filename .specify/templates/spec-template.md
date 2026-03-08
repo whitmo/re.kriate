@@ -84,6 +84,13 @@
 - **State Model Impact**: [Confirm changes preserve context-centric state flow and do not
   introduce custom globals]
 
+## Automation Contract *(mandatory when orchestration changes are in scope)*
+
+- **Ralph Config Impact**: [State whether `ralph.yml` changes are required]
+- **Hat Definitions**: [List each hat name and its responsibilities]
+- **Event Contract**: [Define each hat's `triggers` and `publishes`; ensure naming is
+  consistent with plan/tasks]
+
 ## Requirements *(mandatory)*
 
 <!--

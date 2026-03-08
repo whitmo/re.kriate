@@ -172,6 +172,15 @@ docs/
 
 All state flows through a single `ctx` table. No custom globals.
 
+## Development Automation
+
+Repository orchestration is configured in `ralph.yml`.
+
+- Treat `ralph.yml` as the source of truth for Ralph event loop behavior.
+- If hats are used, each hat MUST define clear `triggers` and `publishes`.
+- Hat names and event contracts in `ralph.yml` MUST match the feature spec and tasks for
+  the same change.
+
 ## References
 
 - [monome/ansible](https://github.com/monome/ansible) — original kria firmware (C)

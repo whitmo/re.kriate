@@ -41,6 +41,8 @@
       stated and degradation behavior under load is defined.
 - [ ] **Spec & Documentation Discipline**: Spec artifacts are complete and documentation
       updates are included in scope.
+- [ ] **Ralph Automation Contract**: If `ralph.yml` or hats are in scope, hat names,
+      `triggers`, and `publishes` are explicitly defined and consistent with spec/tasks.
 
 ## Project Structure
 
