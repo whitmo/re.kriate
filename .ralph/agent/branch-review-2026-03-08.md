@@ -32,8 +32,9 @@
 
 - `origin/multiclaude/clever-deer`
   - Delta: README update plus `docs/grid-interface.html`
-  - Hypothesis: documentation-only branch, probably low risk
-  - Next step: confirm docs accuracy against current controls, then merge if aligned
+  - Verified status: already merged on `main` as commit `4125f5e` / PR `#12`
+  - Review notes: `git cherry -v main origin/multiclaude/clever-deer` reports the branch patch as already applied; focused specs for grid and seamstress keyboard docs passed
+  - Follow-up: no merge needed; keep future doc reviews focused on unique branches only
 
 - `origin/work/proud-eagle`
   - Delta: CI coverage workflow and `scripts/coverage.sh`
@@ -59,7 +60,7 @@
 
 ## Proposed Order
 
-1. Review docs/tooling-only branches: `origin/multiclaude/clever-deer`, `origin/work/proud-eagle`, `origin/work/proud-wolf`
+1. Review docs/tooling-only branches still unique to `main`: `origin/work/proud-eagle`, `origin/work/proud-wolf`
 2. Check whether `origin/multiclaude/witty-badger` still has any unique content after `main`
 3. Review `origin/multiclaude/calm-hawk` as the first code-bearing merge candidate
 4. Perform a decomposition review for PR `#11`
