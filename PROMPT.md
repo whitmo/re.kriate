@@ -1,6 +1,7 @@
 You did this: "review all branches locally and remotely including open PRs. Merge low hanging fruit, make notes and plans for other unfinished work. Tidy up like Kent Beck, work on planning for increase simplicity. Visualize and document where there are gaps"
 
+use spec-kit to spec out the next set of tasks based on your last run
+
+Find the context, use these files as well
 file:///Users/whit/.agent/diagrams/re-kriate-branch-gap-map-2026-03-08.html
 file:///Users/whit/.agent/diagrams/re-kriate-code-review.html
-
-use spec-kit to spec out the next set of tasks based on your last run
