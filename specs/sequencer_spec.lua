@@ -512,8 +512,8 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
-      assert.are.equal(#events, 1)
+      local notes = note_events_for(ctx.voices[1])
+      assert.are.equal(#notes, 1)
     end)
 
     it("sets grid_dirty even when muted", function()

@@ -62,9 +62,14 @@ local function spy_grid()
   return g
 end
 
--- Helper to read an LED value from a spy grid
+-- Helper to read an LED value from either grid type
 local function led_at(g, x, y)
-  return (g.leds[x] and g.leds[x][y]) or 0
+  if g.leds then
+    return (g.leds[x] and g.leds[x][y]) or 0
+  elseif g.get_led then
+    return g:get_led(x, y)
+  end
+  return 0
 end
 
 -- Helper: create a minimal ctx for grid_ui testing
