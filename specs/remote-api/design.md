@@ -128,13 +128,18 @@ Handler registration is static (defined at module load time in the handlers tabl
 
 ### Validation helpers
 
-Three reusable validators, each returning `(validated_value, err)`:
+Four reusable validators, each returning `(validated_value, err)`:
 
 ```lua
 local function check_track(args)     -- validates args[1] as track 1-NUM_TRACKS
 local function check_param(name)     -- validates against track_mod.PARAM_NAMES
 local function check_step(s)         -- validates as step 1-NUM_STEPS
+local function check_value(pname, v) -- validates value against per-param range
 ```
+
+Per-param value ranges (enforced by `check_value`):
+- `trigger`: 0-1
+- `note`, `octave`, `duration`, `velocity`, `ratchet`, `alt_note`, `glide`: 1-7
 
 ### Handler pattern
 
@@ -220,7 +225,11 @@ The `/state/snapshot` handler returns a deep copy of the full sequencer state:
 - **Invalid direction mode:** Returns `nil, "invalid direction"`.
 - **Division out of range:** Returns `nil, "division must be 1-7"`.
 - **Missing arguments:** Returns `nil, "missing value"` or `nil, "missing start/end"`.
+- **Value out of range:** Returns `nil, "value out of range (min-max)"` — enforced per param (trigger: 0-1, others: 1-7).
 - **Pattern set with wrong count:** Returns `nil, "need 16 values"`.
+- **Pattern set with out-of-range value:** Returns `nil, "value out of range (...) at step N"`.
+- **Loop start > end:** Returns `nil, "loop start must be <= end"`.
+- **Loop bounds out of range:** Returns `nil, "loop bounds must be 1-16"`.
 - **OSC with no return address:** Reply silently skipped.
 
 ## Acceptance Criteria

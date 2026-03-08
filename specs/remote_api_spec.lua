@@ -258,6 +258,20 @@ describe("remote API", function()
       assert.is_not_nil(err)
     end)
 
+    it("/set rejects value out of range for trigger", function()
+      local ctx = make_ctx()
+      local ok, err = api.dispatch(ctx, "/step/set", {1, "trigger", 1, 5})
+      assert.is_nil(ok)
+      assert.truthy(err:find("out of range"))
+    end)
+
+    it("/set rejects value out of range for note", function()
+      local ctx = make_ctx()
+      local ok, err = api.dispatch(ctx, "/step/set", {1, "note", 1, 0})
+      assert.is_nil(ok)
+      assert.truthy(err:find("out of range"))
+    end)
+
     it("/toggle toggles a trigger step", function()
       local ctx = make_ctx()
       local orig = ctx.tracks[1].params.trigger.steps[1]
@@ -299,6 +313,16 @@ describe("remote API", function()
       end
     end)
 
+    it("/set rejects out of range values", function()
+      local ctx = make_ctx()
+      -- note range is 1-7, value 9 should fail
+      local args = {1, "note"}
+      for i = 1, 16 do args[#args + 1] = (i == 8) and 9 or 4 end
+      local ok, err = api.dispatch(ctx, "/pattern/set", args)
+      assert.is_nil(ok)
+      assert.truthy(err:find("out of range"))
+    end)
+
     it("/set rejects too few values", function()
       local ctx = make_ctx()
       local ok, err = api.dispatch(ctx, "/pattern/set", {1, "trigger", 1, 0})
@@ -320,6 +344,20 @@ describe("remote API", function()
       local p = ctx.tracks[1].params.note
       assert.are.equal(p.loop_start, 3)
       assert.are.equal(p.loop_end, 10)
+    end)
+
+    it("/set rejects start > end", function()
+      local ctx = make_ctx()
+      local ok, err = api.dispatch(ctx, "/loop/set", {1, "note", 10, 3})
+      assert.is_nil(ok)
+      assert.truthy(err:find("start must be"))
+    end)
+
+    it("/set rejects out of range bounds", function()
+      local ctx = make_ctx()
+      local ok, err = api.dispatch(ctx, "/loop/set", {1, "note", 0, 16})
+      assert.is_nil(ok)
+      assert.truthy(err:find("bounds"))
     end)
 
     it("/get returns loop info", function()

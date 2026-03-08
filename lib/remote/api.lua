@@ -42,6 +42,30 @@ local function check_step(s)
   return math.floor(n)
 end
 
+-- Value ranges per param (min, max). Trigger is 0/1; others are 1-7.
+local PARAM_RANGES = {
+  trigger  = {0, 1},
+  note     = {1, 7},
+  octave   = {1, 7},
+  duration = {1, 7},
+  velocity = {1, 7},
+  ratchet  = {1, 7},
+  alt_note = {1, 7},
+  glide    = {1, 7},
+}
+
+-- Helper: validate step value against param-specific range
+local function check_value(pname, v)
+  local val = tonumber(v)
+  if not val then return nil, "missing value" end
+  val = math.floor(val)
+  local range = PARAM_RANGES[pname]
+  if range and (val < range[1] or val > range[2]) then
+    return nil, "value out of range (" .. range[1] .. "-" .. range[2] .. ")"
+  end
+  return val
+end
+
 ------------------------------------------------------------------------
 -- Transport control
 ------------------------------------------------------------------------
@@ -172,9 +196,9 @@ handlers["/step/set"] = function(ctx, args)
   if not pname then return nil, perr end
   local s, serr = check_step(args[3])
   if not s then return nil, serr end
-  local val = tonumber(args[4])
-  if not val then return nil, "missing value" end
-  track_mod.set_step(ctx.tracks[t].params[pname], s, math.floor(val))
+  local val, verr = check_value(pname, args[4])
+  if not val then return nil, verr end
+  track_mod.set_step(ctx.tracks[t].params[pname], s, val)
   ctx.grid_dirty = true
   return true
 end
@@ -229,9 +253,16 @@ handlers["/pattern/set"] = function(ctx, args)
     return nil, "need " .. track_mod.NUM_STEPS .. " values"
   end
   local param = ctx.tracks[t].params[pname]
+  local range = PARAM_RANGES[pname]
   for i = 1, track_mod.NUM_STEPS do
     local v = tonumber(args[2 + i])
-    if v then param.steps[i] = math.floor(v) end
+    if v then
+      v = math.floor(v)
+      if range and (v < range[1] or v > range[2]) then
+        return nil, "value out of range (" .. range[1] .. "-" .. range[2] .. ") at step " .. i
+      end
+      param.steps[i] = v
+    end
   end
   ctx.grid_dirty = true
   return true
@@ -250,7 +281,12 @@ handlers["/loop/set"] = function(ctx, args)
   local ls = tonumber(args[3])
   local le = tonumber(args[4])
   if not ls or not le then return nil, "missing start/end" end
-  track_mod.set_loop(ctx.tracks[t].params[pname], math.floor(ls), math.floor(le))
+  ls, le = math.floor(ls), math.floor(le)
+  if ls < 1 or ls > track_mod.NUM_STEPS or le < 1 or le > track_mod.NUM_STEPS then
+    return nil, "loop bounds must be 1-" .. track_mod.NUM_STEPS
+  end
+  if ls > le then return nil, "loop start must be <= end" end
+  track_mod.set_loop(ctx.tracks[t].params[pname], ls, le)
   ctx.grid_dirty = true
   return true
 end
