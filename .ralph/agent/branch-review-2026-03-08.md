@@ -49,9 +49,9 @@
   - Follow-up: keep the remote branch unmerged as-is; the docs correction should land from `main` or a refreshed branch instead of merging the stale `86e5a29` patch directly
 
 - `origin/multiclaude/witty-badger`
-  - Delta: one commit for spec-kit templates and remote API spec
-  - Hypothesis: partially subsumed by `main` commit `189b773`
-  - Next step: inspect whether anything remains unique before spending review time
+  - Delta: one commit (`e767dcd`) for spec-kit templates and remote API spec (9 files, 760 lines)
+  - Verified status: fully subsumed by `main`; `git cherry` reports `-` prefix; `git diff` against main is empty
+  - Follow-up: safe to delete remote branch; no merge needed
 
 ## Simplicity Gaps
 
@@ -62,7 +62,7 @@
 
 ## Proposed Order
 
-1. Check whether `origin/multiclaude/witty-badger` still has any unique content after `main`
+1. ~~Check whether `origin/multiclaude/witty-badger` still has any unique content after `main`~~ — done, fully subsumed
 2. Review `origin/multiclaude/calm-hawk` as the first code-bearing merge candidate
 3. Correct `origin/work/proud-wolf` doc drift, then re-evaluate it as a low-risk docs merge
 4. Perform a decomposition review for PR `#11`
