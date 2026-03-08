@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate — Branch Review &amp; Gap Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============ THEME — Blueprint: deep slate/blue + gold ============ */
+  :root {
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'Fira Code', 'SF Mono', Consolas, monospace;
+
+    --bg: #0c1220;
+    --surface: #131b2e;
+    --surface2: #1a2440;
+    --surface-elevated: #1e2a4a;
+    --border: rgba(255, 255, 255, 0.06);
+    --border-bright: rgba(255, 255, 255, 0.12);
+    --text: #e2e8f0;
+    --text-dim: #7b8ba5;
+    --accent: #d4a73a;
+    --accent-dim: rgba(212, 167, 58, 0.12);
+    --blue: #4a90d9;
+    --blue-dim: rgba(74, 144, 217, 0.12);
+    --green: #3ddc84;
+    --green-dim: rgba(61, 220, 132, 0.1);
+    --red: #f07178;
+    --red-dim: rgba(240, 113, 120, 0.1);
+    --amber: #ffcb6b;
+    --amber-dim: rgba(255, 203, 107, 0.1);
+    --teal: #4fd1c5;
+    --teal-dim: rgba(79, 209, 197, 0.1);
+    --slate: #546e8a;
+    --slate-dim: rgba(84, 110, 138, 0.12);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f0f2f8;
+      --surface: #ffffff;
+      --surface2: #e8ecf4;
+      --surface-elevated: #f5f7fc;
+      --border: rgba(0, 0, 0, 0.07);
+      --border-bright: rgba(0, 0, 0, 0.14);
+      --text: #1a2035;
+      --text-dim: #5a6680;
+      --accent: #b08520;
+      --accent-dim: rgba(176, 133, 32, 0.08);
+      --blue: #2563a0;
+      --blue-dim: rgba(37, 99, 160, 0.08);
+      --green: #16a34a;
+      --green-dim: rgba(22, 163, 74, 0.08);
+      --red: #dc2626;
+      --red-dim: rgba(220, 38, 38, 0.08);
+      --amber: #b45309;
+      --amber-dim: rgba(180, 83, 9, 0.08);
+      --teal: #0d9488;
+      --teal-dim: rgba(13, 148, 136, 0.08);
+      --slate: #3d5470;
+      --slate-dim: rgba(61, 84, 112, 0.08);
+    }
+  }
+
+  /* ============ RESET + BASE ============ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 15% 0%, var(--blue-dim) 0%, transparent 50%),
+      radial-gradient(ellipse at 85% 100%, var(--accent-dim) 0%, transparent 40%);
+    color: var(--text);
+    font-family: var(--font-body);
+    padding: 40px;
+    min-height: 100vh;
+    /* Blueprint subtle grid */
+    background-size: 100% 100%, 100% 100%, 40px 40px;
+    background-blend-mode: normal;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    opacity: 0.3;
+    z-index: 0;
+  }
+
+  /* ============ ANIMATION ============ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeScale {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .animate {
+    animation: fadeUp 0.4s ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.06s);
+  }
+
+  .animate-scale {
+    animation: fadeScale 0.35s ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.06s);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* ============ NAV LAYOUT ============ */
+  .wrap {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    gap: 0 40px;
+    position: relative;
+    z-index: 1;
+  }
+  .main { min-width: 0; }
+
+  .toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    padding: 14px 0;
+    grid-row: 1 / -1;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+  .toc::-webkit-scrollbar { width: 3px; }
+  .toc::-webkit-scrollbar-thumb { background: var(--surface-elevated); border-radius: 2px; }
+
+  .toc-title {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    padding: 0 0 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .toc a {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 5px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    line-height: 1.4;
+    margin-bottom: 1px;
+  }
+  .toc a:hover { color: var(--text); background: var(--surface2); }
+  .toc a.active { color: var(--accent); border-left-color: var(--accent); }
+
+  @media (max-width: 1000px) {
+    .wrap { grid-template-columns: 1fr; padding-top: 0; }
+    body { padding-top: 0; }
+    .toc {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      max-height: none;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 0;
+      margin: 0 -40px;
+      padding-left: 40px;
+      padding-right: 40px;
+      grid-row: auto;
+    }
+    .toc::-webkit-scrollbar { display: none; }
+    .toc-title { display: none; }
+    .toc a {
+      white-space: nowrap;
+      flex-shrink: 0;
+      border-left: none;
+      border-bottom: 2px solid transparent;
+      border-radius: 4px 4px 0 0;
+      padding: 6px 10px;
+      font-size: 10px;
+    }
+    .toc a.active {
+      border-left: none;
+      border-bottom-color: var(--accent);
+      background: var(--surface);
+    }
+    .main { padding-top: 20px; }
+    .sec-head { scroll-margin-top: 52px; }
+  }
+
+  /* ============ TYPOGRAPHY ============ */
+  h1 {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+    margin-bottom: 6px;
+    text-wrap: balance;
+  }
+
+  h1 .mono {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 0.85em;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    margin-bottom: 36px;
+  }
+
+  .sec-head {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    color: var(--text-dim);
+    padding: 24px 0 16px;
+    margin-top: 8px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sec-head .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* ============ KPI CARDS ============ */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi-card--hero {
+    background: var(--surface-elevated);
+    border-color: var(--accent-dim);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .kpi-card__value {
+    font-family: var(--font-mono);
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kpi-card__label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+
+  /* ============ TABLE ============ */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .data-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .data-table th {
+    background: var(--surface2);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 14px 16px;
+    border-bottom: 2px solid var(--border-bright);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .data-table tbody tr:last-child td { border-bottom: none; }
+
+  .data-table tbody tr:nth-child(even) { background: var(--surface2); }
+
+  .data-table tbody tr {
+    transition: background 0.15s ease;
+    animation: fadeUp 0.35s ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.03s);
+  }
+
+  .data-table tbody tr:hover { background: var(--accent-dim); }
+
+  .data-table code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--blue-dim);
+    color: var(--blue);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .data-table small {
+    display: block;
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .data-table tfoot td {
+    background: var(--surface2);
+    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-top: 2px solid var(--border-bright);
+    border-bottom: none;
+    padding: 14px 16px;
+  }
+
+  .data-table .wide {
+    min-width: 180px;
+    max-width: 400px;
+  }
+
+  /* ============ STATUS BADGES ============ */
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+  }
+
+  .status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status--merged { background: var(--green-dim); color: var(--green); }
+  .status--open { background: var(--amber-dim); color: var(--amber); }
+  .status--done { background: var(--green-dim); color: var(--green); }
+  .status--pending { background: var(--amber-dim); color: var(--amber); }
+  .status--gap { background: var(--red-dim); color: var(--red); }
+  .status--active { background: var(--blue-dim); color: var(--blue); }
+  .status--superseded { background: var(--slate-dim); color: var(--slate); }
+
+  /* ============ FEATURE MATRIX ============ */
+  .feature-group {
+    margin-bottom: 20px;
+  }
+
+  .feature-group-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .feature-group-title .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .feature-group--main .feature-group-title { color: var(--green); }
+  .feature-group--main .feature-group-title .dot { background: var(--green); }
+
+  .feature-group--branch .feature-group-title { color: var(--amber); }
+  .feature-group--branch .feature-group-title .dot { background: var(--amber); }
+
+  .feature-group--gap .feature-group-title { color: var(--red); }
+  .feature-group--gap .feature-group-title .dot { background: var(--red); }
+
+  .feature-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 6px;
+    padding: 0 16px 16px;
+  }
+
+  .feature-list li {
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.4;
+    overflow-wrap: break-word;
+    min-width: 0;
+  }
+
+  .feature-list li .icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    margin-top: 1px;
+  }
+
+  .feature-list li .icon--done { background: var(--green-dim); color: var(--green); }
+  .feature-list li .icon--pending { background: var(--amber-dim); color: var(--amber); }
+  .feature-list li .icon--gap { background: var(--red-dim); color: var(--red); }
+
+  /* ============ ARCHITECTURE ============ */
+  .arch-overview {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+
+  .arch-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .arch-label .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .mermaid-wrap {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    overflow: auto;
+    max-height: 500px;
+    cursor: grab;
+  }
+
+  .mermaid-wrap:active { cursor: grabbing; }
+
+  .zoom-controls {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+  }
+
+  .zoom-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .zoom-btn:hover { background: var(--surface-elevated); color: var(--text); }
+
+  /* Module detail cards under the diagram */
+  .module-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+  }
+
+  .module-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+
+  .module-card--new {
+    border-left: 3px solid var(--amber);
+  }
+
+  .module-card__name {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .module-card__name .badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .badge--main { background: var(--green-dim); color: var(--green); }
+  .badge--new { background: var(--amber-dim); color: var(--amber); }
+
+  .module-card__desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* ============ NEXT STEPS ============ */
+  .steps-list {
+    list-style: none;
+    display: grid;
+    gap: 10px;
+  }
+
+  .step-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    transition: border-color 0.2s;
+  }
+
+  .step-item:hover { border-color: var(--accent-dim); }
+
+  .step-item--priority {
+    background: var(--surface-elevated);
+    border-color: var(--accent-dim);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .step-item__num {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-dim);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .step-item__content {
+    min-width: 0;
+  }
+
+  .step-item__title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 3px;
+  }
+
+  .step-item__desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    overflow-wrap: break-word;
+  }
+
+  /* ============ SIMPLICITY ASSESSMENT ============ */
+  .assessment-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .assess-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+
+  .assess-card--good { border-left: 3px solid var(--green); }
+  .assess-card--improve { border-left: 3px solid var(--amber); }
+
+  .assess-card__title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+
+  .assess-card--good .assess-card__title { color: var(--green); }
+  .assess-card--improve .assess-card__title { color: var(--amber); }
+
+  .assess-list {
+    list-style: none;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .assess-list li {
+    padding-left: 14px;
+    position: relative;
+    overflow-wrap: break-word;
+  }
+
+  .assess-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+
+  .assess-card--good .assess-list li::before { background: var(--green); }
+  .assess-card--improve .assess-list li::before { background: var(--amber); }
+
+  /* ============ LEGEND ============ */
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  /* ============ CALLOUT ============ */
+  .callout {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    margin-top: 16px;
+  }
+
+  .callout strong { color: var(--text); font-weight: 600; }
+
+  .callout code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--blue-dim);
+    color: var(--blue);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ============ COLLAPSIBLE ============ */
+  details.collapsible {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  details.collapsible summary {
+    padding: 14px 20px;
+    background: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+    transition: background 0.15s ease;
+  }
+
+  details.collapsible summary:hover { background: var(--surface-elevated); }
+  details.collapsible summary::-webkit-details-marker { display: none; }
+
+  details.collapsible summary::before {
+    content: '\25B8';
+    font-size: 11px;
+    color: var(--text-dim);
+    transition: transform 0.15s ease;
+  }
+
+  details.collapsible[open] summary::before { transform: rotate(90deg); }
+
+  details.collapsible .collapsible__body {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+
+  details.collapsible .collapsible__body strong { color: var(--text); font-weight: 600; }
+
+  details.collapsible .collapsible__body code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--blue-dim);
+    color: var(--blue);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ============ TIMESTAMP ============ */
+  .timestamp {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 24px 0;
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 768px) {
+    body { padding: 16px; }
+    h1 { font-size: 26px; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .feature-list { grid-template-columns: 1fr; }
+    .assessment-grid { grid-template-columns: 1fr; }
+    .module-cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <nav class="toc" id="toc">
+    <div class="toc-title">Contents</div>
+    <a href="#s1">1. Overview</a>
+    <a href="#s2">2. Branches</a>
+    <a href="#s3">3. PR History</a>
+    <a href="#s4">4. Feature Matrix</a>
+    <a href="#s5">5. Architecture</a>
+    <a href="#s6">6. Next Steps</a>
+    <a href="#s7">7. Simplicity</a>
+  </nav>
+
+  <div class="main">
+
+    <h1 class="animate" style="--i:0"><span class="mono">re.kriate</span> Branch Review &amp; Gap Analysis</h1>
+    <p class="subtitle animate" style="--i:1">2026-03-08 &mdash; post-review state snapshot &mdash; 20 PRs reviewed, 19 merged</p>
+
+    <!-- =========== SECTION 1: OVERVIEW KPIs =========== -->
+    <div id="s1" class="sec-head animate" style="--i:2"><span class="num">1</span> Overview</div>
+
+    <div class="kpi-row">
+      <div class="kpi-card kpi-card--hero animate-scale" style="--i:3">
+        <div class="kpi-card__value" style="color:var(--green)">19</div>
+        <div class="kpi-card__label">PRs Merged</div>
+      </div>
+      <div class="kpi-card animate-scale" style="--i:4">
+        <div class="kpi-card__value" style="color:var(--amber)">1</div>
+        <div class="kpi-card__label">PR Open</div>
+      </div>
+      <div class="kpi-card animate-scale" style="--i:5">
+        <div class="kpi-card__value" style="color:var(--green)">242</div>
+        <div class="kpi-card__label">Tests Passing</div>
+      </div>
+      <div class="kpi-card animate-scale" style="--i:6">
+        <div class="kpi-card__value" style="color:var(--teal)">92.9%</div>
+        <div class="kpi-card__label">Coverage</div>
+      </div>
+      <div class="kpi-card animate-scale" style="--i:7">
+        <div class="kpi-card__value" style="color:var(--blue)">9</div>
+        <div class="kpi-card__label">Stale Branches Deleted</div>
+      </div>
+    </div>
+
+    <!-- =========== SECTION 2: BRANCH STATUS =========== -->
+    <div id="s2" class="sec-head animate" style="--i:8"><span class="num">2</span> Branch Status</div>
+
+    <div class="table-wrap animate" style="--i:9">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Branch</th>
+              <th>Commit</th>
+              <th>Status</th>
+              <th class="wide">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="--i:0">
+              <td><code>main</code></td>
+              <td><code>5422380</code></td>
+              <td><span class="status status--done">Active</span></td>
+              <td>Canonical. Up to date with all merged PRs.</td>
+            </tr>
+            <tr style="--i:1">
+              <td><code>002-modifiers-meta-config-presets</code></td>
+              <td><code>4f983eb</code></td>
+              <td><span class="status status--pending">19 commits ahead</span></td>
+              <td>Rebase onto main, strip scaffolding (~11K lines), consolidate into ~5 logical commits, open as single PR.<small>High quality code. 11 new modules, all following ctx pattern.</small></td>
+            </tr>
+            <tr style="--i:2">
+              <td><code>pdd/seamstress-entrypoint</code><small>PR #11</small></td>
+              <td><code>e44bbf8</code></td>
+              <td><span class="status status--superseded">Superseded</span></td>
+              <td>Close PR. Superseded by 002 branch. Merging as-is would regress main (deletes grid_provider, remote API, docs).<small>129 files, 13K+ lines. All unique value present in 002.</small></td>
+            </tr>
+            <tr style="--i:3">
+              <td><code>whitmo/review-response</code></td>
+              <td><code>5422380</code></td>
+              <td><span class="status status--active">Session</span></td>
+              <td>Review session branch. Same tip as main.</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">4 local branches</td>
+              <td colspan="2">2 remote: <code>origin/main</code>, <code>origin/pdd/seamstress-entrypoint</code></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <details class="collapsible animate" style="--i:10">
+      <summary>Cleaned Up Branches (9 deleted)</summary>
+      <div class="collapsible__body">
+        <strong>Remote branches deleted after verifying all content merged to main:</strong><br><br>
+        <code>origin/multiclaude/calm-hawk</code> (PR #15),
+        <code>origin/multiclaude/clever-deer</code> (PR #12),
+        <code>origin/multiclaude/witty-badger</code> (PR #16),
+        <code>origin/work/proud-eagle</code> (PR #13),
+        <code>origin/work/proud-wolf</code> (PR #14),
+        plus 4 additional worktree branches.<br><br>
+        <strong>Local branches deleted (redundant scaffolding):</strong><br>
+        <code>003-step-trigger-probability</code>,
+        <code>004-sprite-timeline-viz</code>,
+        <code>005-cross-track-fx</code>
+        &mdash; all ancestors of 002, content preserved in 002 branch.
+      </div>
+    </details>
+
+    <!-- =========== SECTION 3: PR HISTORY =========== -->
+    <div id="s3" class="sec-head animate" style="--i:11"><span class="num">3</span> PR History</div>
+
+    <div class="table-wrap animate" style="--i:12">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>PR</th>
+              <th class="wide">Title</th>
+              <th>State</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="--i:0"><td>#1</td><td>CI pipeline (lint + test)</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:1"><td>#2</td><td>Direction module (5 playback modes)</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:2"><td>#3</td><td>Pattern storage module</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:3"><td>#4</td><td>Extended track params + direction field</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:4"><td>#5</td><td>Voice portamento support</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:5"><td>#6</td><td>Grid/scale test coverage</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:6"><td>#7</td><td>Extended page toggle (trigger/ratchet, note/alt_note, octave/glide)</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:7"><td>#8</td><td>Extended page grid displays</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:8"><td>#9</td><td>Direction, mute, glide, ratchet, alt-note integration</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:9"><td>#10</td><td>Dead code cleanup (pass #2)</td><td><span class="status status--merged">Merged</span></td><td>Mar 7</td></tr>
+            <tr style="--i:10"><td>#11</td><td>Seamstress port: dual-platform kria sequencer</td><td><span class="status status--open">Open</span></td><td>Mar 7</td></tr>
+            <tr style="--i:11"><td>#12</td><td>README refresh + grid interface guide</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+            <tr style="--i:12"><td>#13</td><td>Test coverage measurement (luacov)</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+            <tr style="--i:13"><td>#14</td><td>Voice system visual explainer</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+            <tr style="--i:14"><td>#15</td><td>Pluggable remote control API</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+            <tr style="--i:15"><td>#16</td><td>Spec-kit + remote API spec</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+            <tr style="--i:16"><td>#17</td><td>Test coverage visual explainer</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+            <tr style="--i:17"><td>#18</td><td>Adversarial code review</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+            <tr style="--i:18"><td>#19</td><td>Pluggable grid provider interface</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+            <tr style="--i:19"><td>#20</td><td>Remote API validation + hardening</td><td><span class="status status--merged">Merged</span></td><td>Mar 8</td></tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">20 pull requests</td>
+              <td colspan="2">19 merged &middot; 1 open (superseded)</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- =========== SECTION 4: FEATURE STATUS =========== -->
+    <div id="s4" class="sec-head animate" style="--i:13"><span class="num">4</span> Feature Status Matrix</div>
+
+    <div class="legend animate" style="--i:14">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div> On main</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--amber)"></div> In 002 branch</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div> Not implemented</div>
+    </div>
+
+    <div class="table-wrap animate" style="--i:15">
+      <div class="feature-group feature-group--main">
+        <div class="feature-group-title"><span class="dot"></span> Shipped on Main (13 features)</div>
+        <ul class="feature-list">
+          <li><span class="icon icon--done">&#10003;</span> Multi-track step sequencer (4 tracks)</li>
+          <li><span class="icon icon--done">&#10003;</span> Per-parameter loop lengths (polymetric)</li>
+          <li><span class="icon icon--done">&#10003;</span> Direction modes (fwd/rev/pendulum/random/drunk)</li>
+          <li><span class="icon icon--done">&#10003;</span> Extended pages (trigger/ratchet, note/alt_note, octave/glide)</li>
+          <li><span class="icon icon--done">&#10003;</span> Scale quantization</li>
+          <li><span class="icon icon--done">&#10003;</span> MIDI voice output</li>
+          <li><span class="icon icon--done">&#10003;</span> Recorder voice output</li>
+          <li><span class="icon icon--done">&#10003;</span> Pluggable grid provider interface</li>
+          <li><span class="icon icon--done">&#10003;</span> Remote control API (OSC)</li>
+          <li><span class="icon icon--done">&#10003;</span> Remote API validation + hardening</li>
+          <li><span class="icon icon--done">&#10003;</span> CI pipeline (lint + test)</li>
+          <li><span class="icon icon--done">&#10003;</span> Test coverage (luacov, 92.87%)</li>
+          <li><span class="icon icon--done">&#10003;</span> 242 tests passing</li>
+        </ul>
+      </div>
+
+      <div class="feature-group feature-group--branch">
+        <div class="feature-group-title"><span class="dot"></span> Ready in 002 Branch (11 features)</div>
+        <ul class="feature-list">
+          <li><span class="icon icon--pending">~</span> Pattern storage (16 slots, save/load)</li>
+          <li><span class="icon icon--pending">~</span> Meta-sequencer (pattern sequencing)</li>
+          <li><span class="icon icon--pending">~</span> Config page (global settings UI)</li>
+          <li><span class="icon icon--pending">~</span> Preset storage (safe serialization)</li>
+          <li><span class="icon icon--pending">~</span> Cross-track FX</li>
+          <li><span class="icon icon--pending">~</span> Sprite voice + rendering</li>
+          <li><span class="icon icon--pending">~</span> Scale page UI</li>
+          <li><span class="icon icon--pending">~</span> Pattern page UI</li>
+          <li><span class="icon icon--pending">~</span> Preset page UI</li>
+          <li><span class="icon icon--pending">~</span> Clock division per track</li>
+          <li><span class="icon icon--pending">~</span> Ratchet/glide/alt-note enhancements</li>
+        </ul>
+      </div>
+
+      <div class="feature-group feature-group--gap">
+        <div class="feature-group-title"><span class="dot"></span> Not Yet Implemented (12 gaps)</div>
+        <ul class="feature-list">
+          <li><span class="icon icon--gap">&#10005;</span> Seamstress platform support</li>
+          <li><span class="icon icon--gap">&#10005;</span> Crow voice output (eurorack CV/gate)</li>
+          <li><span class="icon icon--gap">&#10005;</span> Just Friends voice output</li>
+          <li><span class="icon icon--gap">&#10005;</span> Multiple pattern banks</li>
+          <li><span class="icon icon--gap">&#10005;</span> Pattern morphing / interpolation</li>
+          <li><span class="icon icon--gap">&#10005;</span> Probability per step</li>
+          <li><span class="icon icon--gap">&#10005;</span> Arpeggiator mode</li>
+          <li><span class="icon icon--gap">&#10005;</span> Swing / shuffle timing</li>
+          <li><span class="icon icon--gap">&#10005;</span> MIDI input for external sequencing</li>
+          <li><span class="icon icon--gap">&#10005;</span> Param menu integration (norns)</li>
+          <li><span class="icon icon--gap">&#10005;</span> PSET save/load (norns parameter sets)</li>
+          <li><span class="icon icon--gap">&#10005;</span> Live recording mode</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- =========== SECTION 5: ARCHITECTURE =========== -->
+    <div id="s5" class="sec-head animate" style="--i:16"><span class="num">5</span> Architecture</div>
+
+    <div class="arch-overview animate" style="--i:17">
+      <div class="arch-label"><span class="dot" style="background:var(--blue)"></span> Module Dependency Overview</div>
+      <div class="mermaid-wrap" id="mermaid-container">
+        <div class="zoom-controls">
+          <button class="zoom-btn" onclick="zoomDiagram(1.2)" title="Zoom in">+</button>
+          <button class="zoom-btn" onclick="zoomDiagram(0.8)" title="Zoom out">&minus;</button>
+          <button class="zoom-btn" onclick="resetZoom()" title="Reset">R</button>
+        </div>
+        <pre class="mermaid">
+flowchart TD
+    APP["app.lua"] --> SEQ["sequencer.lua"]
+    APP --> GUI["grid_ui.lua"]
+    APP --> SCL["scale.lua"]
+    APP --> DIR["direction.lua"]
+    SEQ --> TRK["track.lua"]
+    GUI --> GP["grid_provider.lua"]
+    APP --> MIDI["voices/midi.lua"]
+    APP --> REC["voices/recorder.lua"]
+    APP --> API["remote/api.lua"]
+    API --> OSC["remote/osc.lua"]
+    API --> GAPI["remote/grid_api.lua"]
+
+    classDef mainMod fill:#3ddc8422,stroke:#3ddc84,stroke-width:1.5px
+    classDef entryMod fill:#4a90d933,stroke:#4a90d9,stroke-width:2px
+    class APP entryMod
+    class SEQ,TRK,GUI,GP,SCL,DIR,MIDI,REC,API,OSC,GAPI mainMod
+        </pre>
+      </div>
+    </div>
+
+    <div class="arch-label animate" style="--i:18"><span class="dot" style="background:var(--amber)"></span> Modules Added by 002 Branch</div>
+
+    <div class="module-cards animate" style="--i:19">
+      <div class="module-card module-card--new">
+        <div class="module-card__name">pattern.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Pattern save/load to 16 slots. 62 lines, clean single-responsibility.</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">meta_sequencer.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Sequences patterns themselves. Depends on pattern.lua.</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">config.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Global config store. 42 lines &mdash; almost too small for its own module, but clean separation.</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">preset_storage.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Safe serialization for presets. 461 lines &mdash; largest new module. Uses safe serialization (no eval/load).</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">cross_track_fx.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Cross-track effects routing. Standalone, no dependencies on other new modules.</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">voices/sprite.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Sprite voice backend for seamstress platform rendering.</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">pattern_page.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Grid UI page for pattern management.</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">config_page.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Grid UI page for global config settings.</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">preset_page.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Grid UI page for preset management.</div>
+      </div>
+      <div class="module-card module-card--new">
+        <div class="module-card__name">scale_page.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Grid UI page for scale selection and editing.</div>
+      </div>
+      <div class="module-card">
+        <div class="module-card__name">seamstress/sprite_render.lua <span class="badge badge--new">NEW</span></div>
+        <div class="module-card__desc">Sprite rendering for seamstress platform.</div>
+      </div>
+    </div>
+
+    <div class="callout animate" style="--i:20">
+      <strong>Dependency graph is clean.</strong> No circular dependencies. New modules follow a downward coupling pattern:
+      <code>preset_storage</code> &larr; <code>preset_page</code>,
+      <code>pattern</code> &larr; <code>meta_sequencer</code> &larr; <code>pattern_page</code>,
+      <code>config</code> &larr; <code>config_page</code>,
+      <code>cross_track_fx</code> (standalone),
+      <code>sprite</code> + <code>sprite_render</code> (standalone).
+    </div>
+
+    <!-- =========== SECTION 6: NEXT STEPS =========== -->
+    <div id="s6" class="sec-head animate" style="--i:21"><span class="num">6</span> Recommended Next Steps</div>
+
+    <ol class="steps-list animate" style="--i:22">
+      <li class="step-item step-item--priority">
+        <span class="step-item__num">1</span>
+        <div class="step-item__content">
+          <div class="step-item__title">Close PR #11</div>
+          <div class="step-item__desc">Superseded by 002. Merging would regress main by deleting grid_provider, remote API, and docs. All unique value already exists in 002 branch.</div>
+        </div>
+      </li>
+      <li class="step-item step-item--priority">
+        <span class="step-item__num">2</span>
+        <div class="step-item__content">
+          <div class="step-item__title">Rebase 002 onto main</div>
+          <div class="step-item__desc">Resolve 4 file conflicts: <code>app.lua</code> (+6 lines), <code>grid_ui.lua</code> (+34), <code>sequencer.lua</code> (+55), <code>track.lua</code> (+20). Main's changes are relatively small &mdash; conflicts should be resolvable.</div>
+        </div>
+      </li>
+      <li class="step-item">
+        <span class="step-item__num">3</span>
+        <div class="step-item__content">
+          <div class="step-item__title">Strip scaffolding from 002</div>
+          <div class="step-item__desc">Remove <code>.claude/</code>, <code>.codex/</code>, <code>.specify/</code>, <code>test_*.lua</code>, <code>probe_v1.lua</code>, <code>ralph-002.yml</code> &mdash; ~11K lines of session artifacts that are not product code.</div>
+        </div>
+      </li>
+      <li class="step-item">
+        <span class="step-item__num">4</span>
+        <div class="step-item__content">
+          <div class="step-item__title">Consolidate into ~5 logical commits</div>
+          <div class="step-item__desc">Squash 19 commits into: core sequencer extensions, pattern storage + meta-sequencer, config + preset storage, sprite voice + cross-track FX, grid UI multi-mode routing.</div>
+        </div>
+      </li>
+      <li class="step-item">
+        <span class="step-item__num">5</span>
+        <div class="step-item__content">
+          <div class="step-item__title">Open single PR for 002</div>
+          <div class="step-item__desc">Review ~5K lines of product code + 13.5K lines of tests. Branch is internally coherent &mdash; features are coupled through grid_ui.lua routing, so micro-PRs would require repeated surgery.</div>
+        </div>
+      </li>
+      <li class="step-item">
+        <span class="step-item__num">6</span>
+        <div class="step-item__content">
+          <div class="step-item__title">Post-merge feature priorities</div>
+          <div class="step-item__desc">
+            <strong>a)</strong> Seamstress platform support (entrypoint + keyboard mapping)&ensp;
+            <strong>b)</strong> Crow voice output (eurorack CV/gate)&ensp;
+            <strong>c)</strong> Param menu / PSET integration&ensp;
+            <strong>d)</strong> Step probability
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <!-- =========== SECTION 7: SIMPLICITY ASSESSMENT =========== -->
+    <div id="s7" class="sec-head animate" style="--i:23"><span class="num">7</span> Simplicity Assessment</div>
+
+    <div class="assessment-grid animate" style="--i:24">
+      <div class="assess-card assess-card--good">
+        <div class="assess-card__title">Strengths</div>
+        <ul class="assess-list">
+          <li>242 tests, 92.87% coverage &mdash; excellent foundation</li>
+          <li>Code follows ctx pattern, no globals</li>
+          <li>Clean module boundaries, no circular deps</li>
+          <li>No premature abstractions &mdash; each module does one thing</li>
+          <li>Largest module (preset_storage, 461 lines) justified by safe serialization</li>
+          <li>All other modules under 100 lines</li>
+        </ul>
+      </div>
+      <div class="assess-card assess-card--improve">
+        <div class="assess-card__title">Gaps to Address</div>
+        <ul class="assess-list">
+          <li>PR #11 (129 files) should never have been one PR &mdash; process improvement needed</li>
+          <li>Branches carry scaffolding/session artifacts &mdash; needs .gitignore rules</li>
+          <li>No in-repo branch dashboard existed &mdash; this document fills that gap</li>
+          <li>Docs must be validated against code before merge (proud-wolf drift lesson)</li>
+        </ul>
+      </div>
+    </div>
+
+    <details class="collapsible animate" style="--i:25">
+      <summary>Kent Beck Simplification Notes</summary>
+      <div class="collapsible__body">
+        <strong>Do NOT decompose 002 into micro-PRs.</strong> The branch is internally coherent &mdash; features are coupled through <code>grid_ui.lua</code> routing. Merging piecemeal would require repeated <code>grid_ui.lua</code> surgery.<br><br>
+        <strong>Module sizing is appropriate:</strong> <code>config.lua</code> (42 lines) is almost too small, but keeping it standalone follows single-responsibility. <code>pattern.lua</code> (62 lines) similarly minimal but clean. No modules warrant splitting.<br><br>
+        <strong>Rebase complexity is moderate:</strong> 20 commits on main since divergence, but only 4 shared files with manageable diff sizes. Main added <code>grid_provider.lua</code> and <code>remote/</code> API &mdash; 002 doesn't touch these, so no regression risk.
+      </div>
+    </details>
+
+    <div class="callout animate" style="--i:26">
+      <strong>Bottom line:</strong> The codebase is in good shape. 19/20 PRs merged, tests are green, coverage is high. One significant merge remains (002 branch with 11 new features), and the path is clear: rebase, strip noise, open PR. After that, the feature gaps (seamstress, crow, probability) are well-understood and ready for focused development.
+    </div>
+
+    <div class="timestamp">Generated 2026-03-08 &mdash; re.kriate branch review session &mdash; commit 5422380</div>
+
+  </div><!-- /main -->
+</div><!-- /wrap -->
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    look: 'classic',
+    themeVariables: {
+      primaryColor: isDark ? '#1a2440' : '#e8ecf4',
+      primaryBorderColor: isDark ? '#4a90d9' : '#2563a0',
+      primaryTextColor: isDark ? '#e2e8f0' : '#1a2035',
+      secondaryColor: isDark ? '#1e2a4a' : '#f0f2f8',
+      secondaryBorderColor: isDark ? '#3ddc84' : '#16a34a',
+      secondaryTextColor: isDark ? '#e2e8f0' : '#1a2035',
+      lineColor: isDark ? '#546e8a' : '#7b8ba5',
+      fontSize: '14px',
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+    }
+  });
+</script>
+
+<script>
+(function() {
+  // Scroll spy
+  const toc = document.getElementById('toc');
+  const links = toc.querySelectorAll('a');
+  const sections = [];
+
+  links.forEach(link => {
+    const id = link.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ id, el, link });
+  });
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const match = sections.find(s => s.el === entry.target);
+        if (match) {
+          match.link.classList.add('active');
+          if (window.innerWidth <= 1000) {
+            match.link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          }
+        }
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+
+  sections.forEach(s => observer.observe(s.el));
+
+  links.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const id = link.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        history.replaceState(null, '', '#' + id);
+      }
+    });
+  });
+
+  // Mermaid zoom
+  let currentZoom = 1;
+  const container = document.getElementById('mermaid-container');
+
+  window.zoomDiagram = function(factor) {
+    currentZoom *= factor;
+    currentZoom = Math.max(0.3, Math.min(3, currentZoom));
+    const svg = container.querySelector('svg');
+    if (svg) svg.style.transform = 'scale(' + currentZoom + ')';
+  };
+
+  window.resetZoom = function() {
+    currentZoom = 1;
+    const svg = container.querySelector('svg');
+    if (svg) svg.style.transform = 'scale(1)';
+  };
+
+  // Ctrl/Cmd+scroll zoom
+  container.addEventListener('wheel', function(e) {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      zoomDiagram(e.deltaY < 0 ? 1.1 : 0.9);
+    }
+  }, { passive: false });
+})();
+</script>
+
+</body>
+</html>
