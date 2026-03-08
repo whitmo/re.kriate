@@ -1,11 +1,13 @@
 # Branch Review - 2026-03-08
 
-## Snapshot
+## Snapshot (updated)
 
-- `main`: `189b773` (`origin/main`)
+- `main`: `43b4d00` (merged origin/main + local doc commits)
 - Open PRs: `#11` from `pdd/seamstress-entrypoint`
+- Merged PRs: #1–#10, #12–#20 (all closed)
 - Local feature branches: `002-modifiers-meta-config-presets`, `003-step-trigger-probability`, `004-sprite-timeline-viz`, `005-cross-track-fx`, `pdd/seamstress-entrypoint`
-- Remote-only branches worth review: `origin/multiclaude/calm-hawk`, `origin/multiclaude/clever-deer`, `origin/multiclaude/witty-badger`, `origin/work/proud-eagle`, `origin/work/proud-wolf`
+- Remote branches: `origin/pdd/seamstress-entrypoint` only (all others deleted after merge verification)
+- Tests: 242 successes / 0 failures
 
 ## Current Read
 
@@ -62,11 +64,17 @@
 
 ## Proposed Order
 
-1. ~~Check whether `origin/multiclaude/witty-badger` still has any unique content after `main`~~ — done, fully subsumed
-2. Review `origin/multiclaude/calm-hawk` as the first code-bearing merge candidate
-3. Correct `origin/work/proud-wolf` doc drift, then re-evaluate it as a low-risk docs merge
+1. ~~Check whether `origin/multiclaude/witty-badger` still has any unique content after `main`~~ — done, subsumed, remote deleted
+2. ~~Review `origin/multiclaude/calm-hawk`~~ — PR #15 merged, remote deleted
+3. ~~Correct `origin/work/proud-wolf` doc drift~~ — PR #14 merged, remote deleted
 4. Perform a decomposition review for PR `#11`
 5. Perform a decomposition review for `002-modifiers-meta-config-presets`
+
+### Also completed
+
+- Deleted 9 stale remote branches (PRs #12-#20 all merged, branches removed)
+- Merged origin/main into local main (PRs #17-#20 content)
+- Identified local branches 003/004/005 as redundant scaffolding (subsumed by 002)
 
 ## Definition Of Done For Future Review Tasks
 
