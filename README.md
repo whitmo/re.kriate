@@ -1,6 +1,6 @@
 # re.kriate
 
-A kria-inspired polymetric sequencer for norns (seamstress support planned).
+A kria-inspired polymetric sequencer for norns and seamstress.
 
 Based on [kria](https://monome.org/docs/ansible/kria/) from monome Ansible -- each track has independent loop lengths per parameter, creating evolving polymetric patterns.
 
@@ -9,9 +9,19 @@ Based on [kria](https://monome.org/docs/ansible/kria/) from monome Ansible -- ea
 - 4 tracks with independent clocks and per-track clock division
 - Per-parameter loop lengths (trigger, note, octave, duration, velocity)
 - Scale quantization (14 scales via musicutil)
-- [nb](https://github.com/sixolet/nb) voice output
 - Monome grid UI with trigger overview and per-parameter editing
 - Musically useful default patterns out of the box
+- Sprite visualization layer (seamstress)
+
+### Norns
+
+- [nb](https://github.com/sixolet/nb) voice output (engines, MIDI, crow)
+
+### Seamstress
+
+- Direct MIDI output (one device per track, configurable channel)
+- Keyboard controls (no encoders/keys needed)
+- Sprite rendering -- visual feedback on the seamstress screen
 
 ## Requirements
 
@@ -22,11 +32,15 @@ Based on [kria](https://monome.org/docs/ansible/kria/) from monome Ansible -- ea
 - [nb](https://github.com/sixolet/nb) library installed
 - At least one nb-compatible voice (e.g. nb_mx.synths, midi, crow)
 
-### Seamstress (planned)
+### Seamstress
 
-Seamstress 2.0 is the intended primary dev target but is not yet supported. The current code uses norns-specific APIs (`params`, `metro`, `nb`, `musicutil`, `util`) that don't have seamstress equivalents yet. Contributions welcome.
+- [seamstress](https://github.com/ryleelyman/seamstress) v1.4.x (v2 is not yet supported)
+- Monome grid (128 recommended)
+- A MIDI device on port 1 (configurable via params)
 
-## Install (norns)
+## Install & Run
+
+### Norns
 
 From maiden (norns web REPL):
 
@@ -42,6 +56,23 @@ git clone https://github.com/whit/re.kriate re_kriate
 ```
 
 Then select **re.kriate** from the norns script menu.
+
+### Seamstress (v1)
+
+Clone the repo anywhere:
+
+```
+git clone https://github.com/whit/re.kriate
+cd re.kriate
+```
+
+Run with the `-s` flag:
+
+```
+/opt/homebrew/opt/seamstress@1/bin/seamstress -s re_kriate_seamstress.lua
+```
+
+Make sure a MIDI device is connected before launching. The script sends MIDI on channels 1-4 (one per track) by default, configurable in the params menu.
 
 ## Controls
 
@@ -73,22 +104,49 @@ Row 8 layout:
 | K2 | Play / stop |
 | K3 | Reset all playheads |
 
-### Parameters (norns menu)
+### Seamstress keyboard
+
+| Key | Action |
+|-----|--------|
+| Space | Play / stop |
+| R | Reset all playheads |
+| 1-4 | Select track |
+| Q / W / E / T / Y | Select page (trig / note / oct / dur / vel) |
+| Ctrl+1-9 | Save pattern to slot |
+| Shift+1-9 | Load pattern from slot |
+
+### Parameters
 
 - **root note** -- scale root (MIDI note, default 60/C4)
 - **scale** -- Major, Natural Minor, Dorian, Mixolydian, Lydian, Phrygian, Locrian, Harmonic Minor, Melodic Minor, Pentatonic Major, Pentatonic Minor, Blues, Whole Tone, Chromatic
 - **track N division** -- clock division per track (1/16 through 1/1)
-- **voice N** -- nb voice assignment per track
+- **track N direction** -- playhead direction per track
+- **voice N** -- nb voice assignment per track (norns only)
+- **track N channel** -- MIDI channel per track (seamstress only)
 
 ## Architecture
 
 ```
-re_kriate.lua          main script (thin global hooks)
-lib/app.lua            init, params, grid, screen, key/enc
-lib/sequencer.lua      clock-driven step advancement, nb output
-lib/track.lua          data model (steps, loops, defaults)
-lib/grid_ui.lua        grid display and input
-lib/scale.lua          scale quantization via musicutil
+re_kriate.lua              norns entrypoint (thin global hooks)
+re_kriate_seamstress.lua   seamstress entrypoint (MIDI voices, keyboard, sprites)
+
+lib/app.lua                init, params, grid, screen, key/enc
+lib/sequencer.lua          clock-driven step advancement
+lib/track.lua              data model (steps, loops, defaults)
+lib/grid_ui.lua            grid display and input
+lib/scale.lua              scale quantization via musicutil
+lib/pattern.lua            pattern save/load slots
+lib/direction.lua          playhead direction modes
+
+lib/voices/midi.lua        direct MIDI voice output
+lib/voices/sprite.lua      visual sprite events
+lib/voices/recorder.lua    event recording
+
+lib/norns/nb_voice.lua     nb voice wrapper (norns only)
+
+lib/seamstress/keyboard.lua      keyboard input
+lib/seamstress/screen_ui.lua     screen display
+lib/seamstress/sprite_render.lua sprite drawing
 ```
 
 All state flows through a single `ctx` table. No custom globals.
