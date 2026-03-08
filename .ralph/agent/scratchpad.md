@@ -98,3 +98,26 @@ Iteration result:
 
 Most important learned constraint:
 - Large visual docs branches are only "low hanging fruit" if every user-visible behavior claim survives a code check; duplicated UI prose can drift even when the branch is docs-only.
+
+## 2026-03-08T19:05:00Z
+
+Current atomic task:
+- Correct the `origin/work/proud-wolf` voice explainer drift on `main` (`task-1772990313-34f7`) so the repo carries an accurate version of the document even though the remote branch itself should not merge unchanged.
+
+Current read:
+- `main` already contains `docs/voices.html`, so this iteration can repair the behavior prose directly without reopening the earlier branch-review commit.
+- No spec-kit constitution file is present in this repo; only templates exist under `spec-kit/`, so code plus specs remain the source of truth for the explainer.
+
+Plan for this iteration:
+1. Fix the extended-page activation language in `docs/voices.html` to describe second-press toggle semantics instead of a timing-based "double-tap".
+2. Correct the default-pattern prose for tracks 2 and 4 so the duration descriptions match `lib/track.lua`.
+3. Update the branch review artifact to record that the corrected explainer now lives on `main`, then re-run the focused voice/grid specs before committing.
+
+Iteration result:
+- Updated `docs/voices.html` so the extended-page tables now describe the actual second-press toggle behavior for trigger/note/octave navigation instead of implying a timing-sensitive double-tap.
+- Corrected the shipped-pattern prose for tracks 2 and 4 to match `lib/track.lua` durations, including track 2's final four half-beat steps and track 4's longer steps 5-8.
+- Updated `.ralph/agent/branch-review-2026-03-08.md` to record that `main` now carries the corrected explainer and that the stale remote branch should not merge directly.
+- Focused verification passed with `busted specs/voice_spec.lua specs/sequencer_spec.lua specs/grid_ui_spec.lua` (`103 successes / 0 failures / 0 errors / 0 pending`).
+
+Most important learned constraint:
+- If a docs branch duplicates sequencer defaults or UI navigation rules, repair the canonical doc on `main` and treat the stale branch as superseded rather than trying to merge inaccurate prose for the sake of branch closure.

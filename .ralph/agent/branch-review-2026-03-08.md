@@ -44,9 +44,9 @@
 
 - `origin/work/proud-wolf`
   - Delta: `docs/voices.html`
-  - Verified status: not merged; review found behavior drift that should be corrected before landing
+  - Verified status: not merged; the branch copy drifted, but `main` now carries a corrected explainer
   - Review notes: `git cherry -v main origin/work/proud-wolf` reports one unique docs commit (`86e5a29`). Focused verification passed with `busted specs/voice_spec.lua specs/sequencer_spec.lua specs/grid_ui_spec.lua` (`103 successes / 0 failures / 0 errors / 0 pending`), but the explainer misstates extended-page activation as a "double-tap" even though `lib/grid_ui.lua` toggles on a second press of the same nav key with no timing window, and its default-pattern prose compresses duration behavior for tracks 2 and 4 beyond what `lib/track.lua` actually ships.
-  - Follow-up: keep the branch unmerged until the explainer is reconciled with current grid and pattern behavior
+  - Follow-up: keep the remote branch unmerged as-is; the docs correction should land from `main` or a refreshed branch instead of merging the stale `86e5a29` patch directly
 
 - `origin/multiclaude/witty-badger`
   - Delta: one commit for spec-kit templates and remote API spec
