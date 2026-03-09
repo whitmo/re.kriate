@@ -37,6 +37,7 @@ local SCALE_DEGREES = 7
 function M.start(ctx)
   if ctx.playing then return end
   ctx.playing = true
+  if ctx.events then ctx.events:emit("sequencer:start", {}) end
   -- one clock coroutine per track
   ctx.clock_ids = {}
   for t = 1, track_mod.NUM_TRACKS do
@@ -49,6 +50,7 @@ end
 function M.stop(ctx)
   if not ctx.playing then return end
   ctx.playing = false
+  if ctx.events then ctx.events:emit("sequencer:stop", {}) end
   if ctx.clock_ids then
     for _, id in ipairs(ctx.clock_ids) do
       clock.cancel(id)
@@ -96,6 +98,11 @@ function M.step_track(ctx, track_num)
     vals[name] = direction_mod.advance(track.params[name], dir)
   end
 
+  -- emit step event (before mute check so listeners see all steps)
+  if ctx.events then
+    ctx.events:emit("sequencer:step", {track=track_num, step=track.params.trigger.pos, vals=vals})
+  end
+
   -- if muted, advance happened but skip note output
   if track.muted then
     ctx.grid_dirty = true
@@ -109,6 +116,11 @@ function M.step_track(ctx, track_num)
     local midi_note = scale_mod.to_midi(effective_degree, vals.octave, ctx.scale_notes)
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
     local velocity = track_mod.VELOCITY_MAP[vals.velocity] or track_mod.VELOCITY_MAP[4]
+
+    -- emit voice:note event
+    if ctx.events then
+      ctx.events:emit("voice:note", {track=track_num, note=midi_note, vel=velocity, dur=duration})
+    end
 
     -- apply glide/portamento
     local voice = ctx.voices and ctx.voices[track_num]
