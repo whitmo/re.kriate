@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Work Complete Visual</title>
+<style>
+:root { --bg:#f6f7fb; --ink:#0f172a; --ok:#16a34a; --wait:#f59e0b; --card:#ffffff; --line:#dbe1ea; --accent:#0ea5e9; }
+body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; background: radial-gradient(1200px 500px at 20% -10%, #e0f2fe, transparent), var(--bg); color:var(--ink); }
+main { max-width: 980px; margin: 32px auto; padding: 0 16px; }
+h1 { margin: 0 0 8px; font-size: 34px; letter-spacing: -0.02em; }
+.sub { opacity:.75; margin-bottom:20px; }
+.grid { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap:12px; margin:16px 0 24px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; box-shadow:0 10px 30px rgba(2,6,23,.05); }
+.k { font-size:12px; text-transform: uppercase; letter-spacing:.08em; opacity:.7; }
+.v { font-size:28px; font-weight:700; margin-top:4px; }
+.panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(2,6,23,.05); margin-bottom:14px; }
+.row { display:flex; align-items:center; gap:8px; margin:10px 0; }
+.lab { width:160px; font-size:14px; }
+.bar { flex:1; background:#eef2f7; border-radius:999px; height:12px; overflow:hidden; }
+.fill { height:100%; }
+.ok { background:var(--ok); }
+.wait { background:var(--wait); }
+.accent { background:var(--accent); }
+.small { font-size:13px; opacity:.8; }
+ul { margin: 8px 0 0 18px; }
+code { background:#eef2ff; border:1px solid #dbeafe; padding:1px 6px; border-radius:8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ralph + Multiclaude Work Complete</h1>
+  <div class="sub">Cycle <code>cycle-20260309-030109</code> • Updated 2026-03-08 20:09:10</div>
+
+  <section class="grid">
+    <div class="card"><div class="k">Review Items</div><div class="v">8</div></div>
+    <div class="card"><div class="k">Merge Now</div><div class="v" style="color:var(--ok)">8</div></div>
+    <div class="card"><div class="k">Wait</div><div class="v" style="color:var(--wait)">0</div></div>
+    <div class="card"><div class="k">Multiclaude Items</div><div class="v">0</div></div>
+  </section>
+
+  <section class="panel">
+    <h3 style="margin:0 0 8px;">Status Breakdown</h3>
+    <div class="row"><div class="lab">merge-now</div><div class="bar"><div class="fill ok" style="width:100.0%"></div></div><div class="small">8</div></div>
+    <div class="row"><div class="lab">wait</div><div class="bar"><div class="fill wait" style="width:0.0%"></div></div><div class="small">0</div></div>
+  </section>
+
+  <section class="panel">
+    <h3 style="margin:0 0 8px;">Origin Groups</h3>
+    <div class="row"><div class="lab">core</div><div class="bar"><div class="fill accent" style="width:25.0%"></div></div><div class="small">2</div></div>
+    <div class="row"><div class="lab">multiclaude</div><div class="bar"><div class="fill accent" style="width:0.0%"></div></div><div class="small">0</div></div>
+    <div class="row"><div class="lab">other</div><div class="bar"><div class="fill accent" style="width:75.0%"></div></div><div class="small">6</div></div>
+  </section>
+
+  <section class="panel">
+    <h3 style="margin:0 0 8px;">What Was Completed</h3>
+    <ul>
+      <li>Review cycle regenerated from <code>scripts/review_cycle/run_review_cycle.sh</code>.</li>
+      <li>Canonical docs refreshed: <code>docs/code-review.html</code> and <code>docs/branch-gap-analysis.html</code>.</li>
+      <li>Speech flows executed for CI celebration and task completion with idempotency keys.</li>
+      <li>US1-US5 validators and contract checks run in latest cycle.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
