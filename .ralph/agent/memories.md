@@ -2,9 +2,21 @@
 
 ## Patterns
 
+### mem-1773025663-2505
+> Spec-kit consistency rule: contract filenames in specs/001 quickstart should match current entity names (e.g., decomposition-slice.schema.json) so validation steps don't carry legacy automation terms.
+<!-- tags: review, planning, spec-kit | created: 2026-03-09 -->
+
 ## Decisions
 
+### mem-1773025545-6042
+> Diagram-backed scope drift pattern: branch-gap artifacts can supersede decomposition-first assumptions; keep PR #11 closure-first with salvage fallback and treat 002 as primary simplification line in spec/plan docs.
+<!-- tags: review, planning, spec-kit | created: 2026-03-09 -->
+
 ## Fixes
+
+### mem-1773025698-1994
+> failure: cmd=rg validation with backticks in double-quoted pattern, exit=0 with shell error, error=zsh command substitution attempted on , next=use single-quoted rg patterns when matching markdown backticks
+<!-- tags: tooling, error-handling, spec-kit | created: 2026-03-09 -->
 
 ### mem-1773018122-7ad7
 > failure: cmd=rg stale-scope validation on narrowed support artifacts, exit=1, error=pattern matched negative mentions of removed CI/speech scope in research.md and quickstart.md, next=use narrower legacy-term checks that target implementation phrases or scripts instead of descriptive exclusions
@@ -246,6 +258,10 @@
 <!-- tags: ralph, error-handling | created: 2026-03-08 -->
 
 ## Context
+
+### mem-1773025371-53cc
+> Loop primary-20260309-030108 starts with spec 001 artifacts already narrowed; next actions are drift-correction and consistency validation using docs/code-review.html, docs/branch-gap-analysis.html, and 2026-03-08 diagram snapshots.
+<!-- tags: review, planning, spec-kit | created: 2026-03-09 -->
 
 ### mem-1773018167-546d
 > Spec 001 support artifacts now validate against the narrowed evidence set: research/data-model/quickstart/contracts all describe decomposition planning, and the PR #11 salvage-vs-superseded disagreement is recorded as a pass-with-conflicts result.

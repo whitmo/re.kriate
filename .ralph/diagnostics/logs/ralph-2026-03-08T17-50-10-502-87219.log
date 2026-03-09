@@ -21,3 +21,7 @@
 [2m2026-03-09T01:03:06.543004Z[0m [32m INFO[0m [2mralph::loop_runner[0m[2m:[0m Completion event LOOP_COMPLETE detected.
 [2m2026-03-09T01:03:06.543033Z[0m [32m INFO[0m [2mralph_core::event_loop[0m[2m:[0m Wrapping up: completed. 3 iterations in 12m 56s. [3mreason[0m[2m=[0mcompleted [3miterations[0m[2m=[0m3 [3mduration[0m[2m=[0m12m 56s
 [2m2026-03-09T01:03:06.551758Z[0m [32m INFO[0m [2mralph_core::landing[0m[2m:[0m Beginning landing sequence [3mloop_id[0m[2m=[0mprimary
+[2m2026-03-09T01:03:06.681818Z[0m [32m INFO[0m [2mralph_core::landing[0m[2m:[0m Auto-committed changes during landing [3mloop_id[0m[2m=[0mprimary [3mcommit[0m[2m=[0mSome("ad128dea53a2fc927924ec50439c06320d9423bc") [3mfiles[0m[2m=[0m60
+[2m2026-03-09T01:03:07.083421Z[0m [32m INFO[0m [2mralph_core::landing[0m[2m:[0m Generated handoff file [3mloop_id[0m[2m=[0mprimary [3mpath[0m[2m=[0m/Users/whit/src/re.kriate/.ralph/agent/handoff.md [3mcompleted[0m[2m=[0m21 [3mopen[0m[2m=[0m0
+[2m2026-03-09T01:03:07.089362Z[0m [32m INFO[0m [2mralph_core::loop_completion[0m[2m:[0m Landing completed with auto-commit [3mcommit[0m[2m=[0mSome("ad128dea53a2fc927924ec50439c06320d9423bc") [3mhandoff[0m[2m=[0m/Users/whit/src/re.kriate/.ralph/agent/handoff.md
+[2m2026-03-09T01:03:07.089372Z[0m [32m INFO[0m [2mralph::loop_runner[0m[2m:[0m Primary loop landed successfully [3mcommitted[0m[2m=[0mtrue [3mhandoff[0m[2m=[0m/Users/whit/src/re.kriate/.ralph/agent/handoff.md [3mopen_tasks[0m[2m=[0m0

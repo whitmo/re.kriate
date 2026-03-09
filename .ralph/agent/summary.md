@@ -2,7 +2,7 @@
 
 **Status:** Completed successfully
 **Iterations:** 3
-**Duration:** 12m 56s
+**Duration:** 7m 57s
 
 ## Tasks
 
@@ -14,4 +14,4 @@ _No events recorded._
 
 ## Final Commit
 
-468da2f: Validate narrowed planning artifacts
+e3f693c: spec-kit: align contracts and quickstart validation
