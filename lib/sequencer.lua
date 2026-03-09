@@ -104,13 +104,9 @@ function M.step_track(ctx, track_num)
 
   -- fire note on trigger
   if vals.trigger == 1 then
-    -- compute effective note degree with alt_note
-    local note_deg = vals.note
-    if vals.alt_note and vals.alt_note > 1 then
-      note_deg = ((vals.note - 1) + (vals.alt_note - 1)) % SCALE_DEGREES + 1
-    end
-
-    local midi_note = scale_mod.to_midi(note_deg, vals.octave, ctx.scale_notes)
+    -- alt_note: additive pitch combination
+    local effective_degree = ((vals.note - 1) + (vals.alt_note - 1)) % SCALE_DEGREES + 1
+    local midi_note = scale_mod.to_midi(effective_degree, vals.octave, ctx.scale_notes)
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
     local velocity = track_mod.VELOCITY_MAP[vals.velocity] or track_mod.VELOCITY_MAP[4]
 
@@ -124,7 +120,7 @@ function M.step_track(ctx, track_num)
       end
     end
 
-    -- handle ratchet
+    -- ratchet: subdivide into N evenly-spaced notes
     local ratchet_count = vals.ratchet or 1
     if ratchet_count > 1 then
       local sub_dur = duration / ratchet_count
