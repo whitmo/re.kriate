@@ -8,21 +8,21 @@
 Regenerate the planning artifacts so they only describe the two unfinished review targets from the
 2026-03-08 branch review: PR `#11` (`pdd/seamstress-entrypoint`) and local branch
 `002-modifiers-meta-config-presets`. The implementation remains documentation-first: consolidate
-the canonical review evidence, document why each target is blocked from merge as-is, and publish a
-simplicity-first decomposition plus ordered next-task set that future loops can execute one slice
-at a time.
+the canonical review evidence, encode the diagram-backed priority order (PR `#11` closure-first as
+superseded candidate; branch `002` simplification-first), and publish an ordered next-task set
+that future loops can execute one atomic step at a time.
 
 ## Technical Context
 
 **Language/Version**: Markdown specifications + HTML review artifacts + bash workflow scripts  
-**Primary Dependencies**: Spec Kit templates, `git` branch/PR metadata, `.ralph/agent/branch-review-2026-03-08.md`, `docs/code-review.html`, `docs/branch-gap-analysis.html`  
+**Primary Dependencies**: Spec Kit templates, `git` branch/PR metadata, `.ralph/agent/branch-review-2026-03-08.md`, `docs/code-review.html`, `docs/branch-gap-analysis.html`, `/Users/whit/.agent/diagrams/re-kriate-branch-gap-map-2026-03-08.html`, `/Users/whit/.agent/diagrams/re-kriate-code-review.html`  
 **Storage**: Versioned planning docs under `specs/001-branch-review-followups/` plus cited review artifacts in `docs/` and `.ralph/agent/`  
 **Testing**: Manual artifact consistency review against spec acceptance scenarios and evidence sources  
 **Target Platform**: Local repository planning workflow  
 **Project Type**: Documentation/process planning feature  
 **Performance Goals**: A maintainer can identify the first reviewable slice for each active target in one pass through the generated artifacts  
 **Constraints**: Exclude already-merged or subsumed branches, keep runtime/platform behavior out of scope, preserve evidence traceability back to the 2026-03-08 review set  
-**Scale/Scope**: Two active planning targets, four canonical evidence inputs, one prioritized next-task set
+**Scale/Scope**: Two active planning targets, five canonical evidence inputs, one prioritized next-task set
 
 ## Constitution Check
 
@@ -66,8 +66,8 @@ docs/
 ```
 
 **Structure Decision**: Keep the feature entirely documentation-centric. The implementation work is
-to align the Spec Kit artifacts with the narrowed planning objective and use the review docs as the
-source of truth for decomposition decisions.
+to align the Spec Kit artifacts with the narrowed planning objective and use the review docs plus
+diagram snapshots as the source of truth for resolution ordering decisions.
 
 ## Implementation Phases
 
@@ -77,22 +77,25 @@ source of truth for decomposition decisions.
 - Cross-check `.ralph/agent/branch-review-2026-03-08.md`, `docs/code-review.html`,
   `docs/branch-gap-analysis.html`, and the `/Users/whit/.agent/diagrams/` snapshots for matching
   risk signals and prioritization.
+- Capture the explicit ordering signal: close PR `#11` as superseded unless unique value survives
+  comparison, then simplify branch `002` as the primary remaining implementation path.
 - Remove or quarantine stale planning assumptions from older review-cycle automation work so they
   do not leak into regenerated artifacts.
 
 ### Phase 1: Planning Model
 
 - Define the planning entities that matter now: planning target, blocked merge reason,
-  decomposition slice, evidence source, and task candidate.
-- Record explicit blocking reasons for PR `#11` and branch `002`.
-- Choose the simplest decomposition path for each target and note why broader bundle-based
-  alternatives are rejected.
+  resolution path, evidence source, and task candidate.
+- Record explicit blocking reasons for PR `#11` and branch `002`, plus the superseded-vs-salvage
+  decision gate for PR `#11`.
+- Choose the simplest execution path for each target and note why broader bundle-based or
+  higher-churn alternatives are rejected.
 
 ### Phase 2: Task Publication
 
-- Convert the decomposition into a priority-ordered, dependency-aware task set.
+- Convert the resolution/simplification plan into a priority-ordered, dependency-aware task set.
 - Ensure each proposed task is reviewable in one or two iterations and cites its evidence source.
-- Preserve the distinction between completed review work and future decomposition execution.
+- Preserve the distinction between completed review work and future execution steps.
 
 ## Complexity Tracking
 

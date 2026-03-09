@@ -18,3 +18,9 @@
   3. `task-1773025311-6a36` (blocked): run support-artifact consistency validation and close loop.
 - Decision: treat existing spec-kit docs as the baseline and use remaining tasks to perform drift correction/validation only, avoiding unnecessary churn.
 - Confidence: 90 (evidence sources and current tasks/plan already align; next work is verification-focused).
+
+## 2026-03-09T03:03:50Z
+- Implementing `task-1773025308-a2f9` (diagram-backed scope correction for spec-kit core artifacts).
+- Drift check result: `docs/branch-gap-analysis.html` and `/Users/whit/.agent/diagrams/re-kriate-branch-gap-map-2026-03-08.html` prioritize closure of PR `#11` as superseded and simplification of branch `002` as a coherent rebased delivery, while current `spec.md`/`plan.md` still center decomposition of both targets.
+- Planned correction in this iteration: update `spec.md` and `plan.md` to encode closure-first handling for PR `#11` (with salvage only as an explicit fallback), and to reframe branch `002` as simplify/rebase/consolidate planning rather than micro-slice decomposition.
+- Confidence: 88 (evidence is explicit in both canonical dashboard and snapshot; changes are documentation-only and reversible).

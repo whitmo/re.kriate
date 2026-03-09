@@ -13,7 +13,7 @@
 - Q: What unfinished work should this spec plan next? → A: The two remaining high-complexity items from the 2026-03-08 review: PR `#11` (`pdd/seamstress-entrypoint`) and local branch `002-modifiers-meta-config-presets`.
 - Q: What artifacts count as planning evidence? → A: `.ralph/agent/branch-review-2026-03-08.md`, `docs/code-review.html`, `docs/branch-gap-analysis.html`, and the linked visual snapshots under `/Users/whit/.agent/diagrams/`.
 - Q: Should already-merged or already-deleted low-hanging-fruit branches stay in scope? → A: No; they are historical evidence only, not planned implementation targets.
-- Q: What kind of output is needed now? → A: A simplicity-first next-task set that decomposes each remaining large branch into reviewable, testable slices.
+- Q: What kind of output is needed now? → A: A simplicity-first next-task set that follows the diagram-backed priority order: close PR `#11` if superseded (or salvage only proven unique slices) and simplify branch `002` into coherent, reviewable delivery steps.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -26,7 +26,8 @@ is based on the latest verified review evidence rather than stale branch state.
 creates follow-up tasks that no longer matter.
 
 **Independent Test**: A reviewer can inspect the planning artifact and confirm that only PR `#11`
-and branch `002-modifiers-meta-config-presets` remain as active decomposition targets.
+and branch `002-modifiers-meta-config-presets` remain active, with PR `#11` treated as a
+superseded-candidate and branch `002` as the primary simplification target.
 
 **Acceptance Scenarios**:
 
@@ -39,33 +40,36 @@ and branch `002-modifiers-meta-config-presets` remain as active decomposition ta
 
 ---
 
-### User Story 2 - Decompose the Two Large Workstreams (Priority: P1)
+### User Story 2 - Resolve PR #11 and Simplify Branch 002 (Priority: P1)
 
-As a maintainer, I need each remaining large branch translated into smaller reviewable slices so
-the next work can be merged or rejected incrementally instead of as an omnibus change.
+As a maintainer, I need a diagram-backed resolution path where PR `#11` is handled as a
+superseded-candidate and branch `002` is simplified for safe review so the next work can proceed
+without omnibus risk.
 
-**Why this priority**: Both remaining items are explicitly too large to merge safely in one pass.
+**Why this priority**: The branch-gap dashboard and external gap-map snapshot both show PR `#11`
+as superseded risk and branch `002` as the remaining high-value simplification target.
 
-**Independent Test**: A reviewer can read the decomposition plan and identify a sequence of
-smaller tasks for PR `#11` and branch `002` without needing extra branch discovery.
+**Independent Test**: A reviewer can read the plan and identify (a) a closure-first decision path
+for PR `#11` and (b) an ordered simplification path for branch `002` without rediscovering branch
+state.
 
 **Acceptance Scenarios**:
 
-1. **Given** PR `#11` mixes runtime code, tests, docs, and Ralph metadata, **When** its next
-   tasks are defined, **Then** the plan separates shippable slices from review noise.
-2. **Given** branch `002` mixes modifiers, patterns, scale, meta, and registry changes, **When**
-   its next tasks are defined, **Then** the plan breaks the branch into conceptually coherent
-   slices with explicit dependency order.
-3. **Given** multiple ways to split either branch, **When** the recommendation is documented,
-   **Then** the simpler decomposition is chosen and the more complex alternative is rejected
-   with rationale.
+1. **Given** `docs/branch-gap-analysis.html` marks PR `#11` as superseded, **When** its next tasks
+   are defined, **Then** closure is the default recommendation and salvage work is allowed only if
+   unique value is explicitly verified.
+2. **Given** branch `002` remains the primary unfinished implementation line, **When** its next
+   tasks are defined, **Then** the plan focuses on coherent simplification steps (rebase cleanup,
+   scaffolding removal, logical commit grouping) instead of omnibus merge.
+3. **Given** multiple ways to split branch `002`, **When** the recommendation is documented,
+   **Then** the simpler path is chosen and higher-churn alternatives are rejected with rationale.
 
 ---
 
 ### User Story 3 - Publish a Prioritized Next-Task Set (Priority: P2)
 
-As a maintainer, I need the decomposition work turned into a spec-ready task set so a future loop
-can execute one atomic slice at a time.
+As a maintainer, I need the resolution/simplification plan turned into a spec-ready task set so a
+future loop can execute one atomic step at a time.
 
 **Why this priority**: The review is already done; the missing step is converting it into
 actionable, ordered work.
@@ -75,7 +79,7 @@ dependencies, expected outcomes, and linked evidence for each next task.
 
 **Acceptance Scenarios**:
 
-1. **Given** the decomposition plans are complete, **When** the task set is published,
+1. **Given** the PR-resolution and branch-simplification plans are complete, **When** the task set is published,
    **Then** each task is a single reviewable unit that can be finished in one or two iterations.
 2. **Given** a task depends on an earlier split or validation step, **When** tasks are listed,
    **Then** the dependency is explicit.
@@ -85,7 +89,7 @@ dependencies, expected outcomes, and linked evidence for each next task.
 ### Edge Cases
 
 - A branch appears unique in one artifact but is shown as already subsumed in a newer review note.
-- PR `#11` contains generated or orchestration state that should be excluded from any merge plan.
+- PR `#11` may contain no unique product value after comparison with branch `002`, requiring direct closure instead of slice extraction.
 - Branch `002` contains tightly coupled changes that cannot be split cleanly without documenting a
   temporary staging branch or rewrite path.
 - Visual snapshots and in-repo docs disagree because one is older than the other.
@@ -111,22 +115,27 @@ dependencies, expected outcomes, and linked evidence for each next task.
   verified review evidence from 2026-03-08.
 - **FR-002**: The system MUST exclude branches and PRs already merged, deleted, or fully subsumed
   by `main` from the active next-task set.
-- **FR-003**: The system MUST identify PR `#11` and branch `002-modifiers-meta-config-presets` as
-  the active planning targets unless newer review evidence explicitly supersedes them.
+- **FR-003**: The system MUST identify PR `#11` as a superseded-candidate target and branch
+  `002-modifiers-meta-config-presets` as the primary simplification target unless newer review
+  evidence explicitly supersedes this ordering.
 - **FR-004**: The system MUST document the blocking reasons that prevent each active target from
   being merged as-is.
-- **FR-005**: The system MUST produce a decomposition plan for PR `#11` that distinguishes
-  shippable slices from docs/metadata/review-noise slices.
-- **FR-006**: The system MUST produce a decomposition plan for branch `002-modifiers-meta-config-presets`
-  that groups changes into simpler, conceptually coherent work units.
+- **FR-005**: The system MUST produce a closure-first plan for PR `#11` aligned with
+  `docs/branch-gap-analysis.html`, including an explicit salvage-only fallback if unique value is
+  proven.
+- **FR-006**: The system MUST produce a simplification plan for branch
+  `002-modifiers-meta-config-presets` that groups work into coherent rebase/cleanup/review units.
 - **FR-007**: The system MUST assign an intended outcome and dependency order to each proposed next
   task.
-- **FR-008**: The system MUST state the simplicity rationale for each decomposition choice,
-  including why a broader bundled path was not selected.
+- **FR-008**: The system MUST state the simplicity rationale for each chosen resolution path,
+  including why broader or higher-churn alternatives were not selected.
 - **FR-009**: The system MUST reference `docs/code-review.html`, `docs/branch-gap-analysis.html`,
   and `.ralph/agent/branch-review-2026-03-08.md` as canonical evidence inputs.
 - **FR-010**: The system MUST reference the external visual snapshots under
   `/Users/whit/.agent/diagrams/` when they reinforce or clarify the planning priority.
+- **FR-013**: The system MUST preserve and document the PR `#11` conflict read: canonical branch-gap
+  evidence prefers closure as superseded, while narrative review allows salvage only if unique
+  slices remain after verification.
 - **FR-011**: The system MUST produce a spec-ready next-task summary that can be translated
   directly into Spec Kit plan/tasks artifacts.
 - **FR-012**: The system MUST preserve a clear distinction between completed review work and
@@ -161,7 +170,8 @@ dependencies, expected outcomes, and linked evidence for each next task.
 - **SC-002**: 100% of already-resolved low-hanging-fruit branches are excluded from the active
   next-task set.
 - **SC-003**: Both PR `#11` and branch `002-modifiers-meta-config-presets` receive a documented
-  decomposition plan with at least one explicit simpler-than-bundle recommendation.
+  plan where PR `#11` has a closure-first path with fallback criteria and branch `002` has an
+  explicit simplification path with at least one simpler-than-bundle recommendation.
 - **SC-004**: 100% of proposed next tasks include a priority, dependency note, and intended outcome.
 - **SC-005**: A reviewer can identify the first implementation slice for each active planning
   target in one pass through the planning artifacts.
