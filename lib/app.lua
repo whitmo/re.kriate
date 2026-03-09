@@ -8,6 +8,7 @@ local grid_ui = require("lib/grid_ui")
 local pattern = require("lib/pattern")
 local direction = require("lib/direction")
 local grid_provider = require("lib/grid_provider")
+local events = require("lib/events")
 
 local M = {}
 
@@ -33,6 +34,9 @@ function M.init(config)
     voices = config.voices or {},
     sprite_voices = config.sprite_voices,
     patterns = pattern.new_slots(),
+    events = events.new(),
+    pattern_held = false,
+    pattern_slot = 1,
   }
 
   -- params: scale
