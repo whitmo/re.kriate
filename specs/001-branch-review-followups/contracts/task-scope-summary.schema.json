@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Task Scope Summary",
+  "type": "object",
+  "required": [
+    "feature",
+    "active_targets",
+    "excluded_resolved_items",
+    "next_tasks"
+  ],
+  "properties": {
+    "feature": { "type": "string" },
+    "active_targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "status", "blocking_summary"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["decompose-first", "superseded-candidate"]
+          },
+          "blocking_summary": { "type": "string" }
+        }
+      }
+    },
+    "excluded_resolved_items": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "title",
+          "priority",
+          "target_id",
+          "why_now",
+          "expected_outcome"
+        ],
+        "properties": {
+          "task_id": { "type": "string" },
+          "title": { "type": "string" },
+          "priority": { "type": "string", "enum": ["P1", "P2", "P3"] },
+          "target_id": { "type": "string" },
+          "why_now": { "type": "string" },
+          "expected_outcome": { "type": "string" },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "evidence_links": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "residual_conflicts": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

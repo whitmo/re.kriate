@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Decomposition Slice",
+  "type": "object",
+  "required": [
+    "slice_id",
+    "target_id",
+    "title",
+    "goal",
+    "simplicity_rationale",
+    "alternatives_rejected"
+  ],
+  "properties": {
+    "slice_id": { "type": "string" },
+    "target_id": {
+      "type": "string",
+      "pattern": "^(branch:.+|pr:.+)$"
+    },
+    "title": { "type": "string" },
+    "goal": { "type": "string", "minLength": 1 },
+    "ship_decision": {
+      "type": "string",
+      "enum": ["extract-for-merge", "rewrite-before-merge", "close-as-superseded"]
+    },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "excluded_noise": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "simplicity_rationale": { "type": "string", "minLength": 1 },
+    "alternatives_rejected": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "evidence_links": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Validation Summary",
+  "type": "object",
+  "required": [
+    "validated_on",
+    "artifact_paths",
+    "evidence_inputs",
+    "status",
+    "confirmed_scope"
+  ],
+  "properties": {
+    "validated_on": { "type": "string", "format": "date" },
+    "artifact_paths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "allOf": [
+        { "contains": { "const": "specs/001-branch-review-followups/spec.md" } },
+        { "contains": { "const": "specs/001-branch-review-followups/plan.md" } },
+        { "contains": { "const": "specs/001-branch-review-followups/tasks.md" } }
+      ]
+    },
+    "evidence_inputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "allOf": [
+        { "contains": { "const": ".ralph/agent/branch-review-2026-03-08.md" } },
+        { "contains": { "const": "docs/branch-gap-analysis.html" } },
+        { "contains": { "const": "docs/code-review.html" } }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "pass-with-conflicts", "fail"]
+    },
+    "confirmed_scope": {
+      "type": "array",
+      "items": { "type": "string" },
+      "allOf": [
+        { "contains": { "const": "pr:11" } },
+        { "contains": { "const": "branch:002-modifiers-meta-config-presets" } }
+      ]
+    },
+    "residual_conflicts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
