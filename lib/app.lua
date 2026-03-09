@@ -8,18 +8,53 @@ local grid_ui = require("lib/grid_ui")
 local pattern = require("lib/pattern")
 local direction = require("lib/direction")
 local grid_provider = require("lib/grid_provider")
+local log = require("lib/log")
 
 local M = {}
 
 local SCALE_NAMES = {
   "Major", "Natural Minor", "Dorian", "Mixolydian",
   "Lydian", "Phrygian", "Locrian", "Harmonic Minor",
-  "Melodic Minor", "Pentatonic Major", "Pentatonic Minor",
+  "Melodic Minor", "Major Pentatonic", "Minor Pentatonic",
   "Blues Scale", "Whole Tone", "Chromatic",
 }
 
+local NOTE_NAMES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
+
+local VOICE_TYPES = {"midi", "osc", "none"}
+
+--- Convert a MIDI note number to a human-readable note name (C0 = MIDI 0)
+local function note_name(midi_num)
+  return NOTE_NAMES[midi_num % 12 + 1] .. math.floor(midi_num / 12)
+end
+
+--- Formatter for the root_note param (receives the Control param object)
+local function note_formatter(param)
+  return note_name(param:get())
+end
+
+--- Build or rebuild a voice for a given track based on current param values
+local function build_voice(ctx, t)
+  local voice_idx = params:get("voice_" .. t)
+  local voice_type = VOICE_TYPES[voice_idx]
+  if voice_type == "midi" then
+    local midi_voice = require("lib/voices/midi")
+    local ch = params:get("midi_ch_" .. t)
+    ctx.voices[t] = midi_voice.new(ctx.midi_dev, ch)
+  elseif voice_type == "osc" then
+    local osc_voice = require("lib/voices/osc")
+    local host = params:get("osc_host")
+    local port = params:get("osc_port")
+    ctx.voices[t] = osc_voice.new(t, host, port)
+  else
+    ctx.voices[t] = nil
+  end
+end
+
 function M.init(config)
   config = config or {}
+
+  local use_config_voices = config.voices ~= nil
 
   local ctx = {
     tracks = track_mod.new_tracks(),
@@ -33,56 +68,83 @@ function M.init(config)
     voices = config.voices or {},
     sprite_voices = config.sprite_voices,
     patterns = pattern.new_slots(),
+    midi_dev = config.midi_dev,
   }
 
-  -- params: scale
+  -- params: global settings
   params:add_separator("re_kriate", "re.kriate")
 
-  params:add_number("root_note", "root note", 0, 127, 60)
+  params:add_number("root_note", "root note", 0, 127, 60, nil, note_formatter)
   params:set_action("root_note", function() M.rebuild_scale(ctx) end)
 
   params:add_option("scale_type", "scale", SCALE_NAMES, 1)
   params:set_action("scale_type", function() M.rebuild_scale(ctx) end)
 
-  -- params: per-track division
+  -- params: output group
+  params:add_group("output", "output", 2)
+  params:add_option("osc_host", "osc host", {"127.0.0.1"}, 1)
+  params:add_number("osc_port", "osc port", 1, 65535, 57120)
+
+  -- params: per-track groups
   local div_names = {"1/16", "1/12", "1/8", "1/6", "1/4", "1/2", "1/1"}
   for t = 1, track_mod.NUM_TRACKS do
-    params:add_option("division_" .. t, "track " .. t .. " division", div_names, 1)
+    params:add_group("track_" .. t, "track " .. t, 4)
+
+    params:add_option("voice_" .. t, "voice", VOICE_TYPES, 1)
+    if not use_config_voices then
+      params:set_action("voice_" .. t, function()
+        build_voice(ctx, t)
+      end)
+    end
+
+    params:add_number("midi_ch_" .. t, "midi ch", 1, 16, t)
+    if not use_config_voices then
+      params:set_action("midi_ch_" .. t, function(val)
+        -- Only rebuild if current voice type is midi
+        local voice_idx = params:get("voice_" .. t)
+        if VOICE_TYPES[voice_idx] == "midi" then
+          build_voice(ctx, t)
+        end
+      end)
+    end
+
+    params:add_option("division_" .. t, "division", div_names, 1)
     params:set_action("division_" .. t, function(val)
       ctx.tracks[t].division = val
     end)
-  end
 
-  -- params: per-track direction
-  for t = 1, track_mod.NUM_TRACKS do
-    params:add_option("direction_" .. t, "track " .. t .. " direction", direction.MODES, 1)
+    params:add_option("direction_" .. t, "direction", direction.MODES, 1)
     params:set_action("direction_" .. t, function(val)
       ctx.tracks[t].direction = direction.MODES[val]
     end)
   end
 
-  -- voice params are set up by the entrypoint
-  -- (nb params for norns, MIDI channel params for seamstress)
+  -- Build initial voices from params (unless config provided voices)
+  if not use_config_voices and ctx.midi_dev then
+    for t = 1, track_mod.NUM_TRACKS do
+      build_voice(ctx, t)
+    end
+  end
 
   -- build initial scale
   M.rebuild_scale(ctx)
 
   -- grid (pluggable: config.grid_provider selects backend)
   ctx.g = grid_provider.connect(config.grid_provider, config.grid_opts)
-  ctx.g.key = function(x, y, z)
+  ctx.g.key = log.wrap(function(x, y, z)
     grid_ui.key(ctx, x, y, z)
     ctx.grid_dirty = true
-  end
+  end, "grid.key")
 
   -- grid redraw metro
   ctx.grid_metro = metro.init()
   ctx.grid_metro.time = 1 / 30
-  ctx.grid_metro.event = function()
+  ctx.grid_metro.event = log.wrap(function()
     if ctx.grid_dirty then
       grid_ui.redraw(ctx)
       ctx.grid_dirty = false
     end
-  end
+  end, "grid_metro.event")
   ctx.grid_metro:start()
 
   return ctx
@@ -91,7 +153,8 @@ end
 function M.rebuild_scale(ctx)
   local root = params:get("root_note")
   local scale_type = SCALE_NAMES[params:get("scale_type")]
-  ctx.scale_notes = scale_mod.build_scale(root, scale_type)
+  local notes = scale_mod.build_scale(root, scale_type)
+  if notes then ctx.scale_notes = notes end
 end
 
 function M.redraw(ctx)

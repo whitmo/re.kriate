@@ -15,7 +15,8 @@ local param_store = {}
 local param_actions = {}
 rawset(_G, "params", {
   add_separator = function(self, id, name) end,
-  add_number = function(self, id, name, min, max, default)
+  add_group = function(self, id, name, n) end,
+  add_number = function(self, id, name, min, max, default, units, formatter)
     param_store[id] = default
   end,
   add_option = function(self, id, name, options, default)

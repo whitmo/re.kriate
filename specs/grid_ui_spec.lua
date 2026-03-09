@@ -1020,6 +1020,7 @@ describe("grid_ui", function()
 
     it("displays alt_note values as bar graph", function()
       local ctx, g = make_ctx({ active_page = "alt_note" })
+      ctx.tracks[1].params.alt_note.loop_end = 16
       ctx.tracks[1].params.alt_note.steps[3] = 5
       ctx.tracks[1].params.alt_note.steps[8] = 2
 
@@ -1063,6 +1064,7 @@ describe("grid_ui", function()
 
     it("displays glide values as bar graph", function()
       local ctx, g = make_ctx({ active_page = "glide" })
+      ctx.tracks[1].params.glide.loop_end = 16
       ctx.tracks[1].params.glide.steps[2] = 4
       ctx.tracks[1].params.glide.steps[10] = 7
 
