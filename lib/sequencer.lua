@@ -103,18 +103,20 @@ function M.step_track(ctx, track_num)
     ctx.events:emit("sequencer:step", {track=track_num, step=track.params.trigger.pos, vals=vals})
   end
 
-  -- if muted, advance happened but skip note output
-  if track.muted then
-    ctx.grid_dirty = true
-    return
-  end
-
   -- fire note on trigger
   if vals.trigger == 1 then
+    local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
+
+    -- if muted, skip audio but still fire ghost sprite
+    if track.muted then
+      M.play_sprite(ctx, track_num, vals, duration, {muted = true})
+      ctx.grid_dirty = true
+      return
+    end
+
     -- alt_note: additive pitch combination
     local effective_degree = ((vals.note - 1) + (vals.alt_note - 1)) % SCALE_DEGREES + 1
     local midi_note = scale_mod.to_midi(effective_degree, vals.octave, ctx.scale_notes)
-    local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
     local velocity = track_mod.VELOCITY_MAP[vals.velocity] or track_mod.VELOCITY_MAP[4]
 
     -- emit voice:note event
@@ -150,6 +152,10 @@ function M.step_track(ctx, track_num)
 
     -- sprite voice: fire with raw kria vals (additive, alongside audio)
     M.play_sprite(ctx, track_num, vals, duration)
+  elseif track.muted then
+    -- muted track with no trigger: just mark grid dirty
+    ctx.grid_dirty = true
+    return
   end
 
   -- request grid redraw
@@ -163,10 +169,10 @@ function M.play_note(ctx, track_num, note, velocity, duration)
   end
 end
 
-function M.play_sprite(ctx, track_num, vals, duration)
+function M.play_sprite(ctx, track_num, vals, duration, opts)
   local sv = ctx.sprite_voices and ctx.sprite_voices[track_num]
   if sv then
-    sv:play(vals, duration)
+    sv:play(vals, duration, opts)
   end
 end
 
