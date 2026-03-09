@@ -51,6 +51,11 @@ function M.new_param(default_val)
   }
 end
 
+-- Extended param value ranges (1-indexed, matching grid rows 1-7)
+-- ratchet: 1-7 (number of repeats within step; 1 = normal, 2+ = ratchet)
+-- alt_note: 1-7 (secondary note offset, combined with note for variation)
+-- glide: 1-7 (portamento amount; 1 = none, 7 = max)
+
 -- Musically useful defaults per track
 local DEFAULT_PATTERNS = {
   -- Track 1: steady 16th triggers, ascending scale fragment
@@ -96,9 +101,9 @@ local PARAM_DEFAULTS = {
   octave   = 4,
   duration = 4,
   velocity = 4,
-  ratchet  = 1,
-  alt_note = 1,
-  glide    = 1,
+  ratchet  = 1,  -- 1 = no ratchet
+  alt_note = 1,  -- 1 = no offset
+  glide    = 1,  -- 1 = no glide
 }
 
 function M.new_track(track_num)

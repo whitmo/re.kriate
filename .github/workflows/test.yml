@@ -20,11 +20,26 @@ jobs:
       - name: Install luarocks
         run: sudo apt-get install -y luarocks
 
-      - name: Install busted
-        run: sudo luarocks install busted
+      - name: Install busted and luacov
+        run: sudo luarocks install busted && sudo luarocks install luacov
 
       - name: Lint - syntax check all Lua files
         run: find . -name '*.lua' -not -path './.git/*' -not -path './.specify/*' -exec luac -p {} +
 
-      - name: Run tests
-        run: busted specs/
+      - name: Run tests with coverage
+        run: |
+          busted --coverage specs/
+          luacov
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          sed -n '/^Summary$/,$p' luacov.report.out >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Check coverage threshold
+        run: |
+          TOTAL=$(grep '^Total' luacov.report.out | awk '{print $NF}' | tr -d '%')
+          echo "Total coverage: ${TOTAL}%"
+          if [ "$(echo "$TOTAL < 80" | bc -l)" -eq 1 ]; then
+            echo "FAIL: Coverage ${TOTAL}% is below 80% threshold"
+            exit 1
+          fi

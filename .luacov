@@ -1,0 +1,16 @@
+-- .luacov - LuaCov configuration
+-- Only track coverage for project source files (not test deps or specs)
+return {
+  include = {
+    "lib/",
+  },
+  exclude = {
+    "specs/",
+    "luarocks",
+    "busted",
+    "luassert",
+    "mediator",
+    "say",
+    "pl/",
+  },
+}

@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate — Voice System Deep Dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'Fira Code', 'SF Mono', Consolas, monospace;
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --surface2: #edf0f5;
+    --surface-elevated: #ffffff;
+    --border: rgba(0, 0, 0, 0.07);
+    --border-bright: rgba(0, 0, 0, 0.14);
+    --text: #1a2233;
+    --text-dim: #6b7a8d;
+    --navy: #1e3a5f;
+    --navy-dim: rgba(30, 58, 95, 0.08);
+    --gold: #b57614;
+    --gold-dim: rgba(181, 118, 20, 0.08);
+    --teal: #0e7c6b;
+    --teal-dim: rgba(14, 124, 107, 0.08);
+    --rust: #a4400e;
+    --rust-dim: rgba(164, 64, 14, 0.08);
+    --slate: #475569;
+    --slate-dim: rgba(71, 85, 105, 0.08);
+    --green: #2d6a30;
+    --green-dim: rgba(45, 106, 48, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1724;
+      --surface: #182033;
+      --surface2: #1e2940;
+      --surface-elevated: #222e45;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-bright: rgba(255, 255, 255, 0.12);
+      --text: #d8e0ec;
+      --text-dim: #7a8ba0;
+      --navy: #5b9bd5;
+      --navy-dim: rgba(91, 155, 213, 0.12);
+      --gold: #d4a73a;
+      --gold-dim: rgba(212, 167, 58, 0.12);
+      --teal: #3dcbb5;
+      --teal-dim: rgba(61, 203, 181, 0.12);
+      --rust: #e8804a;
+      --rust-dim: rgba(232, 128, 74, 0.12);
+      --slate: #94a3b8;
+      --slate-dim: rgba(148, 163, 184, 0.10);
+      --green: #4ade80;
+      --green-dim: rgba(74, 222, 128, 0.10);
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 15% 5%, var(--navy-dim) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 95%, var(--gold-dim) 0%, transparent 40%);
+    color: var(--text);
+    font-family: var(--font-body);
+    padding: 40px;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .anim {
+    animation: fadeUp 0.4s ease-out both;
+    animation-delay: calc(var(--i, 0) * 0.06s);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Layout */
+  .wrap {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    gap: 0 40px;
+  }
+  .main { min-width: 0; max-width: 1120px; }
+
+  /* TOC */
+  .toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    padding: 14px 0;
+    grid-row: 1 / -1;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+  .toc::-webkit-scrollbar { width: 3px; }
+  .toc::-webkit-scrollbar-thumb { background: var(--surface-elevated); border-radius: 2px; }
+  .toc-title {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    padding: 0 0 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .toc a {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 5px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    line-height: 1.4;
+    margin-bottom: 1px;
+  }
+  .toc a:hover { color: var(--text); background: var(--surface2); }
+  .toc a.active { color: var(--text); border-left-color: var(--navy); }
+
+  @media (max-width: 1000px) {
+    .wrap { grid-template-columns: 1fr; padding-top: 0; }
+    body { padding-top: 0; }
+    .toc {
+      position: sticky; top: 0; z-index: 200;
+      max-height: none; display: flex; gap: 4px; align-items: center;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 10px 0; margin: 0 -40px; padding-left: 40px; padding-right: 40px;
+      grid-row: auto;
+    }
+    .toc::-webkit-scrollbar { display: none; }
+    .toc-title { display: none; }
+    .toc a {
+      white-space: nowrap; flex-shrink: 0; border-left: none;
+      border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0;
+      padding: 6px 10px; font-size: 10px;
+    }
+    .toc a.active { border-left: none; border-bottom-color: var(--navy); background: var(--surface); }
+    .main { padding-top: 20px; }
+    .sec-head { scroll-margin-top: 52px; }
+  }
+
+  /* Typography */
+  h1 { font-size: 40px; font-weight: 700; letter-spacing: -1.5px; margin-bottom: 6px; }
+  .subtitle { color: var(--text-dim); font-family: var(--font-mono); font-size: 12px; margin-bottom: 40px; }
+  .sec-head {
+    font-size: 20px; font-weight: 700; letter-spacing: -0.5px;
+    margin-top: 48px; margin-bottom: 20px; padding-top: 8px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sec-head .num {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    width: 24px; height: 24px; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .sec-head--navy .num { background: var(--navy-dim); color: var(--navy); }
+  .sec-head--gold .num { background: var(--gold-dim); color: var(--gold); }
+  .sec-head--teal .num { background: var(--teal-dim); color: var(--teal); }
+  .sec-head--rust .num { background: var(--rust-dim); color: var(--rust); }
+  .sec-head--slate .num { background: var(--slate-dim); color: var(--slate); }
+  .sec-head--green .num { background: var(--green-dim); color: var(--green); }
+
+  /* Cards */
+  .ve-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    min-width: 0;
+  }
+  .ve-card--hero {
+    background: var(--surface-elevated);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    padding: 28px 32px;
+  }
+  .ve-card--recessed {
+    background: var(--surface2);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .ve-card--navy { border-color: var(--navy-dim); }
+  .ve-card--gold { border-color: var(--gold-dim); }
+  .ve-card--teal { border-color: var(--teal-dim); }
+  .ve-card--rust { border-color: var(--rust-dim); }
+  .ve-card--slate { border-color: var(--slate-dim); }
+  .ve-card--green { border-color: var(--green-dim); }
+
+  .card-label {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .card-label .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .card-label--navy { color: var(--navy); }
+  .card-label--navy .dot { background: var(--navy); }
+  .card-label--gold { color: var(--gold); }
+  .card-label--gold .dot { background: var(--gold); }
+  .card-label--teal { color: var(--teal); }
+  .card-label--teal .dot { background: var(--teal); }
+  .card-label--rust { color: var(--rust); }
+  .card-label--rust .dot { background: var(--rust); }
+  .card-label--slate { color: var(--slate); }
+  .card-label--slate .dot { background: var(--slate); }
+  .card-label--green { color: var(--green); }
+  .card-label--green .dot { background: var(--green); }
+
+  /* Grids */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 768px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* Inner card */
+  .inner-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+  }
+  .inner-card .title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .inner-card .desc { color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+
+  /* Code */
+  code {
+    font-family: var(--font-mono); font-size: 11px;
+    background: var(--surface2); padding: 2px 6px; border-radius: 4px;
+  }
+  pre {
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    line-height: 1.7; margin: 12px 0;
+  }
+  .code-label {
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;
+  }
+
+  /* Wrinkle callout */
+  .wrinkle {
+    background: var(--gold-dim); border-left: 3px solid var(--gold);
+    border-radius: 0 8px 8px 0; padding: 12px 16px;
+    font-size: 13px; line-height: 1.6; margin: 12px 0;
+  }
+  .wrinkle strong { color: var(--gold); }
+  .wrinkle code { background: rgba(0,0,0,0.06); }
+  @media (prefers-color-scheme: dark) {
+    .wrinkle code { background: rgba(255,255,255,0.06); }
+  }
+
+  /* Lists */
+  .node-list { list-style: none; font-size: 13px; line-height: 1.9; }
+  .node-list li { padding-left: 14px; position: relative; }
+  .node-list li::before { content: '›'; color: var(--text-dim); font-weight: 600; position: absolute; left: 0; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+  th {
+    text-align: left; font-family: var(--font-mono); font-size: 11px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-dim); padding: 8px 12px;
+    border-bottom: 2px solid var(--border-bright);
+    position: sticky; top: 0; background: var(--surface);
+  }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--surface2); }
+  td code { font-size: 11px; }
+  .num-col { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 12px; }
+
+  /* Flow arrows */
+  .flow-arrow {
+    display: flex; justify-content: center; align-items: center; gap: 8px;
+    color: var(--text-dim); font-family: var(--font-mono); font-size: 11px; padding: 8px 0;
+  }
+  .flow-arrow svg { width: 20px; height: 20px; fill: none; stroke: var(--border-bright); stroke-width: 2; stroke-linecap: round; }
+
+  /* Pipeline */
+  .pipeline { display: flex; gap: 0; align-items: stretch; overflow-x: auto; padding-bottom: 4px; }
+  .pipeline-step {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; min-width: 100px; flex-shrink: 0; text-align: center;
+  }
+  .pipeline-step .step-num { font-family: var(--font-mono); font-size: 10px; font-weight: 600; margin-bottom: 3px; }
+  .pipeline-step .step-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .pipeline-step .step-detail { font-size: 10px; color: var(--text-dim); line-height: 1.4; }
+  .pipeline-arrow { display: flex; align-items: center; padding: 0 3px; color: var(--text-dim); font-size: 14px; flex-shrink: 0; }
+  @media (max-width: 768px) {
+    .pipeline { flex-wrap: wrap; gap: 6px; }
+    .pipeline-arrow { display: none; }
+  }
+
+  /* Grid visualizer */
+  .grid-viz { display: inline-grid; gap: 2px; }
+  .grid-viz .cell {
+    width: 22px; height: 14px; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 7px; color: var(--text);
+    transition: background 0.15s;
+  }
+  .cell-off { background: var(--surface2); }
+  .cell-loop { background: rgba(71,85,105,0.15); }
+  .cell-trig { background: var(--navy-dim); border: 1px solid var(--navy); }
+  .cell-val { background: var(--teal-dim); }
+  .cell-val-set { background: var(--teal); color: #fff; }
+  .cell-bar { background: var(--teal-dim); opacity: 0.5; }
+  .cell-head { background: var(--gold); color: #fff; }
+  .cell-nav { background: var(--slate-dim); border: 1px solid var(--slate); }
+  .cell-nav-active { background: var(--navy); color: #fff; }
+
+  /* Direction animation */
+  .dir-track { display: flex; gap: 3px; align-items: center; margin: 6px 0; }
+  .dir-cell {
+    width: 28px; height: 22px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .dir-cell.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .dir-cell.in-loop { border-color: var(--border-bright); }
+  .dir-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); width: 70px; flex-shrink: 0; }
+
+  /* Polymetry bars */
+  .poly-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .poly-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); width: 60px; text-align: right; flex-shrink: 0; }
+  .poly-bar { height: 14px; border-radius: 3px; position: relative; }
+  .poly-marker { position: absolute; top: -2px; width: 3px; height: 18px; border-radius: 2px; background: var(--gold); }
+
+  /* Detail toggle */
+  details { margin: 8px 0; }
+  details summary {
+    cursor: pointer; font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-dim); padding: 6px 0;
+    list-style: none;
+  }
+  details summary::before { content: '+ '; color: var(--navy); font-weight: 600; }
+  details[open] summary::before { content: '- '; }
+  details summary::-webkit-details-marker { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc" id="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#s1">1. Voice Interface</a>
+  <a href="#s2">2. nb Voice</a>
+  <a href="#s3">3. MIDI Voice</a>
+  <a href="#s4">4. Recorder Voice</a>
+  <a href="#s5">5. Note Pipeline</a>
+  <a href="#s6">6. Parameters</a>
+  <a href="#s7">7. Polymetry</a>
+  <a href="#s8">8. Direction Modes</a>
+  <a href="#s9">9. Grid Display</a>
+  <a href="#s10">10. Default Patterns</a>
+</nav>
+
+<div class="main">
+
+<h1 class="anim" style="--i:0">Voice System</h1>
+<p class="subtitle anim" style="--i:1">re.kriate &mdash; every voice backend, every parameter, every wrinkle</p>
+
+<!-- ================================================================ -->
+<!-- SECTION 1: VOICE INTERFACE CONTRACT -->
+<!-- ================================================================ -->
+<div id="s1" class="sec-head sec-head--navy anim" style="--i:2"><span class="num">1</span> Voice Interface Contract</div>
+
+<div class="ve-card ve-card--hero ve-card--navy anim" style="--i:3">
+  <div class="card-label card-label--navy"><span class="dot"></span> Interface</div>
+  <p style="font-size:14px;margin-bottom:14px;">Every voice backend implements the same contract. The sequencer calls <code>voice:play_note()</code> without knowing or caring whether it's nb, MIDI, or a test recorder.</p>
+  <pre>play_note(self, note, vel, dur)   -- primary: fire-and-forget note
+note_on(self, note, vel)          -- manual note on
+note_off(self, note)              -- manual note off
+set_portamento(self, time)        -- optional: glide control
+all_notes_off(self)               -- cleanup on stop</pre>
+  <div class="wrinkle"><strong>Wrinkle:</strong> <code>set_portamento</code> is optional. The sequencer checks <code>if voice and voice.set_portamento</code> before calling. Currently only a hypothetical MIDI implementation would use it &mdash; nb_voice and recorder don't implement it.</div>
+</div>
+
+<div class="grid-3 anim" style="--i:4">
+  <div class="inner-card">
+    <div class="title" style="color:var(--navy)">nb Voice</div>
+    <div class="desc">Norns-native. Wraps nb player system. Hot-swappable voice assignment.</div>
+  </div>
+  <div class="inner-card">
+    <div class="title" style="color:var(--teal)">MIDI Voice</div>
+    <div class="desc">External gear. Active note tracking. Clock-based note-off. CC 123 cleanup.</div>
+  </div>
+  <div class="inner-card">
+    <div class="title" style="color:var(--gold)">Recorder Voice</div>
+    <div class="desc">Test/viz. Captures events to buffer. Shared buffer for cross-track analysis.</div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 2: NB VOICE -->
+<!-- ================================================================ -->
+<div id="s2" class="sec-head sec-head--navy anim" style="--i:5"><span class="num">2</span> nb Voice</div>
+
+<div class="ve-card ve-card--navy anim" style="--i:6">
+  <div class="card-label card-label--navy"><span class="dot"></span> lib/norns/nb_voice.lua</div>
+  <p style="font-size:13px;margin-bottom:12px;">Wraps the norns <code>nb</code> player system. Created with <code>M.new(param_id)</code> where param_id is the nb voice parameter name (e.g. <code>"voice_1"</code>).</p>
+
+  <div class="grid-2">
+    <div class="inner-card">
+      <div class="title">How it works</div>
+      <div class="desc">
+        On every <code>play_note</code> call, looks up the player:<br>
+        <code>params:lookup_param(param_id):get_player()</code><br>
+        Then delegates directly: <code>player:play_note(note, vel, dur)</code>
+      </div>
+    </div>
+    <div class="inner-card">
+      <div class="title">Cleanup</div>
+      <div class="desc">
+        <code>all_notes_off()</code> is a <strong>no-op</strong>. The nb system handles its own cleanup internally when scripts unload or voices change.
+      </div>
+    </div>
+  </div>
+
+  <div class="wrinkle"><strong>Wrinkle &mdash; Hot-swap:</strong> Player lookup happens on <em>every single call</em>, not cached at construction. If the user changes the nb voice assignment in the params menu, the new voice takes effect immediately on the next note &mdash; no restart needed.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Silent nil:</strong> If no player is assigned (player is <code>nil</code>), all calls silently do nothing. The guard <code>if player then</code> prevents errors, but also means a misconfigured voice produces silence with zero feedback.</div>
+
+  <details>
+    <summary>Full source (28 lines)</summary>
+    <pre>local M = {}
+
+function M.new(param_id)
+  return {
+    param_id = param_id,
+
+    play_note = function(self, note, vel, dur)
+      local player = params:lookup_param(self.param_id):get_player()
+      if player then player:play_note(note, vel, dur) end
+    end,
+
+    note_on = function(self, note, vel)
+      local player = params:lookup_param(self.param_id):get_player()
+      if player then player:note_on(note, vel) end
+    end,
+
+    note_off = function(self, note)
+      local player = params:lookup_param(self.param_id):get_player()
+      if player then player:note_off(note) end
+    end,
+
+    all_notes_off = function(self) end,
+  }
+end
+
+return M</pre>
+  </details>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 3: MIDI VOICE -->
+<!-- ================================================================ -->
+<div id="s3" class="sec-head sec-head--teal anim" style="--i:7"><span class="num">3</span> MIDI Voice</div>
+
+<div class="ve-card ve-card--teal anim" style="--i:8">
+  <div class="card-label card-label--teal"><span class="dot"></span> lib/voices/midi.lua</div>
+  <p style="font-size:13px;margin-bottom:12px;">Sends MIDI note_on/note_off to external hardware. Created with <code>M.new(midi_dev, channel)</code>.</p>
+
+  <div style="margin:16px 0;">
+    <div class="code-label">Note lifecycle</div>
+    <div class="pipeline">
+      <div class="pipeline-step" style="border-color:var(--teal-dim)">
+        <div class="step-num" style="color:var(--teal)">1</div>
+        <div class="step-name">Retrigger?</div>
+        <div class="step-detail">Check active_notes<br>for existing note</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step" style="border-color:var(--rust-dim)">
+        <div class="step-num" style="color:var(--rust)">2</div>
+        <div class="step-name">Cancel old</div>
+        <div class="step-detail">clock.cancel()<br>+ note_off</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step" style="border-color:var(--teal-dim)">
+        <div class="step-num" style="color:var(--teal)">3</div>
+        <div class="step-name">note_on</div>
+        <div class="step-detail">vel * 127<br>on channel</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step" style="border-color:var(--gold-dim)">
+        <div class="step-num" style="color:var(--gold)">4</div>
+        <div class="step-name">Schedule off</div>
+        <div class="step-detail">clock.run +<br>clock.sync(dur)</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step" style="border-color:var(--slate-dim)">
+        <div class="step-num" style="color:var(--slate)">5</div>
+        <div class="step-name">note_off</div>
+        <div class="step-detail">After dur beats<br>clear active</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="inner-card">
+      <div class="title">Active note tracking</div>
+      <div class="desc">
+        Key = <code>channel * 128 + note</code><br>
+        Value = clock coroutine ID<br>
+        Enables per-note cancellation on retrigger
+      </div>
+    </div>
+    <div class="inner-card">
+      <div class="title">all_notes_off()</div>
+      <div class="desc">
+        1. Cancel all pending coroutines<br>
+        2. Send note_off for each active note<br>
+        3. Send <code>CC 123</code> (All Notes Off)<br>
+        4. Clear active_notes table
+      </div>
+    </div>
+  </div>
+
+  <div class="wrinkle"><strong>Wrinkle &mdash; Retrigger safety:</strong> If the same note fires again before the previous note_off, the MIDI voice cancels the pending clock coroutine, sends an explicit note_off, <em>then</em> sends the new note_on. This prevents MIDI note stacking/stuck notes. The key encoding <code>ch*128+note</code> ensures notes on different channels don't collide.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Velocity scaling:</strong> Internal velocity is 0.0&ndash;1.0 (from VELOCITY_MAP). MIDI voice converts via <code>math.floor(vel * 127)</code>. With VELOCITY_MAP[1]=0.15, the minimum MIDI velocity is 19; VELOCITY_MAP[7]=1.0 gives 127.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Tempo-dependent duration:</strong> Note-off timing uses <code>clock.sync(dur)</code> which counts in <em>beats</em>. If the tempo changes while a note is sounding, the real-time duration stretches or compresses accordingly. A half-note at 120 BPM = 1 second, but if tempo drops to 60 BPM mid-sustain, it becomes 2 seconds.</div>
+
+  <details>
+    <summary>Full source (48 lines)</summary>
+    <pre>local M = {}
+
+function M.new(midi_dev, channel)
+  return {
+    midi_dev = midi_dev,
+    channel = channel,
+    active_notes = {},
+
+    play_note = function(self, note, vel, dur)
+      local key = self.channel * 128 + note
+      if self.active_notes[key] then
+        clock.cancel(self.active_notes[key])
+        self.midi_dev:note_off(note, 0, self.channel)
+      end
+      self.midi_dev:note_on(note, math.floor(vel * 127), self.channel)
+      local coro_id = clock.run(function()
+        clock.sync(dur)
+        self.midi_dev:note_off(note, 0, self.channel)
+        self.active_notes[key] = nil
+      end)
+      self.active_notes[key] = coro_id
+    end,
+
+    note_on = function(self, note, vel)
+      self.midi_dev:note_on(note, math.floor(vel * 127), self.channel)
+    end,
+
+    note_off = function(self, note)
+      self.midi_dev:note_off(note, 0, self.channel)
+    end,
+
+    all_notes_off = function(self)
+      for key, coro_id in pairs(self.active_notes) do
+        clock.cancel(coro_id)
+        local note = key % 128
+        self.midi_dev:note_off(note, 0, self.channel)
+      end
+      self.active_notes = {}
+      self.midi_dev:cc(123, 0, self.channel)
+    end,
+  }
+end
+
+return M</pre>
+  </details>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 4: RECORDER VOICE -->
+<!-- ================================================================ -->
+<div id="s4" class="sec-head sec-head--gold anim" style="--i:9"><span class="num">4</span> Recorder Voice</div>
+
+<div class="ve-card ve-card--gold anim" style="--i:10">
+  <div class="card-label card-label--gold"><span class="dot"></span> lib/voices/recorder.lua</div>
+  <p style="font-size:13px;margin-bottom:12px;">Test and visualization backend. Captures all voice events into a buffer with beat timestamps.</p>
+
+  <div class="grid-2">
+    <div class="inner-card">
+      <div class="title">Event schema</div>
+      <div class="desc">
+        <code>play_note</code> &rarr; <code>{track, note, vel, dur, beat}</code><br>
+        <code>note_on</code> &rarr; <code>{track, note, vel, type="on", beat}</code><br>
+        <code>note_off</code> &rarr; <code>{track, note, type="off", beat}</code>
+      </div>
+    </div>
+    <div class="inner-card">
+      <div class="title">Query helpers</div>
+      <div class="desc">
+        <code>get_events()</code> &mdash; filter buffer by track<br>
+        <code>get_notes()</code> &mdash; note values only (no "off" events)<br>
+        <code>clear()</code> &mdash; remove this track's events
+      </div>
+    </div>
+  </div>
+
+  <div class="wrinkle"><strong>Wrinkle &mdash; Shared buffer:</strong> Created with <code>M.new(track_num, shared_buffer)</code>. When multiple recorders share one buffer, all 4 tracks write to the same table. <code>get_events()</code> filters by <code>track_num</code>, so you can inspect interleaved multi-track output from a single buffer. <code>M.clear_all(buffer)</code> empties the shared buffer entirely.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Beat timestamps:</strong> Uses <code>clock.get_beats()</code> at capture time. In tests where the clock isn't running, all events will share the same beat timestamp. The buffer is ordered by insertion, not by beat value.</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 5: NOTE PIPELINE -->
+<!-- ================================================================ -->
+<div id="s5" class="sec-head sec-head--rust anim" style="--i:11"><span class="num">5</span> Note Pipeline</div>
+
+<p class="anim" style="--i:12;font-size:14px;color:var(--text-dim);margin-bottom:16px;">The full journey from clock tick to voice output. Each step has its own wrinkles.</p>
+
+<!-- Step 1: Clock -->
+<div class="ve-card ve-card--navy anim" style="--i:13">
+  <div class="card-label card-label--navy"><span class="dot"></span> Step 1 &mdash; Clock Tick</div>
+  <p style="font-size:13px;margin-bottom:10px;">One <code>clock.run()</code> coroutine per track. Each independently calls <code>clock.sync(division)</code>, then advances.</p>
+  <table>
+    <thead><tr><th>Value</th><th>Division</th><th>Beats</th><th>At 120 BPM</th></tr></thead>
+    <tbody>
+      <tr><td class="num-col">1</td><td>1/16</td><td class="num-col">0.25</td><td class="num-col">125 ms</td></tr>
+      <tr><td class="num-col">2</td><td>1/12</td><td class="num-col">0.333</td><td class="num-col">167 ms</td></tr>
+      <tr><td class="num-col">3</td><td>1/8</td><td class="num-col">0.5</td><td class="num-col">250 ms</td></tr>
+      <tr><td class="num-col">4</td><td>1/6</td><td class="num-col">0.667</td><td class="num-col">333 ms</td></tr>
+      <tr><td class="num-col">5</td><td>1/4</td><td class="num-col">1.0</td><td class="num-col">500 ms</td></tr>
+      <tr><td class="num-col">6</td><td>1/2</td><td class="num-col">2.0</td><td class="num-col">1000 ms</td></tr>
+      <tr><td class="num-col">7</td><td>1/1</td><td class="num-col">4.0</td><td class="num-col">2000 ms</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="flow-arrow anim" style="--i:14">
+  <svg viewBox="0 0 20 20"><path d="M10 4 L10 16 M6 12 L10 16 L14 12"/></svg>
+  all 8 params advance independently
+</div>
+
+<!-- Step 2: Advance -->
+<div class="ve-card ve-card--slate anim" style="--i:15">
+  <div class="card-label card-label--slate"><span class="dot"></span> Step 2 &mdash; Param Advance</div>
+  <p style="font-size:13px;margin-bottom:10px;">Each of the 8 parameters (trigger, note, octave, duration, velocity, ratchet, alt_note, glide) has its own playhead, loop bounds, and step array. All advance using the track's direction mode via <code>direction.advance(param, dir)</code>.</p>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Read-then-advance:</strong> The value at <code>param.pos</code> is captured <em>before</em> the position advances. This means the first note uses step 1's value, then the playhead moves to step 2.</div>
+</div>
+
+<div class="flow-arrow anim" style="--i:16">
+  <svg viewBox="0 0 20 20"><path d="M10 4 L10 16 M6 12 L10 16 L14 12"/></svg>
+  mute check
+</div>
+
+<!-- Step 3: Mute -->
+<div class="ve-card ve-card--recessed anim" style="--i:17">
+  <div class="card-label card-label--slate"><span class="dot"></span> Step 3 &mdash; Mute Gate</div>
+  <p style="font-size:13px;">If <code>track.muted == true</code>, the function returns after advancing. Grid still redraws (<code>ctx.grid_dirty = true</code>).</p>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Silent advance:</strong> Muted tracks keep their playheads moving. When you unmute, the sequence continues from where it <em>would have been</em>, not from where it was when muted. This is intentional &mdash; muting is a performance tool, not a pause.</div>
+</div>
+
+<div class="flow-arrow anim" style="--i:18">
+  <svg viewBox="0 0 20 20"><path d="M10 4 L10 16 M6 12 L10 16 L14 12"/></svg>
+  trigger gate
+</div>
+
+<!-- Step 4: Trigger -->
+<div class="ve-card anim" style="--i:19">
+  <div class="card-label card-label--navy"><span class="dot"></span> Step 4 &mdash; Trigger Gate</div>
+  <p style="font-size:13px;">Only if <code>vals.trigger == 1</code> does note computation proceed. If 0, no sound, but <em>all 8 playheads already advanced</em> (step 2). The trigger is just a gate, not a clock.</p>
+</div>
+
+<div class="flow-arrow anim" style="--i:20">
+  <svg viewBox="0 0 20 20"><path d="M10 4 L10 16 M6 12 L10 16 L14 12"/></svg>
+  compute pitch
+</div>
+
+<!-- Step 5: Alt-note -->
+<div class="ve-card ve-card--teal anim" style="--i:21">
+  <div class="card-label card-label--teal"><span class="dot"></span> Step 5 &mdash; Alt-Note Combination</div>
+  <p style="font-size:13px;margin-bottom:10px;">When <code>alt_note &gt; 1</code>, the effective scale degree is computed:</p>
+  <pre>effective = ((note - 1) + (alt_note - 1)) % 7 + 1</pre>
+  <p style="font-size:12px;color:var(--text-dim);margin-top:8px;">Alt_note = 1 is identity (no change). The modulo 7 wraps within the heptatonic scale.</p>
+
+  <table>
+    <thead><tr><th>note</th><th>alt_note</th><th>Calculation</th><th>Effective</th></tr></thead>
+    <tbody>
+      <tr><td class="num-col">3</td><td class="num-col">1</td><td>no change</td><td class="num-col">3</td></tr>
+      <tr><td class="num-col">3</td><td class="num-col">3</td><td>(2+2)%7+1</td><td class="num-col">5</td></tr>
+      <tr><td class="num-col">5</td><td class="num-col">4</td><td>(4+3)%7+1</td><td class="num-col">1</td></tr>
+      <tr><td class="num-col">6</td><td class="num-col">5</td><td style="color:var(--rust)">(5+4)%7+1</td><td class="num-col" style="color:var(--rust)">3</td></tr>
+      <tr><td class="num-col">7</td><td class="num-col">7</td><td style="color:var(--rust)">(6+6)%7+1</td><td class="num-col" style="color:var(--rust)">6</td></tr>
+    </tbody>
+  </table>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Wraparound:</strong> note=6 + alt_note=5 doesn't give 10 (out of range). It wraps: (5+4)%7+1 = 3. The alt_note can shift a high degree down to a low one, creating non-obvious interval relationships.</div>
+</div>
+
+<div class="flow-arrow anim" style="--i:22">
+  <svg viewBox="0 0 20 20"><path d="M10 4 L10 16 M6 12 L10 16 L14 12"/></svg>
+  scale lookup
+</div>
+
+<!-- Step 6: Scale -->
+<div class="ve-card ve-card--gold anim" style="--i:23">
+  <div class="card-label card-label--gold"><span class="dot"></span> Step 6 &mdash; Scale Quantization</div>
+  <p style="font-size:13px;margin-bottom:10px;">Converts (degree, octave) to a MIDI note number via a pre-built scale table.</p>
+  <pre>idx = (3 + (octave - 4)) * 7 + degree
+-- clamp to [1, #scale_notes]
+-- scale_notes built from root-36, 8 octaves</pre>
+  <table>
+    <thead><tr><th>octave</th><th>Offset</th><th>Base index</th><th>Range (deg 1-7)</th></tr></thead>
+    <tbody>
+      <tr><td class="num-col">1</td><td class="num-col">-3</td><td class="num-col">0*7=0</td><td class="num-col">1&ndash;7</td></tr>
+      <tr><td class="num-col">2</td><td class="num-col">-2</td><td class="num-col">1*7=7</td><td class="num-col">8&ndash;14</td></tr>
+      <tr><td class="num-col">3</td><td class="num-col">-1</td><td class="num-col">2*7=14</td><td class="num-col">15&ndash;21</td></tr>
+      <tr><td class="num-col">4</td><td class="num-col">0</td><td class="num-col">3*7=21</td><td class="num-col">22&ndash;28</td></tr>
+      <tr><td class="num-col">5</td><td class="num-col">+1</td><td class="num-col">4*7=28</td><td class="num-col">29&ndash;35</td></tr>
+      <tr><td class="num-col">6</td><td class="num-col">+2</td><td class="num-col">5*7=35</td><td class="num-col">36&ndash;42</td></tr>
+      <tr><td class="num-col">7</td><td class="num-col">+3</td><td class="num-col">6*7=42</td><td class="num-col">43&ndash;49</td></tr>
+    </tbody>
+  </table>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Clamping at extremes:</strong> With octave=1 + degree=1, idx=1 (lowest note). With octave=7 + degree=7, idx=49. If the scale table has fewer entries (e.g. pentatonic generates 5 notes/octave, not 7), high indices clamp to <code>#scale_notes</code>. Multiple (octave, degree) combos can produce the same MIDI note at the boundaries.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Non-heptatonic scales:</strong> The lookup always uses 7-degree offsets (<code>*7</code>), but pentatonic scales have only 5 notes per octave. The generated table from <code>musicutil.generate_scale</code> returns actual notes, so index 22 may not be the root an octave up in a pentatonic scale. The math assumes heptatonic; non-7 scales create irregular mappings.</div>
+</div>
+
+<div class="flow-arrow anim" style="--i:24">
+  <svg viewBox="0 0 20 20"><path d="M10 4 L10 16 M6 12 L10 16 L14 12"/></svg>
+  duration + velocity
+</div>
+
+<!-- Step 7: Duration/Velocity -->
+<div class="ve-card anim" style="--i:25">
+  <div class="card-label card-label--slate"><span class="dot"></span> Step 7 &mdash; Duration &amp; Velocity Maps</div>
+  <div class="grid-2">
+    <div>
+      <table>
+        <thead><tr><th>Value</th><th>Duration</th><th>Beats</th></tr></thead>
+        <tbody>
+          <tr><td class="num-col">1</td><td>1/16</td><td class="num-col">0.0625</td></tr>
+          <tr><td class="num-col">2</td><td>1/8</td><td class="num-col">0.125</td></tr>
+          <tr><td class="num-col">3</td><td>1/4</td><td class="num-col">0.25</td></tr>
+          <tr><td class="num-col">4</td><td>1/2</td><td class="num-col">0.5</td></tr>
+          <tr><td class="num-col">5</td><td>1 beat</td><td class="num-col">1.0</td></tr>
+          <tr><td class="num-col">6</td><td>2 beats</td><td class="num-col">2.0</td></tr>
+          <tr><td class="num-col">7</td><td>4 beats</td><td class="num-col">4.0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>Value</th><th>Velocity</th><th>MIDI (127)</th></tr></thead>
+        <tbody>
+          <tr><td class="num-col">1</td><td class="num-col">0.15</td><td class="num-col">19</td></tr>
+          <tr><td class="num-col">2</td><td class="num-col">0.30</td><td class="num-col">38</td></tr>
+          <tr><td class="num-col">3</td><td class="num-col">0.45</td><td class="num-col">57</td></tr>
+          <tr><td class="num-col">4</td><td class="num-col">0.60</td><td class="num-col">76</td></tr>
+          <tr><td class="num-col">5</td><td class="num-col">0.75</td><td class="num-col">95</td></tr>
+          <tr><td class="num-col">6</td><td class="num-col">0.90</td><td class="num-col">114</td></tr>
+          <tr><td class="num-col">7</td><td class="num-col">1.00</td><td class="num-col">127</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="flow-arrow anim" style="--i:26">
+  <svg viewBox="0 0 20 20"><path d="M10 4 L10 16 M6 12 L10 16 L14 12"/></svg>
+  glide &rarr; ratchet &rarr; voice
+</div>
+
+<!-- Step 8: Glide -->
+<div class="ve-card ve-card--teal anim" style="--i:27">
+  <div class="card-label card-label--teal"><span class="dot"></span> Step 8 &mdash; Glide / Portamento</div>
+  <p style="font-size:13px;">If <code>vals.glide &gt; 1</code>, calls <code>voice:set_portamento(glide_value)</code>. Otherwise resets to 0.</p>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Optional method:</strong> The sequencer guards with <code>if voice and voice.set_portamento</code>. The nb_voice doesn't implement it, so glide values are silently ignored on norns with nb. Only a future MIDI CC-based implementation or external engine would use this.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Persistent state:</strong> Portamento set on step N stays active until explicitly cleared on a step where glide=1. If your pattern is [3, 3, 3, 1, ...], steps 1&ndash;3 all glide, step 4 snaps. But if step 4 has no trigger, the portamento from step 3 persists into step 5.</div>
+</div>
+
+<!-- Step 9: Ratchet -->
+<div class="ve-card ve-card--rust anim" style="--i:28">
+  <div class="card-label card-label--rust"><span class="dot"></span> Step 9 &mdash; Ratchet</div>
+  <p style="font-size:13px;margin-bottom:10px;">When <code>ratchet &gt; 1</code>, the step's duration is subdivided into equal parts.</p>
+  <pre>sub_dur = duration / ratchet_count
+-- spawn coroutine:
+for i = 1, ratchet_count do
+  play_note(note, vel, sub_dur)
+  if i &lt; ratchet_count then clock.sync(sub_dur) end
+end</pre>
+
+  <table>
+    <thead><tr><th>Ratchet</th><th>Duration=1/4</th><th>Sub-duration</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td class="num-col">1</td><td class="num-col">0.25</td><td class="num-col">0.25</td><td>Normal single note</td></tr>
+      <tr><td class="num-col">2</td><td class="num-col">0.25</td><td class="num-col">0.125</td><td>Two 1/8 notes</td></tr>
+      <tr><td class="num-col">3</td><td class="num-col">0.25</td><td class="num-col">0.083</td><td>Triplet 1/12</td></tr>
+      <tr><td class="num-col">4</td><td class="num-col">0.25</td><td class="num-col">0.0625</td><td>Four 1/16 notes</td></tr>
+      <tr><td class="num-col">7</td><td class="num-col">0.25</td><td class="num-col">0.036</td><td>Rapid septuplet</td></tr>
+    </tbody>
+  </table>
+
+  <div class="wrinkle"><strong>Wrinkle &mdash; Same pitch throughout:</strong> All ratcheted notes use the same MIDI note, velocity, and glide. The param values were captured once (step 2); ratchet just repeats the output.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Subdivide, don't extend:</strong> Total ratchet duration = original step duration. A ratchet of 4 on a quarter note gives four 16th notes, not four quarter notes. The step's slot in the timeline is preserved.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Async coroutine:</strong> Ratchet spawns a <code>clock.run()</code> sub-coroutine. The main track clock continues without waiting. If the track clock advances faster than the ratchet finishes (e.g. very fast division + high ratchet), ratchets from consecutive steps can overlap.</div>
+</div>
+
+<div class="flow-arrow anim" style="--i:29">
+  <svg viewBox="0 0 20 20"><path d="M10 4 L10 16 M6 12 L10 16 L14 12"/></svg>
+  voice:play_note(midi_note, velocity, duration)
+</div>
+
+<!-- Step 10: Voice fires -->
+<div class="ve-card ve-card--hero ve-card--green anim" style="--i:30">
+  <div class="card-label card-label--green"><span class="dot"></span> Step 10 &mdash; Voice Output</div>
+  <p style="font-size:14px;">The voice backend receives the final computed values and produces sound (or records the event). The sequencer doesn't know or care which backend it's talking to.</p>
+  <pre>-- sequencer.play_note()
+local voice = ctx.voices and ctx.voices[track_num]
+if voice then
+  voice:play_note(note, velocity, duration)
+end</pre>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 6: PARAMETERS -->
+<!-- ================================================================ -->
+<div id="s6" class="sec-head sec-head--gold anim" style="--i:31"><span class="num">6</span> Parameters</div>
+
+<div class="ve-card anim" style="--i:32">
+  <div class="card-label card-label--gold"><span class="dot"></span> 8 Independent Parameters Per Track</div>
+  <table>
+    <thead><tr><th>Parameter</th><th>Range</th><th>Default</th><th>Grid Page</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><code>trigger</code></td><td class="num-col">0 / 1</td><td class="num-col">0</td><td>Primary</td><td>Binary gate: fire note or skip</td></tr>
+      <tr><td><code>note</code></td><td class="num-col">1&ndash;7</td><td class="num-col">4</td><td>Primary</td><td>Scale degree (heptatonic)</td></tr>
+      <tr><td><code>octave</code></td><td class="num-col">1&ndash;7</td><td class="num-col">4</td><td>Primary</td><td>Octave offset (4 = center)</td></tr>
+      <tr><td><code>duration</code></td><td class="num-col">1&ndash;7</td><td class="num-col">4</td><td>Primary</td><td>Note length (1/16 &rarr; 4 beats)</td></tr>
+      <tr><td><code>velocity</code></td><td class="num-col">1&ndash;7</td><td class="num-col">4</td><td>Primary</td><td>Dynamics (0.15 &rarr; 1.0)</td></tr>
+      <tr><td><code>ratchet</code></td><td class="num-col">1&ndash;7</td><td class="num-col">1</td><td style="color:var(--rust)">Extended</td><td>Repeats per step (1 = normal)</td></tr>
+      <tr><td><code>alt_note</code></td><td class="num-col">1&ndash;7</td><td class="num-col">1</td><td style="color:var(--rust)">Extended</td><td>Secondary note offset (1 = none)</td></tr>
+      <tr><td><code>glide</code></td><td class="num-col">1&ndash;7</td><td class="num-col">1</td><td style="color:var(--rust)">Extended</td><td>Portamento time (1 = none)</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:12px;color:var(--text-dim);margin-top:10px;">Each parameter is a table: <code>{ steps[1..16], loop_start, loop_end, pos, advancing_forward }</code></p>
+</div>
+
+<div class="ve-card ve-card--recessed anim" style="--i:33">
+  <div class="card-label card-label--rust"><span class="dot"></span> Extended Page Toggle</div>
+  <table>
+    <thead><tr><th>Primary Page</th><th>Extended Page</th><th>Nav Button</th><th>Activation</th></tr></thead>
+    <tbody>
+      <tr><td>trigger</td><td style="color:var(--rust)">ratchet</td><td class="num-col">x=6</td><td>Press again while already on trigger</td></tr>
+      <tr><td>note</td><td style="color:var(--rust)">alt_note</td><td class="num-col">x=7</td><td>Press again while already on note</td></tr>
+      <tr><td>octave</td><td style="color:var(--rust)">glide</td><td class="num-col">x=8</td><td>Press again while already on octave</td></tr>
+      <tr><td>duration</td><td style="color:var(--text-dim)">&mdash;</td><td class="num-col">x=9</td><td>No extended page</td></tr>
+      <tr><td>velocity</td><td style="color:var(--text-dim)">&mdash;</td><td class="num-col">x=10</td><td>No extended page</td></tr>
+    </tbody>
+  </table>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Toggle logic:</strong> Same button while on primary &rarr; go to extended. Same button while on extended &rarr; go back to primary. Different button &rarr; always go to that primary (clears any extended state). Duration/velocity buttons are idempotent (no extended page exists).</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 7: POLYMETRY -->
+<!-- ================================================================ -->
+<div id="s7" class="sec-head sec-head--teal anim" style="--i:34"><span class="num">7</span> Polymetry</div>
+
+<div class="ve-card ve-card--hero ve-card--teal anim" style="--i:35">
+  <div class="card-label card-label--teal"><span class="dot"></span> 32 Independent Loops</div>
+  <p style="font-size:14px;margin-bottom:16px;">4 tracks &times; 8 parameters = 32 independently looping playheads. This is the core of Kria's magic: when loop lengths don't share a common factor, patterns evolve over long cycles before repeating.</p>
+
+  <div style="margin:20px 0;">
+    <p style="font-size:12px;font-weight:600;margin-bottom:8px;">Example: Track 1 with different loop lengths</p>
+    <div class="poly-row">
+      <div class="poly-label">trigger</div>
+      <div class="poly-bar" style="width:50%;background:var(--navy-dim);border:1px solid var(--navy);">
+        <div class="poly-marker" style="left:12%"></div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">8 steps</span>
+    </div>
+    <div class="poly-row">
+      <div class="poly-label">note</div>
+      <div class="poly-bar" style="width:100%;background:var(--teal-dim);border:1px solid var(--teal);">
+        <div class="poly-marker" style="left:6%"></div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">16 steps</span>
+    </div>
+    <div class="poly-row">
+      <div class="poly-label">octave</div>
+      <div class="poly-bar" style="width:75%;background:var(--gold-dim);border:1px solid var(--gold);">
+        <div class="poly-marker" style="left:8%"></div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">12 steps</span>
+    </div>
+    <div class="poly-row">
+      <div class="poly-label">duration</div>
+      <div class="poly-bar" style="width:25%;background:var(--rust-dim);border:1px solid var(--rust);">
+        <div class="poly-marker" style="left:25%"></div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">4 steps</span>
+    </div>
+    <div class="poly-row">
+      <div class="poly-label">velocity</div>
+      <div class="poly-bar" style="width:37.5%;background:var(--slate-dim);border:1px solid var(--slate);">
+        <div class="poly-marker" style="left:16%"></div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">6 steps</span>
+    </div>
+    <div class="poly-row">
+      <div class="poly-label">ratchet</div>
+      <div class="poly-bar" style="width:18.75%;background:var(--green-dim);border:1px solid var(--green);">
+        <div class="poly-marker" style="left:33%"></div>
+      </div>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">3 steps</span>
+    </div>
+  </div>
+
+  <p style="font-size:12px;color:var(--text-dim);">With trigger at 8, note at 16, octave at 12, duration at 4, velocity at 6, ratchet at 3: the full cycle is LCM(8,16,12,4,6,3) = <strong>48 steps</strong> before exact repetition. At 1/16 division and 120 BPM, that's 6 seconds of evolving pattern.</p>
+
+  <div class="wrinkle"><strong>Wrinkle &mdash; Trigger independence:</strong> The trigger loop determines <em>when</em> a note fires, but note/octave/etc determine <em>what</em> fires. If trigger loops at 8 and note loops at 5, the melody heard on triggers doesn't map predictably to the note sequence &mdash; you hear notes at trigger positions that shift against the note loop. This is the polymetric sweet spot.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Loop editing scope:</strong> Loop bounds are set per-parameter. Editing the loop on the note page only affects <code>track.params.note.loop_start/end</code>. On the trigger page, it affects the active track's trigger param. Each parameter is fully independent.</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 8: DIRECTION MODES -->
+<!-- ================================================================ -->
+<div id="s8" class="sec-head sec-head--slate anim" style="--i:36"><span class="num">8</span> Direction Modes</div>
+
+<p class="anim" style="--i:37;font-size:13px;color:var(--text-dim);margin-bottom:16px;">Five modes determine how each param's playhead moves through its loop. Direction is set per-track (all 8 params in one track share the same direction mode).</p>
+
+<!-- Forward -->
+<div class="ve-card anim" style="--i:38">
+  <div class="card-label card-label--navy"><span class="dot"></span> Forward</div>
+  <p style="font-size:13px;margin-bottom:8px;">Standard left-to-right. Wraps from end to start.</p>
+  <div class="dir-track" id="dir-forward">
+    <div class="dir-label">forward</div>
+    <div class="dir-cell in-loop" data-idx="0">1</div>
+    <div class="dir-cell in-loop" data-idx="1">2</div>
+    <div class="dir-cell in-loop" data-idx="2">3</div>
+    <div class="dir-cell in-loop" data-idx="3">4</div>
+    <div class="dir-cell in-loop" data-idx="4">5</div>
+    <div class="dir-cell in-loop" data-idx="5">6</div>
+  </div>
+  <pre style="font-size:11px;margin-top:4px;">1 → 2 → 3 → 4 → 5 → 6 → 1 → 2 → ...</pre>
+</div>
+
+<!-- Reverse -->
+<div class="ve-card anim" style="--i:39">
+  <div class="card-label card-label--teal"><span class="dot"></span> Reverse</div>
+  <p style="font-size:13px;margin-bottom:8px;">Right-to-left. Wraps from start to end.</p>
+  <div class="dir-track" id="dir-reverse">
+    <div class="dir-label">reverse</div>
+    <div class="dir-cell in-loop" data-idx="0">1</div>
+    <div class="dir-cell in-loop" data-idx="1">2</div>
+    <div class="dir-cell in-loop" data-idx="2">3</div>
+    <div class="dir-cell in-loop" data-idx="3">4</div>
+    <div class="dir-cell in-loop" data-idx="4">5</div>
+    <div class="dir-cell in-loop" data-idx="5">6</div>
+  </div>
+  <pre style="font-size:11px;margin-top:4px;">6 → 5 → 4 → 3 → 2 → 1 → 6 → 5 → ...</pre>
+</div>
+
+<!-- Pendulum -->
+<div class="ve-card ve-card--gold anim" style="--i:40">
+  <div class="card-label card-label--gold"><span class="dot"></span> Pendulum</div>
+  <p style="font-size:13px;margin-bottom:8px;">Bounces between endpoints. Tracks state via <code>advancing_forward</code>.</p>
+  <div class="dir-track" id="dir-pendulum">
+    <div class="dir-label">pendulum</div>
+    <div class="dir-cell in-loop" data-idx="0">1</div>
+    <div class="dir-cell in-loop" data-idx="1">2</div>
+    <div class="dir-cell in-loop" data-idx="2">3</div>
+    <div class="dir-cell in-loop" data-idx="3">4</div>
+    <div class="dir-cell in-loop" data-idx="4">5</div>
+    <div class="dir-cell in-loop" data-idx="5">6</div>
+  </div>
+  <pre style="font-size:11px;margin-top:4px;">1 → 2 → 3 → 4 → 5 → 6 → 5 → 4 → 3 → 2 → 1 → 2 → ...</pre>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Single-step no-op:</strong> When <code>loop_start == loop_end</code> (loop of 1), pendulum does nothing &mdash; the position never changes. The function returns early.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Endpoint repetition:</strong> The endpoints play only once per direction change. The sequence is 1,2,3,4,5,6,5,4,3,2,1,2... &mdash; note that 6 and 1 each appear once per bounce, while interior steps appear twice per full cycle.</div>
+</div>
+
+<!-- Drunk -->
+<div class="ve-card anim" style="--i:41">
+  <div class="card-label card-label--rust"><span class="dot"></span> Drunk</div>
+  <p style="font-size:13px;margin-bottom:8px;">Random walk: delta of -1, 0, or +1. Clamped to loop bounds.</p>
+  <div class="dir-track" id="dir-drunk">
+    <div class="dir-label">drunk</div>
+    <div class="dir-cell in-loop" data-idx="0">1</div>
+    <div class="dir-cell in-loop" data-idx="1">2</div>
+    <div class="dir-cell in-loop" data-idx="2">3</div>
+    <div class="dir-cell in-loop" data-idx="3">4</div>
+    <div class="dir-cell in-loop" data-idx="4">5</div>
+    <div class="dir-cell in-loop" data-idx="5">6</div>
+  </div>
+  <pre style="font-size:11px;margin-top:4px;">3 → 4 → 4 → 3 → 2 → 3 → 3 → 4 → 5 → 4 → ...</pre>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Stutter (delta=0):</strong> One-third of the time, the playhead stays put. This creates rhythmic stuttering where the same step repeats. With a short loop (2&ndash;3 steps), drunk mode produces noticeable repetition clusters.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Edge clamping:</strong> At loop boundaries, the walk is biased. At position 1, delta -1 clamps to 1 (effectively 0), so the playhead has a 2/3 chance of staying or moving right but only 1/3 of staying at the edge.</div>
+</div>
+
+<!-- Random -->
+<div class="ve-card anim" style="--i:42">
+  <div class="card-label card-label--slate"><span class="dot"></span> Random</div>
+  <p style="font-size:13px;margin-bottom:8px;">Uniform random position within loop bounds. No memory of previous position.</p>
+  <div class="dir-track" id="dir-random">
+    <div class="dir-label">random</div>
+    <div class="dir-cell in-loop" data-idx="0">1</div>
+    <div class="dir-cell in-loop" data-idx="1">2</div>
+    <div class="dir-cell in-loop" data-idx="2">3</div>
+    <div class="dir-cell in-loop" data-idx="3">4</div>
+    <div class="dir-cell in-loop" data-idx="4">5</div>
+    <div class="dir-cell in-loop" data-idx="5">6</div>
+  </div>
+  <pre style="font-size:11px;margin-top:4px;">5 → 1 → 6 → 2 → 2 → 4 → 1 → 6 → 3 → ...</pre>
+  <div class="wrinkle"><strong>Wrinkle &mdash; No history:</strong> Unlike drunk, random picks any position uniformly. It can jump from step 1 to step 6 in one tick. It can also repeat the same step multiple times in a row (probability 1/loop_length).</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 9: GRID DISPLAY -->
+<!-- ================================================================ -->
+<div id="s9" class="sec-head sec-head--green anim" style="--i:43"><span class="num">9</span> Grid Display</div>
+
+<div class="ve-card ve-card--hero anim" style="--i:44">
+  <div class="card-label card-label--green"><span class="dot"></span> 16&times;8 Grid Layout</div>
+
+  <p style="font-size:13px;margin-bottom:16px;">The grid has two zones: rows 1&ndash;7 for step data (varies by page) and row 8 for navigation.</p>
+
+  <div style="margin-bottom:20px;">
+    <p style="font-size:12px;font-weight:600;margin-bottom:8px;">Trigger Page &mdash; all 4 tracks visible</p>
+    <div class="grid-viz" style="grid-template-columns:repeat(16, 22px);">
+      <!-- Row 1: Track 1 -->
+      <div class="cell cell-trig">1</div><div class="cell cell-off"></div><div class="cell cell-trig">1</div><div class="cell cell-off"></div>
+      <div class="cell cell-head">1</div><div class="cell cell-off"></div><div class="cell cell-trig">1</div><div class="cell cell-off"></div>
+      <div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <!-- Row 2: Track 2 -->
+      <div class="cell cell-trig">1</div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <div class="cell cell-trig">1</div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <div class="cell cell-head">1</div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <div class="cell cell-trig">1</div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-trig">1</div>
+      <!-- Row 3: Track 3 -->
+      <div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-head">1</div><div class="cell cell-loop"></div>
+      <div class="cell cell-loop"></div><div class="cell cell-trig">1</div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <div class="cell cell-trig">1</div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-trig">1</div>
+      <div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-trig">1</div><div class="cell cell-loop"></div>
+      <!-- Row 4: Track 4 -->
+      <div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <div class="cell cell-trig">1</div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-loop"></div>
+      <div class="cell cell-loop"></div><div class="cell cell-loop"></div><div class="cell cell-head">1</div><div class="cell cell-loop"></div>
+      <!-- Rows 5-7: empty on trigger page -->
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <!-- Row 8: Nav -->
+      <div class="cell cell-nav-active">T1</div><div class="cell cell-nav">T2</div><div class="cell cell-nav">T3</div><div class="cell cell-nav">T4</div>
+      <div class="cell cell-off"></div>
+      <div class="cell cell-nav-active">Tr</div><div class="cell cell-nav">No</div><div class="cell cell-nav">Oc</div><div class="cell cell-nav">Du</div><div class="cell cell-nav">Ve</div>
+      <div class="cell cell-off"></div>
+      <div class="cell cell-nav">Lp</div>
+      <div class="cell cell-off"></div><div class="cell cell-off"></div><div class="cell cell-off"></div>
+      <div class="cell cell-nav">&#9654;</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <p style="font-size:12px;font-weight:600;margin-bottom:6px;">Trigger brightness levels</p>
+      <table style="font-size:11px;">
+        <tbody>
+          <tr><td class="num-col">0</td><td>Off (outside loop)</td></tr>
+          <tr><td class="num-col">2</td><td>In loop, trigger off</td></tr>
+          <tr><td class="num-col">8</td><td>Trigger on</td></tr>
+          <tr><td class="num-col">15</td><td>Playhead position</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <p style="font-size:12px;font-weight:600;margin-bottom:6px;">Value page brightness levels</p>
+      <table style="font-size:11px;">
+        <tbody>
+          <tr><td class="num-col">0</td><td>Off (outside loop or above value)</td></tr>
+          <tr><td class="num-col">3</td><td>Bar fill (below value, in loop)</td></tr>
+          <tr><td class="num-col">4</td><td>Value set (outside loop)</td></tr>
+          <tr><td class="num-col">6</td><td>Playhead bar fill</td></tr>
+          <tr><td class="num-col">10</td><td>Value set (in loop)</td></tr>
+          <tr><td class="num-col">15</td><td>Playhead at value</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="ve-card ve-card--recessed anim" style="--i:45">
+  <div class="card-label card-label--slate"><span class="dot"></span> Nav Row (Row 8)</div>
+  <table>
+    <thead><tr><th>Position</th><th>Function</th><th>Interaction</th></tr></thead>
+    <tbody>
+      <tr><td><code>x=1&ndash;4</code></td><td>Track select</td><td>Press to select track 1&ndash;4</td></tr>
+      <tr><td><code>x=6</code></td><td>Trigger / Ratchet</td><td>Press = trigger, press again = ratchet</td></tr>
+      <tr><td><code>x=7</code></td><td>Note / Alt-note</td><td>Press = note, press again = alt_note</td></tr>
+      <tr><td><code>x=8</code></td><td>Octave / Glide</td><td>Press = octave, press again = glide</td></tr>
+      <tr><td><code>x=9</code></td><td>Duration</td><td>Press to select (no extended)</td></tr>
+      <tr><td><code>x=10</code></td><td>Velocity</td><td>Press to select (no extended)</td></tr>
+      <tr><td><code>x=12</code></td><td>Loop edit</td><td>Hold + press 2 columns to set loop</td></tr>
+      <tr><td><code>x=16</code></td><td>Play / Stop</td><td>Press to toggle</td></tr>
+    </tbody>
+  </table>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Value page orientation:</strong> Row 1 = value 7 (highest), row 7 = value 1 (lowest). The mapping is <code>val = 8 - y</code>. This means the visual "up" on the grid corresponds to higher values, matching the intuition of a bar graph.</div>
+  <div class="wrinkle"><strong>Wrinkle &mdash; Loop edit is modal:</strong> While x=12 is held, all grid presses in rows 1&ndash;7 become loop boundary setters instead of value edits. First press = start, second press = end. <code>math.min/max</code> ensures order doesn't matter.</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- SECTION 10: DEFAULT PATTERNS -->
+<!-- ================================================================ -->
+<div id="s10" class="sec-head sec-head--navy anim" style="--i:46"><span class="num">10</span> Default Patterns</div>
+
+<p class="anim" style="--i:47;font-size:13px;color:var(--text-dim);margin-bottom:16px;">Four tracks ship with musically useful patterns so the sequencer sounds good on first play.</p>
+
+<!-- Track 1 -->
+<div class="ve-card ve-card--navy anim" style="--i:48">
+  <div class="card-label card-label--navy"><span class="dot"></span> Track 1 &mdash; Steady 16ths, ascending fragment</div>
+  <div class="grid-2">
+    <div>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">TRIGGER (16 steps)</p>
+      <pre style="font-size:11px;padding:8px 12px;margin:0;">1 0 1 0 | 1 0 1 0 | 1 0 1 0 | 1 0 1 0</pre>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin:8px 0 4px;">NOTE (loop_end = 8)</p>
+      <pre style="font-size:11px;padding:8px 12px;margin:0;">1 2 3 4 | 5 4 3 2 <span style="color:var(--text-dim)">| 1 3 5 3 | 1 2 4 5</span></pre>
+    </div>
+    <div>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">Character</p>
+      <p style="font-size:12px;line-height:1.6;">Alternating 16th triggers create a steady pulse. Note loops at 8 steps while trigger loops at 16, so the 8-note melody repeats twice per trigger cycle. Octave 4 (center), duration 3 (1/4 beat), velocity alternates 5/4 for slight accent pattern.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Track 2 -->
+<div class="ve-card ve-card--teal anim" style="--i:49">
+  <div class="card-label card-label--teal"><span class="dot"></span> Track 2 &mdash; Sparse bass</div>
+  <div class="grid-2">
+    <div>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">TRIGGER (16 steps)</p>
+      <pre style="font-size:11px;padding:8px 12px;margin:0;">1 0 0 0 | 1 0 0 0 | 1 0 0 0 | 1 0 0 1</pre>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin:8px 0 4px;">NOTE (16 steps)</p>
+      <pre style="font-size:11px;padding:8px 12px;margin:0;">1 1 1 1 | 5 5 5 5 | 3 3 3 3 | 1 1 1 4</pre>
+    </div>
+    <div>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">Character</p>
+      <p style="font-size:12px;line-height:1.6;">Hits on beats 1, 5, 9, 13 (+ pickup on 16). <strong>Octave 3</strong> (one below center) for bass register. Duration stays at 5 (full beat) for the first 12 steps, then tightens to 4 (half beat) for the final four-step turnaround. Root&ndash;fifth&ndash;third bass movement. The off-beat trigger at step 16 creates forward momentum.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Track 3 -->
+<div class="ve-card ve-card--gold anim" style="--i:50">
+  <div class="card-label card-label--gold"><span class="dot"></span> Track 3 &mdash; Offset syncopation</div>
+  <div class="grid-2">
+    <div>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">TRIGGER (16 steps)</p>
+      <pre style="font-size:11px;padding:8px 12px;margin:0;">0 0 1 0 | 0 1 0 0 | 1 0 0 1 | 0 0 1 0</pre>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin:8px 0 4px;">NOTE (loop_end = 8)</p>
+      <pre style="font-size:11px;padding:8px 12px;margin:0;">3 3 5 5 | 4 4 2 2 <span style="color:var(--text-dim)">| 1 1 3 3 | 5 5 7 7</span></pre>
+    </div>
+    <div>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">Character</p>
+      <p style="font-size:12px;line-height:1.6;">Syncopated &mdash; triggers avoid the downbeats (steps 1, 5). Middle register (octave 4). Note loop at 8 creates polymetric drift against the 16-step trigger. Duration alternates 3/4 (1/4 and 1/2 beats). Pairs of same notes (3,3 | 5,5) give a call-and-response feel.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Track 4 -->
+<div class="ve-card ve-card--rust anim" style="--i:51">
+  <div class="card-label card-label--rust"><span class="dot"></span> Track 4 &mdash; Sparse high accents</div>
+  <div class="grid-2">
+    <div>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">TRIGGER (16 steps)</p>
+      <pre style="font-size:11px;padding:8px 12px;margin:0;">0 0 0 0 | 1 0 0 0 | 0 0 0 0 | 0 0 1 0</pre>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin:8px 0 4px;">NOTE (16 steps)</p>
+      <pre style="font-size:11px;padding:8px 12px;margin:0;">5 5 7 7 | 6 6 5 5 | 3 3 4 4 | 5 5 6 6</pre>
+    </div>
+    <div>
+      <p style="font-size:11px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">Character</p>
+      <p style="font-size:12px;line-height:1.6;">Only 2 triggers in 16 steps &mdash; rare accent notes. <strong>Octave 5</strong> (one above center) for high register. Duration is mostly short (2 = 1/8 beat), but steps 5&ndash;8 open up to 3 (1/4 beat) for a slightly longer accent window. High velocity variation (5&ndash;7) gives these sparse notes more impact. Creates space between the busier tracks.</p>
+    </div>
+  </div>
+</div>
+
+<div class="ve-card ve-card--recessed anim" style="--i:52">
+  <p style="font-size:12px;color:var(--text-dim);line-height:1.6;"><strong>Together:</strong> Track 1 (steady pulse) + Track 2 (bass anchors) + Track 3 (syncopated fills) + Track 4 (high accents) = a complete arrangement from first play. The polymetric note loops (8 vs 16) ensure the pattern keeps evolving.</p>
+</div>
+
+</div><!-- /main -->
+</div><!-- /wrap -->
+
+<!-- Scroll spy + direction animations -->
+<script>
+// TOC scroll spy
+(function() {
+  const toc = document.getElementById('toc');
+  const links = toc.querySelectorAll('a');
+  const sections = [];
+  links.forEach(link => {
+    const id = link.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ id, el, link });
+  });
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const match = sections.find(s => s.el === entry.target);
+        if (match) {
+          match.link.classList.add('active');
+          if (window.innerWidth <= 1000) {
+            match.link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          }
+        }
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+  sections.forEach(s => observer.observe(s.el));
+  links.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const id = link.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); history.replaceState(null, '', '#' + id); }
+    });
+  });
+})();
+
+// Direction mode animations
+(function() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const sequences = {
+    'dir-forward':  [0,1,2,3,4,5, 0,1,2,3,4,5, 0,1,2,3,4,5],
+    'dir-reverse':  [5,4,3,2,1,0, 5,4,3,2,1,0, 5,4,3,2,1,0],
+    'dir-pendulum': [0,1,2,3,4,5, 4,3,2,1, 0,1,2,3,4,5, 4,3,2,1],
+    'dir-drunk':    [2,3,3,2,1,2,2,3,4,3,4,5,4,4,3,2,1,1],
+    'dir-random':   [4,0,5,1,1,3,0,5,2,4,3,1,5,2,0,4,3,5],
+  };
+
+  Object.keys(sequences).forEach(id => {
+    const container = document.getElementById(id);
+    if (!container) return;
+    const cells = container.querySelectorAll('.dir-cell');
+    const seq = sequences[id];
+    let step = 0;
+
+    setInterval(() => {
+      cells.forEach(c => c.classList.remove('active'));
+      if (seq[step] !== undefined && cells[seq[step]]) {
+        cells[seq[step]].classList.add('active');
+      }
+      step = (step + 1) % seq.length;
+    }, 500);
+  });
+})();
+</script>
+</body>
+</html>

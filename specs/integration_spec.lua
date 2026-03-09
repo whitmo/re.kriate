@@ -424,7 +424,7 @@ describe("integration", function()
       app.enc(ctx, 2, -10)
       assert.are.equal("trigger", ctx.active_page)
       app.enc(ctx, 2, 100)
-      assert.are.equal("velocity", ctx.active_page)
+      assert.are.equal("glide", ctx.active_page)
     end)
 
   end)

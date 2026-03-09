@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate - Test Coverage &amp; Testing Guide</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --green-dim: #238636;
+    --yellow: #d29922;
+    --orange: #db6d28;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --pink: #f778ba;
+    --cyan: #39d353;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #fff;
+  }
+
+  h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 2rem 0 1rem;
+    color: #fff;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--accent);
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  /* Hero stats */
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0 2rem;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+
+  .stat-card .value {
+    font-size: 2.4rem;
+    font-weight: 700;
+    display: block;
+  }
+
+  .stat-card .label {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.25rem;
+  }
+
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.accent .value { color: var(--accent); }
+  .stat-card.purple .value { color: var(--purple); }
+  .stat-card.yellow .value { color: var(--yellow); }
+
+  /* Coverage table */
+  .coverage-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin: 1rem 0;
+  }
+
+  .coverage-table th {
+    background: var(--surface2);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .coverage-table td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+
+  .coverage-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .coverage-table tr.total {
+    background: var(--surface2);
+    font-weight: 700;
+  }
+
+  .coverage-table .file {
+    font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+
+  /* Coverage bar */
+  .cov-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .cov-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    min-width: 100px;
+  }
+
+  .cov-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+
+  .cov-pct {
+    font-weight: 600;
+    font-size: 0.9rem;
+    min-width: 52px;
+    text-align: right;
+  }
+
+  .cov-100 .cov-bar-fill { background: var(--green); }
+  .cov-100 .cov-pct { color: var(--green); }
+  .cov-90 .cov-bar-fill { background: var(--cyan); }
+  .cov-90 .cov-pct { color: var(--cyan); }
+  .cov-80 .cov-bar-fill { background: var(--yellow); }
+  .cov-80 .cov-pct { color: var(--yellow); }
+  .cov-70 .cov-bar-fill { background: var(--orange); }
+  .cov-70 .cov-pct { color: var(--orange); }
+  .cov-low .cov-bar-fill { background: var(--red); }
+  .cov-low .cov-pct { color: var(--red); }
+
+  /* Test spec cards */
+  .spec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+
+  .spec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+  }
+
+  .spec-card .spec-name {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+    color: #fff;
+  }
+
+  .spec-card .spec-file {
+    font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+  }
+
+  .spec-card .spec-count {
+    display: inline-block;
+    background: var(--green-dim);
+    color: var(--green);
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+  }
+
+  .spec-card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .spec-card li {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    padding: 0.2rem 0;
+    padding-left: 1.2rem;
+    position: relative;
+  }
+
+  .spec-card li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55rem;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+
+  /* Architecture diagram */
+  .arch-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+  }
+
+  .arch-diagram svg {
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Flow diagram */
+  .flow-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.75rem 0;
+  }
+
+  .flow-step + .flow-step {
+    border-top: 1px solid var(--border);
+  }
+
+  .flow-num {
+    min-width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .flow-content {
+    flex: 1;
+  }
+
+  .flow-content strong {
+    color: #fff;
+  }
+
+  .flow-content code {
+    font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+    background: var(--surface2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+
+  .flow-content p {
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+    color: var(--text-dim);
+  }
+
+  /* Code blocks */
+  pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 0.75rem 0;
+    color: var(--text);
+  }
+
+  .keyword { color: var(--pink); }
+  .string { color: var(--green); }
+  .comment { color: var(--text-dim); font-style: italic; }
+  .fn { color: var(--purple); }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .badge-green { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+  .badge-yellow { background: rgba(210, 153, 34, 0.15); color: var(--yellow); }
+  .badge-purple { background: rgba(188, 140, 255, 0.15); color: var(--purple); }
+  .badge-accent { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
+
+  /* Module map */
+  .module-map {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
+  }
+
+  .module-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+
+  .module-box:hover {
+    border-color: var(--accent);
+  }
+
+  .module-box .mod-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #fff;
+    margin-bottom: 0.25rem;
+  }
+
+  .module-box .mod-desc {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  .module-box .mod-lines {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    opacity: 0.7;
+  }
+
+  .module-box.core { border-left: 3px solid var(--accent); }
+  .module-box.ui { border-left: 3px solid var(--purple); }
+  .module-box.voice { border-left: 3px solid var(--green); }
+  .module-box.remote { border-left: 3px solid var(--yellow); }
+  .module-box.platform { border-left: 3px solid var(--pink); }
+
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin: 0.75rem 0;
+    font-size: 0.85rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  .dot-core { background: var(--accent); }
+  .dot-ui { background: var(--purple); }
+  .dot-voice { background: var(--green); }
+  .dot-remote { background: var(--yellow); }
+  .dot-platform { background: var(--pink); }
+
+  /* Pie chart */
+  .pie-container {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+
+  .pie-chart {
+    width: 180px;
+    height: 180px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .pie-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .pie-center .pct {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  .pie-center .lbl {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+  }
+
+  .pie-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .pie-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .pie-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+
+  /* Info callout */
+  .callout {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+
+  .callout strong {
+    color: var(--accent);
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 1rem; }
+    .hero-stats { grid-template-columns: repeat(2, 1fr); }
+    .spec-grid { grid-template-columns: 1fr; }
+    .module-map { grid-template-columns: repeat(2, 1fr); }
+    .pie-container { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<h1>re.kriate Testing &amp; Coverage Report</h1>
+<p class="subtitle">Comprehensive test suite analysis for the norns polymetric sequencer</p>
+
+<!-- Hero Stats -->
+<div class="hero-stats">
+  <div class="stat-card green">
+    <span class="value">195</span>
+    <span class="label">Tests Passing</span>
+  </div>
+  <div class="stat-card green">
+    <span class="value">92.9%</span>
+    <span class="label">Code Coverage</span>
+  </div>
+  <div class="stat-card accent">
+    <span class="value">8</span>
+    <span class="label">Spec Files</span>
+  </div>
+  <div class="stat-card purple">
+    <span class="value">11</span>
+    <span class="label">Source Modules</span>
+  </div>
+  <div class="stat-card yellow">
+    <span class="value">0</span>
+    <span class="label">Failures</span>
+  </div>
+</div>
+
+<!-- Coverage Breakdown -->
+<h2>Per-File Coverage</h2>
+<table class="coverage-table">
+  <thead>
+    <tr>
+      <th>File</th>
+      <th>Hits</th>
+      <th>Missed</th>
+      <th style="width: 40%">Coverage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="file">lib/direction.lua</td>
+      <td>41</td>
+      <td>0</td>
+      <td>
+        <div class="cov-bar-wrap cov-100">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 100%"></div></div>
+          <span class="cov-pct">100.0%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/remote/api.lua</td>
+      <td>188</td>
+      <td>0</td>
+      <td>
+        <div class="cov-bar-wrap cov-100">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 100%"></div></div>
+          <span class="cov-pct">100.0%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/scale.lua</td>
+      <td>12</td>
+      <td>0</td>
+      <td>
+        <div class="cov-bar-wrap cov-100">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 100%"></div></div>
+          <span class="cov-pct">100.0%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/seamstress/keyboard.lua</td>
+      <td>25</td>
+      <td>0</td>
+      <td>
+        <div class="cov-bar-wrap cov-100">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 100%"></div></div>
+          <span class="cov-pct">100.0%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/seamstress/screen_ui.lua</td>
+      <td>27</td>
+      <td>0</td>
+      <td>
+        <div class="cov-bar-wrap cov-100">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 100%"></div></div>
+          <span class="cov-pct">100.0%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/voices/midi.lua</td>
+      <td>26</td>
+      <td>0</td>
+      <td>
+        <div class="cov-bar-wrap cov-100">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 100%"></div></div>
+          <span class="cov-pct">100.0%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/voices/recorder.lua</td>
+      <td>41</td>
+      <td>0</td>
+      <td>
+        <div class="cov-bar-wrap cov-100">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 100%"></div></div>
+          <span class="cov-pct">100.0%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/track.lua</td>
+      <td>118</td>
+      <td>1</td>
+      <td>
+        <div class="cov-bar-wrap cov-90">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 99.16%"></div></div>
+          <span class="cov-pct">99.2%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/sequencer.lua</td>
+      <td>68</td>
+      <td>7</td>
+      <td>
+        <div class="cov-bar-wrap cov-90">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 90.67%"></div></div>
+          <span class="cov-pct">90.7%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/grid_ui.lua</td>
+      <td>102</td>
+      <td>13</td>
+      <td>
+        <div class="cov-bar-wrap cov-80">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 88.70%"></div></div>
+          <span class="cov-pct">88.7%</span>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td class="file">lib/app.lua</td>
+      <td>55</td>
+      <td>33</td>
+      <td>
+        <div class="cov-bar-wrap cov-low">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 62.50%"></div></div>
+          <span class="cov-pct">62.5%</span>
+        </div>
+      </td>
+    </tr>
+    <tr class="total">
+      <td><strong>Total</strong></td>
+      <td><strong>703</strong></td>
+      <td><strong>54</strong></td>
+      <td>
+        <div class="cov-bar-wrap cov-90">
+          <div class="cov-bar"><div class="cov-bar-fill" style="width: 92.87%"></div></div>
+          <span class="cov-pct">92.9%</span>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Coverage threshold:</strong> CI enforces a minimum of <strong>80%</strong> total coverage. Current coverage of <strong>92.9%</strong> exceeds this by 12.9 percentage points. 7 of 11 modules have perfect 100% coverage.
+</div>
+
+<!-- Coverage Donut Chart -->
+<h2>Coverage Overview</h2>
+<div class="pie-container">
+  <div class="pie-chart">
+    <svg viewBox="0 0 180 180">
+      <!-- Background circle -->
+      <circle cx="90" cy="90" r="70" fill="none" stroke="var(--border)" stroke-width="20" />
+      <!-- Coverage arc: 92.87% = 334.3 degrees -->
+      <circle cx="90" cy="90" r="70" fill="none" stroke="var(--green)" stroke-width="20"
+        stroke-dasharray="407.7 440" stroke-dashoffset="0"
+        transform="rotate(-90 90 90)" stroke-linecap="round" />
+      <!-- Inner circle for donut -->
+      <circle cx="90" cy="90" r="55" fill="var(--surface)" />
+    </svg>
+    <div class="pie-center">
+      <div class="pct">92.9%</div>
+      <div class="lbl">coverage</div>
+    </div>
+  </div>
+  <div class="pie-legend">
+    <div class="pie-legend-item">
+      <div class="pie-legend-color" style="background: var(--green)"></div>
+      <span><strong>703</strong> lines hit</span>
+    </div>
+    <div class="pie-legend-item">
+      <div class="pie-legend-color" style="background: var(--red)"></div>
+      <span><strong>54</strong> lines missed</span>
+    </div>
+    <div class="pie-legend-item">
+      <div class="pie-legend-color" style="background: var(--border)"></div>
+      <span><strong>7/11</strong> modules at 100%</span>
+    </div>
+  </div>
+</div>
+
+<!-- Module Architecture -->
+<h2>Module Architecture</h2>
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot dot-core"></div> Core Logic</div>
+  <div class="legend-item"><div class="legend-dot dot-ui"></div> UI / Display</div>
+  <div class="legend-item"><div class="legend-dot dot-voice"></div> Voice Backends</div>
+  <div class="legend-item"><div class="legend-dot dot-remote"></div> Remote Control</div>
+  <div class="legend-item"><div class="legend-dot dot-platform"></div> Platform</div>
+</div>
+<div class="module-map">
+  <div class="module-box core">
+    <div class="mod-name">app.lua</div>
+    <div class="mod-desc">Init, params, grid connect, key/enc</div>
+    <div class="mod-lines">142 lines &middot; 62.5% cov</div>
+  </div>
+  <div class="module-box core">
+    <div class="mod-name">track.lua</div>
+    <div class="mod-desc">Data model, 4 tracks &times; 16 steps</div>
+    <div class="mod-lines">188 lines &middot; 99.2% cov</div>
+  </div>
+  <div class="module-box core">
+    <div class="mod-name">sequencer.lua</div>
+    <div class="mod-desc">Clock-driven step advancement</div>
+    <div class="mod-lines">134 lines &middot; 90.7% cov</div>
+  </div>
+  <div class="module-box core">
+    <div class="mod-name">direction.lua</div>
+    <div class="mod-desc">5 direction modes</div>
+    <div class="mod-lines">93 lines &middot; 100% cov</div>
+  </div>
+  <div class="module-box core">
+    <div class="mod-name">scale.lua</div>
+    <div class="mod-desc">Scale quantization</div>
+    <div class="mod-lines">34 lines &middot; 100% cov</div>
+  </div>
+  <div class="module-box ui">
+    <div class="mod-name">grid_ui.lua</div>
+    <div class="mod-desc">Grid display &amp; input handling</div>
+    <div class="mod-lines">233 lines &middot; 88.7% cov</div>
+  </div>
+  <div class="module-box platform">
+    <div class="mod-name">seamstress/screen_ui.lua</div>
+    <div class="mod-desc">Screen rendering</div>
+    <div class="mod-lines">49 lines &middot; 100% cov</div>
+  </div>
+  <div class="module-box platform">
+    <div class="mod-name">seamstress/keyboard.lua</div>
+    <div class="mod-desc">Keyboard input handler</div>
+    <div class="mod-lines">39 lines &middot; 100% cov</div>
+  </div>
+  <div class="module-box voice">
+    <div class="mod-name">voices/midi.lua</div>
+    <div class="mod-desc">MIDI note_on/off, CC</div>
+    <div class="mod-lines">48 lines &middot; 100% cov</div>
+  </div>
+  <div class="module-box voice">
+    <div class="mod-name">voices/recorder.lua</div>
+    <div class="mod-desc">Test voice (event capture)</div>
+    <div class="mod-lines">76 lines &middot; 100% cov</div>
+  </div>
+  <div class="module-box remote">
+    <div class="mod-name">remote/api.lua</div>
+    <div class="mod-desc">20+ endpoints, transport-agnostic</div>
+    <div class="mod-lines">366 lines &middot; 100% cov</div>
+  </div>
+</div>
+
+<!-- Test Specs -->
+<h2>Test Suite Breakdown</h2>
+<p style="color: var(--text-dim); margin-bottom: 1rem;">8 spec files with 195 passing tests organized by module concern</p>
+
+<div class="spec-grid">
+  <div class="spec-card">
+    <div class="spec-name">Sequencer Tests</div>
+    <div class="spec-file">specs/sequencer_spec.lua</div>
+    <span class="spec-count">~45 tests</span>
+    <ul>
+      <li>Note firing &amp; trigger logic</li>
+      <li>Per-param independent advancement</li>
+      <li>Ratchet note subdivision</li>
+      <li>Alt-note degree offset &amp; wrapping</li>
+      <li>Glide / portamento dispatch</li>
+      <li>Mute: advances playheads, no notes</li>
+      <li>Direction mode integration</li>
+      <li>Scale quantization via lookup</li>
+    </ul>
+  </div>
+
+  <div class="spec-card">
+    <div class="spec-name">Grid UI Tests</div>
+    <div class="spec-file">specs/grid_ui_spec.lua</div>
+    <span class="spec-count">~30 tests</span>
+    <ul>
+      <li>Trigger page: multi-track row display</li>
+      <li>Value pages: bar graph rendering</li>
+      <li>Extended pages (ratchet, alt_note, glide)</li>
+      <li>Navigation: double-tap page toggle</li>
+      <li>Loop editing on all page types</li>
+      <li>Playhead brightness highlighting</li>
+      <li>Active track switching</li>
+    </ul>
+  </div>
+
+  <div class="spec-card">
+    <div class="spec-name">Remote API Tests</div>
+    <div class="spec-file">specs/remote_api_spec.lua</div>
+    <span class="spec-count">~30 tests</span>
+    <ul>
+      <li>Transport: play, stop, toggle, reset, state</li>
+      <li>Track: select, mute, direction, division</li>
+      <li>Step: set, get, toggle</li>
+      <li>Pattern: get/set all 16 steps</li>
+      <li>Loop: set/get boundaries</li>
+      <li>Page: select, active query</li>
+      <li>State snapshot &amp; introspection</li>
+    </ul>
+  </div>
+
+  <div class="spec-card">
+    <div class="spec-name">Voice Tests</div>
+    <div class="spec-file">specs/voice_spec.lua</div>
+    <span class="spec-count">~25 tests</span>
+    <ul>
+      <li>Recorder: event capture &amp; filtering</li>
+      <li>Recorder: shared buffer, clear, get_notes</li>
+      <li>MIDI: note_on/off with velocity mapping</li>
+      <li>MIDI: retrigger with coroutine cancel</li>
+      <li>MIDI: all_notes_off (CC 123)</li>
+      <li>Multi-channel routing</li>
+      <li>Note-off coroutine behavior</li>
+    </ul>
+  </div>
+
+  <div class="spec-card">
+    <div class="spec-name">Track Model Tests</div>
+    <div class="spec-file">specs/track_spec.lua</div>
+    <span class="spec-count">~12 tests</span>
+    <ul>
+      <li>new_param / new_track / new_tracks</li>
+      <li>advance with loop wrapping</li>
+      <li>toggle_step &amp; set_step</li>
+      <li>set_loop with boundary validation</li>
+      <li>peek (read without advance)</li>
+      <li>Default musical patterns</li>
+    </ul>
+  </div>
+
+  <div class="spec-card">
+    <div class="spec-name">Direction Tests</div>
+    <div class="spec-file">specs/direction_spec.lua</div>
+    <span class="spec-count">~15 tests</span>
+    <ul>
+      <li>Forward: sequential wrap</li>
+      <li>Reverse: backward wrap</li>
+      <li>Pendulum: bounce at boundaries</li>
+      <li>Drunk: random walk within bounds</li>
+      <li>Random: uniform within bounds</li>
+      <li>200+ iteration boundary tests</li>
+    </ul>
+  </div>
+
+  <div class="spec-card">
+    <div class="spec-name">Integration Tests</div>
+    <div class="spec-file">specs/integration_spec.lua</div>
+    <span class="spec-count">~12 tests</span>
+    <ul>
+      <li>app.init wiring with recorder voices</li>
+      <li>Full sequencer cycle: trigger to voice</li>
+      <li>Multi-track shared buffer</li>
+      <li>Keyboard &rarr; app context integration</li>
+      <li>Cleanup stops sequencer &amp; notes off</li>
+      <li>Screen UI rendering without errors</li>
+    </ul>
+  </div>
+
+  <div class="spec-card">
+    <div class="spec-name">Keyboard Tests</div>
+    <div class="spec-file">specs/keyboard_spec.lua</div>
+    <span class="spec-count">~15 tests</span>
+    <ul>
+      <li>Space: play/stop toggle</li>
+      <li>r: reset all playheads</li>
+      <li>1-4: track selection</li>
+      <li>q/w/e/t/y: page selection</li>
+      <li>Input filtering (key up, repeats)</li>
+      <li>grid_dirty flag management</li>
+    </ul>
+  </div>
+</div>
+
+<!-- How Testing Works -->
+<h2>How Testing Works</h2>
+
+<h3>Framework &amp; Tools</h3>
+<div class="flow-section">
+  <div class="flow-step">
+    <div class="flow-num">1</div>
+    <div class="flow-content">
+      <strong>Busted</strong> &mdash; Lua test framework with BDD-style syntax
+      <p><code>describe</code>, <code>it</code>, <code>before_each</code>, <code>after_each</code> organize test structure</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">2</div>
+    <div class="flow-content">
+      <strong>Luassert</strong> &mdash; Assertion library bundled with Busted
+      <p><code>assert.are.equal</code>, <code>assert.are.same</code>, <code>assert.is_true</code>, <code>assert.is_not_nil</code></p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">3</div>
+    <div class="flow-content">
+      <strong>LuaCov</strong> &mdash; Code coverage analysis
+      <p>Configured via <code>.luacov</code> to track only <code>lib/</code> files, excluding test dependencies</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">4</div>
+    <div class="flow-content">
+      <strong>GitHub Actions CI</strong> &mdash; Runs on every push and PR
+      <p>Lua 5.4 install &rarr; lint (<code>luac -p</code>) &rarr; test with coverage &rarr; threshold check (80%)</p>
+    </div>
+  </div>
+</div>
+
+<h3>Test Architecture: Mock Everything External</h3>
+<p style="color: var(--text-dim); margin: 0.5rem 0 1rem;">Tests run on standard Lua without norns/seamstress hardware. All platform APIs are mocked.</p>
+
+<div class="flow-section">
+  <div class="flow-step">
+    <div class="flow-num" style="background: var(--purple);">M</div>
+    <div class="flow-content">
+      <strong>Mock <code>clock</code></strong> &mdash; <code>get_beats()</code>, <code>run()</code>, <code>cancel()</code>, <code>sync()</code>
+      <p>Controls time. In ratchet tests, <code>clock.run</code> executes immediately for synchronous testing.</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background: var(--purple);">M</div>
+    <div class="flow-content">
+      <strong>Mock <code>params</code></strong> &mdash; <code>add_number</code>, <code>add_option</code>, <code>get</code>, <code>set</code>, <code>set_action</code>
+      <p>Simulates the norns parameter system. Actions fire on <code>set()</code> just like real norns.</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background: var(--purple);">M</div>
+    <div class="flow-content">
+      <strong>Mock <code>grid</code></strong> &mdash; <code>led(x, y, brightness)</code>, <code>refresh()</code>, <code>all()</code>
+      <p>Records LED calls. Tests verify brightness values at specific grid coordinates.</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background: var(--purple);">M</div>
+    <div class="flow-content">
+      <strong>Mock <code>musicutil</code></strong> &mdash; <code>generate_scale(root, type, octaves)</code>
+      <p>Returns a deterministic whole-tone-like scale so tests can predict exact MIDI note values.</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num" style="background: var(--green);">V</div>
+    <div class="flow-content">
+      <strong>Recorder Voice</strong> &mdash; The test-dedicated voice backend
+      <p>Captures <code>play_note()</code> calls into an event buffer. Tests assert on captured note, velocity, duration, and track number. Shared buffer enables multi-track assertions.</p>
+    </div>
+  </div>
+</div>
+
+<h3>Running Tests</h3>
+<pre><span class="comment"># Run all tests with coverage</span>
+busted --coverage specs/
+
+<span class="comment"># Generate coverage report</span>
+luacov
+
+<span class="comment"># View coverage summary</span>
+tail -20 luacov.report.out
+
+<span class="comment"># Run a single spec file</span>
+busted specs/sequencer_spec.lua
+
+<span class="comment"># Run tests matching a pattern</span>
+busted --filter <span class="string">"ratchet"</span> specs/</pre>
+
+<h3>CI Pipeline</h3>
+<div class="flow-section">
+  <div class="flow-step">
+    <div class="flow-num">1</div>
+    <div class="flow-content">
+      <strong>Checkout &amp; Install</strong>
+      <p>Lua 5.4, luarocks, busted, luacov</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">2</div>
+    <div class="flow-content">
+      <strong>Lint</strong> &mdash; <code>find . -name '*.lua' ... -exec luac -p {} +</code>
+      <p>Syntax check all Lua files</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">3</div>
+    <div class="flow-content">
+      <strong>Test + Coverage</strong> &mdash; <code>busted --coverage specs/ && luacov</code>
+      <p>Run all 195 tests with line coverage instrumentation</p>
+    </div>
+  </div>
+  <div class="flow-step">
+    <div class="flow-num">4</div>
+    <div class="flow-content">
+      <strong>Threshold Check</strong> &mdash; Fail if total coverage &lt; 80%
+      <p>Extracts total % from luacov.report.out and compares with <code>bc</code></p>
+    </div>
+  </div>
+</div>
+
+<h3>Test Patterns Used</h3>
+<div class="spec-grid">
+  <div class="spec-card">
+    <div class="spec-name">Context Object Pattern</div>
+    <ul>
+      <li>All state flows through a single <code>ctx</code> table</li>
+      <li>Each test creates a fresh <code>ctx</code> via <code>make_ctx()</code></li>
+      <li>No global state pollution between tests</li>
+      <li>Modules receive and operate on context, never globals</li>
+    </ul>
+  </div>
+  <div class="spec-card">
+    <div class="spec-name">Property-Based Testing</div>
+    <ul>
+      <li>Direction modes tested with 200+ iterations</li>
+      <li>Verifies positions stay within loop bounds</li>
+      <li>Catches edge cases in random/drunk walk</li>
+      <li>Ensures wrapping correctness under stress</li>
+    </ul>
+  </div>
+  <div class="spec-card">
+    <div class="spec-name">Shared Buffer Assertions</div>
+    <ul>
+      <li>Recorder voice captures all events to a buffer</li>
+      <li>Multiple voices share one buffer</li>
+      <li>Tests filter by track number to verify routing</li>
+      <li>Enables end-to-end integration assertions</li>
+    </ul>
+  </div>
+  <div class="spec-card">
+    <div class="spec-name">Grid Coordinate Verification</div>
+    <ul>
+      <li>Mock grid records LED brightness per (x,y)</li>
+      <li>Tests verify exact brightness at specific coordinates</li>
+      <li>Validates bar graph rendering, playhead highlight</li>
+      <li>Checks nav button states (dim=3, bright=12, head=15)</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Coverage Gaps -->
+<h2>Coverage Gaps &amp; Notes</h2>
+<table class="coverage-table">
+  <thead>
+    <tr>
+      <th>Module</th>
+      <th>Gap</th>
+      <th>Reason</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="file">lib/app.lua</td>
+      <td><span class="badge badge-yellow">62.5%</span></td>
+      <td>norns-specific callbacks (<code>key</code>, <code>enc</code>, <code>redraw</code>) and metro setup are platform-dependent and harder to mock fully. Core <code>init</code> and <code>cleanup</code> paths are covered via integration tests.</td>
+    </tr>
+    <tr>
+      <td class="file">lib/grid_ui.lua</td>
+      <td><span class="badge badge-green">88.7%</span></td>
+      <td>Some edge cases in loop editing and less-used display branches. All major page types and nav interactions are tested.</td>
+    </tr>
+    <tr>
+      <td class="file">lib/sequencer.lua</td>
+      <td><span class="badge badge-green">90.7%</span></td>
+      <td>Clock coroutine body (the inner loop with <code>clock.sync</code>) runs asynchronously on norns and is difficult to exercise in synchronous tests. Core <code>step_track</code> logic is thoroughly tested.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  re.kriate test coverage report &middot; Generated 2026-03-08 &middot; 195 tests, 92.9% coverage, 0 failures
+</div>
+
+</body>
+</html>
