@@ -34,8 +34,10 @@ M.handlers["/grid/key"] = function(ctx, args)
   if not x or not y or not z then
     return nil, "requires x, y, z arguments"
   end
-  if x < 1 or x > 16 or y < 1 or y > 8 then
-    return nil, "x must be 1-16, y must be 1-8"
+  local max_x = ctx.g.cols and ctx.g:cols() or 16
+  local max_y = ctx.g.rows and ctx.g:rows() or 8
+  if x < 1 or x > max_x or y < 1 or y > max_y then
+    return nil, "x must be 1-" .. max_x .. ", y must be 1-" .. max_y
   end
   if z ~= 0 and z ~= 1 then
     return nil, "z must be 0 or 1"

@@ -101,6 +101,29 @@ describe("grid_api", function()
       assert.is_string(err)
     end)
 
+    it("uses dynamic grid bounds from provider", function()
+      local g = grid_provider.connect("virtual", { cols = 8, rows = 4 })
+      local ctx = {
+        tracks = track_mod.new_tracks(),
+        active_track = 1,
+        active_page = "trigger",
+        playing = false,
+        loop_held = false,
+        loop_first_press = nil,
+        grid_dirty = true,
+        g = g,
+      }
+      g.key = function(x, y, z) end
+      -- x=9 exceeds 8-col grid
+      local _, err = grid_api.handlers["/grid/key"](ctx, {9, 1, 1})
+      assert.is_string(err)
+      assert.matches("1%-8", err)
+      -- x=8, y=4 should be valid
+      local result, err2 = grid_api.handlers["/grid/key"](ctx, {8, 4, 1})
+      assert.is_nil(err2)
+      assert.is_true(result)
+    end)
+
     it("errors on invalid z", function()
       local ctx = make_ctx()
       local _, err = grid_api.handlers["/grid/key"](ctx, {1, 1, 2})
