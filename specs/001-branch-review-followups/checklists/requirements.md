@@ -33,5 +33,6 @@
 
 - Validation completed in one iteration; no clarification prompts required.
 - 2026-03-09 evidence validation: `spec.md`, `plan.md`, `tasks.md`, `research.md`, `data-model.md`, `quickstart.md`, and `contracts/` now align to decomposition planning for PR `#11` and branch `002-modifiers-meta-config-presets`.
+- 2026-03-09 consistency pass: `quickstart.md` now references `contracts/decomposition-slice.schema.json` and explicitly validates PR `#11` closure-first (salvage fallback) plus branch `002` simplification-first guidance.
 - Residual conflict preserved intentionally: `.ralph/agent/branch-review-2026-03-08.md` allows a possible salvage review for PR `#11`, while `docs/branch-gap-analysis.html` recommends closing PR `#11` as superseded by `002`.
 - Validation status: pass with conflicts recorded, not fail. The conflict is evidence-level and should drive the first PR `#11` follow-up task rather than be hidden inside the planning docs.

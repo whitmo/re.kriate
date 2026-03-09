@@ -21,7 +21,7 @@ Validate that the Spec Kit planning artifacts describe only the remaining decomp
 - Validation contracts:
   - `contracts/review-artifact.schema.json`
   - `contracts/review-cycle.schema.json`
-  - `contracts/speech-event.schema.json`
+  - `contracts/decomposition-slice.schema.json`
   - `contracts/task-scope-summary.schema.json`
 
 ## Steps
@@ -30,7 +30,8 @@ Validate that the Spec Kit planning artifacts describe only the remaining decomp
 2. Verify that resolved low-hanging-fruit branches remain historical evidence only and do not appear as active next-task targets.
 3. Cross-check each planning artifact against the evidence set for:
    - blocked-merge reasons
-   - decomposition-first guidance
+   - closure-first guidance for PR `#11` with salvage-only fallback
+   - simplification-first guidance for branch `002-modifiers-meta-config-presets`
    - simplicity-first task ordering
 4. Record any evidence conflicts explicitly, especially the disagreement over whether PR `#11` should be sliced further or closed as superseded by `002`.
 5. Update `checklists/requirements.md` with the validation result and any residual conflicts.
@@ -64,4 +65,5 @@ rg -n "pdd/seamstress-entrypoint|002-modifiers-meta-config-presets" docs/branch-
 
 ## Note
 
-The contract filenames under `contracts/` are retained from the broader first draft, but their content now serves the narrowed decomposition-planning validation workflow.
+Contract filenames under `contracts/` are now aligned to the narrowed planning model (for example,
+`decomposition-slice.schema.json`) and should stay synchronized with `data-model.md` entity names.

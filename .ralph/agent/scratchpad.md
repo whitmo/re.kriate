@@ -24,3 +24,15 @@
 - Drift check result: `docs/branch-gap-analysis.html` and `/Users/whit/.agent/diagrams/re-kriate-branch-gap-map-2026-03-08.html` prioritize closure of PR `#11` as superseded and simplification of branch `002` as a coherent rebased delivery, while current `spec.md`/`plan.md` still center decomposition of both targets.
 - Planned correction in this iteration: update `spec.md` and `plan.md` to encode closure-first handling for PR `#11` (with salvage only as an explicit fallback), and to reframe branch `002` as simplify/rebase/consolidate planning rather than micro-slice decomposition.
 - Confidence: 88 (evidence is explicit in both canonical dashboard and snapshot; changes are documentation-only and reversible).
+- Result: committed `013881e` updating `spec.md` + `plan.md` to reflect diagram-backed ordering; PR `#11` now closure-first with salvage fallback criteria, and branch `002` is framed as simplification/rebase/consolidation-first.
+- Verification: manual drift check via `rg` and `git diff` against `docs/branch-gap-analysis.html` and `/Users/whit/.agent/diagrams/re-kriate-branch-gap-map-2026-03-08.html` signals.
+
+## 2026-03-09T03:18:40Z
+- Implemented `task-1773025311-6a36`: validated contracts/quickstart consistency after diagram-backed scope corrections.
+- Drift found and fixed: quickstart still referenced `contracts/speech-event.schema.json` and generic decomposition-first wording.
+- Applied consistency updates:
+  - renamed contract file to `contracts/decomposition-slice.schema.json`
+  - updated `quickstart.md` contract list and validation criteria to reflect PR `#11` closure-first (salvage fallback) and branch `002` simplification-first guidance
+  - recorded the consistency-pass result in `checklists/requirements.md`
+- Verification: no remaining references to `speech-event.schema.json`; contract directory and quickstart references now align.
+- Confidence: 93 (small documentation-only change, directly tied to current ready task and validated with repo search checks).
