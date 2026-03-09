@@ -2,3 +2,10 @@
 luacov.stats.out
 luacov.report.out
 .codex/*
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+.ralph/agent/review-cycle/

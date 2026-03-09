@@ -1,0 +1,28 @@
+2026-03-09T00:32:54.071953Z  WARN ralph::loop_runner: Interactive mode requested but stdout is not a TTY, falling back to autonomous
+2026-03-09T00:32:54.075993Z  INFO ralph::loop_runner: I'm Ralph. Let's do this.
+2026-03-09T00:32:54.076215Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-09T00:32:54.076370Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: true)
+2026-03-09T00:32:54.080207Z  INFO ralph_core::event_loop: Successfully loaded 10 memories from store
+2026-03-09T00:32:54.080226Z  INFO ralph_core::event_loop: Injecting 10 memories (10033 chars) into prompt
+2026-03-09T00:32:54.081332Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 18 closed) into prompt
+2026-03-09T00:33:18.147238Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-09T00:33:18.147427Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: true)
+2026-03-09T00:33:18.147853Z  INFO ralph_core::event_loop: Successfully loaded 10 memories from store
+2026-03-09T00:33:18.147887Z  INFO ralph_core::event_loop: Injecting 10 memories (10033 chars) into prompt
+2026-03-09T00:33:18.148121Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 18 closed) into prompt
+2026-03-09T00:33:42.781127Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-09T00:33:42.781319Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: true)
+2026-03-09T00:33:42.781711Z  INFO ralph_core::event_loop: Successfully loaded 10 memories from store
+2026-03-09T00:33:42.781740Z  INFO ralph_core::event_loop: Injecting 10 memories (10033 chars) into prompt
+2026-03-09T00:33:42.781964Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 18 closed) into prompt
+2026-03-09T00:34:07.190415Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-09T00:34:07.190738Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: true)
+2026-03-09T00:34:07.191463Z  INFO ralph_core::event_loop: Successfully loaded 10 memories from store
+2026-03-09T00:34:07.191546Z  INFO ralph_core::event_loop: Injecting 10 memories (10033 chars) into prompt
+2026-03-09T00:34:07.192017Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 18 closed) into prompt
+2026-03-09T00:34:31.517977Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-09T00:34:31.518389Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: true)
+2026-03-09T00:34:31.519435Z  INFO ralph_core::event_loop: Successfully loaded 10 memories from store
+2026-03-09T00:34:31.519612Z  INFO ralph_core::event_loop: Injecting 10 memories (10033 chars) into prompt
+2026-03-09T00:34:31.520144Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 18 closed) into prompt
+2026-03-09T00:34:55.544393Z  INFO ralph_core::event_loop: Wrapping up: consecutive_failures. 5 iterations in 2m 1s. reason=consecutive_failures iterations=5 duration=2m 1s

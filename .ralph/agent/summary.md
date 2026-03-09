@@ -1,8 +1,8 @@
 # Loop Summary
 
 **Status:** Completed successfully
-**Iterations:** 6
-**Duration:** 20m 17s
+**Iterations:** 3
+**Duration:** 12m 56s
 
 ## Tasks
 
@@ -14,4 +14,4 @@ _No events recorded._
 
 ## Final Commit
 
-92cae84: docs: add branch review & gap analysis visualization
+468da2f: Validate narrowed planning artifacts

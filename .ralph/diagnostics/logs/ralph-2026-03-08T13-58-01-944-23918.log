@@ -1,0 +1,3 @@
+2026-03-08T20:58:01.952369Z  INFO ralph: Spawning subprocess for TUI mode child_args=["-c", "ralph.yml", "run", "--rpc"]
+2026-03-08T20:58:01.953315Z  INFO ralph: TUI subprocess stderr redirected to log file log_file=/Users/whit/src/re.kriate/.ralph/diagnostics/logs/ralph-2026-03-08T13-58-01-953-23918.log
+2026-03-08T20:58:01.954454Z  INFO ralph: TUI running in subprocess RPC mode

@@ -6,6 +6,22 @@
 
 ## Fixes
 
+### mem-1773018122-7ad7
+> failure: cmd=rg stale-scope validation on narrowed support artifacts, exit=1, error=pattern matched negative mentions of removed CI/speech scope in research.md and quickstart.md, next=use narrower legacy-term checks that target implementation phrases or scripts instead of descriptive exclusions
+<!-- tags: tooling, error-handling, spec-kit | created: 2026-03-09 -->
+
+### mem-1773017834-d9e3
+> failure: cmd=rg stale-scope scan on specs/001-branch-review-followups/plan.md and tasks.md, exit=1, error=validation pattern matched the intentional phrase 'CI/task speech workflows' inside T016, next=avoid using stale-scope keywords in validation-task prose or narrow the scan to disallowed implementation content only
+<!-- tags: tooling, error-handling, spec-kit | created: 2026-03-09 -->
+
+### mem-1773017600-2b4a
+> failure: cmd=rg -n "HOOOOOORAY|DONE \{task number\}|CI-pass|voice rotation|Celebration Event|Task Completion Event" specs/001-branch-review-followups/spec.md, exit=1, error=no matches found during negative-scope verification, next=wrap future negative rg checks with shell logic so expected no-match results do not register as failures
+<!-- tags: tooling, error-handling | created: 2026-03-09 -->
+
+### mem-1773017433-fc0e
+> failure: cmd=sed -n '1,220p' .ralph/agent/scratchpad.md, exit=1, error=No such file or directory, next=recreate scratchpad before continuing Ralph loop work
+<!-- tags: ralph, error-handling | created: 2026-03-09 -->
+
 ### mem-1772990322-ac52
 > failure: cmd=parallel ralph tools task add x2, exit=0, error=both adds returned task-1772990313-34f7, next=add Ralph runtime tasks serially to avoid duplicate IDs from same-second creation
 <!-- tags: ralph, tooling, error-handling | created: 2026-03-08 -->
@@ -230,6 +246,18 @@
 <!-- tags: ralph, error-handling | created: 2026-03-08 -->
 
 ## Context
+
+### mem-1773018167-546d
+> Spec 001 support artifacts now validate against the narrowed evidence set: research/data-model/quickstart/contracts all describe decomposition planning, and the PR #11 salvage-vs-superseded disagreement is recorded as a pass-with-conflicts result.
+<!-- tags: review, planning, spec-kit | created: 2026-03-09 -->
+
+### mem-1773017834-e05e
+> Spec 001 plan.md and tasks.md now align with the narrowed decomposition-planning scope: only PR #11 and branch 002-modifiers-meta-config-presets remain active, and both artifacts cite the canonical review docs plus diagram snapshots as evidence inputs.
+<!-- tags: review, planning, spec-kit | created: 2026-03-09 -->
+
+### mem-1773017621-c326
+> Spec 001 is now narrowed to decomposition planning for PR #11 and branch 002, using the canonical review docs and /Users/whit/.agent/diagrams snapshots as evidence; speech/celebration workflow scope was removed as out-of-objective.
+<!-- tags: review, planning, spec-kit | created: 2026-03-09 -->
 
 ### mem-1772998713-50fc
 > origin/multiclaude/witty-badger is fully subsumed by main: commit e767dcd adds spec-kit templates + specs/remote-api design docs, all identical on main; git cherry reports '-' prefix; safe to delete remote branch
