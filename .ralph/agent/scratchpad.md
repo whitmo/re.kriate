@@ -39,3 +39,7 @@ Also need: gap visualization / documentation artifact.
 **Tests:** 195 successes / 0 failures on main
 
 **Plan:** Delete stale remote branches first (quick tidy), then address local branch cleanup, then tackle decomposition reviews.
+
+## 2026-03-08: Merge main into pdd/seamstress-entrypoint
+
+Merged main to resolve PR #11 conflicts. Combined HEAD's sprite voice features with main's grid_provider, direction modes, and defensive coding improvements.

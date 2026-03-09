@@ -42,6 +42,19 @@ function M.new(midi_dev, channel)
       self.active_notes = {}
       self.midi_dev:cc(123, 0, self.channel)
     end,
+
+    set_portamento = function(self, time)
+      if time and time > 0 then
+        -- Enable portamento: CC 65 (Portamento On/Off) = 127
+        self.midi_dev:cc(65, 127, self.channel)
+        -- Set portamento time: CC 5 = mapped value (time 1-7 -> 0-127 range)
+        local cc_val = math.floor((time - 1) * 127 / 6)
+        self.midi_dev:cc(5, cc_val, self.channel)
+      else
+        -- Disable portamento: CC 65 = 0
+        self.midi_dev:cc(65, 0, self.channel)
+      end
+    end,
   }
 end
 

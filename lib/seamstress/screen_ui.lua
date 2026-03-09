@@ -1,7 +1,10 @@
 -- lib/seamstress/screen_ui.lua
--- Minimal seamstress screen display: title, track/page, play state, step positions
+-- Seamstress screen display: title, track/page, play state, step positions
 
 local M = {}
+
+-- Extended page -> primary page mapping
+local EXTENDED_TO_PRIMARY = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 function M.redraw(ctx)
   screen.clear()
@@ -16,10 +19,16 @@ function M.redraw(ctx)
   screen.move(10, 20)
   screen.text("re.kriate")
 
-  -- Track + page
+  -- Track + page (with extended page indicator)
   screen.color(150, 150, 180, 255)
   screen.move(10, 40)
-  screen.text("track " .. ctx.active_track .. "  |  " .. ctx.active_page)
+  local page = ctx.active_page
+  local primary = EXTENDED_TO_PRIMARY[page]
+  if primary then
+    screen.text("track " .. ctx.active_track .. "  |  " .. primary .. " > " .. page)
+  else
+    screen.text("track " .. ctx.active_track .. "  |  " .. page)
+  end
 
   -- Play state
   if ctx.playing then
@@ -31,14 +40,19 @@ function M.redraw(ctx)
   screen.text(ctx.playing and "playing" or "stopped")
 
   -- Track step positions
-  screen.color(120, 120, 150, 255)
   if ctx.tracks then
     for t = 1, 4 do
       local track = ctx.tracks[t]
       if track then
         local trig = track.params.trigger
         screen.move(10, 75 + (t - 1) * 12)
-        screen.text("T" .. t .. " step " .. trig.pos .. "/" .. trig.loop_end)
+        if track.muted then
+          screen.color(80, 80, 100, 255)
+          screen.text("T" .. t .. " mute  " .. trig.pos .. "/" .. trig.loop_end)
+        else
+          screen.color(120, 120, 150, 255)
+          screen.text("T" .. t .. " step " .. trig.pos .. "/" .. trig.loop_end)
+        end
       end
     end
   end

@@ -18,6 +18,17 @@ For an interactive visual guide to the grid interface, see [`docs/grid-interface
 - Monome grid UI with trigger overview, per-parameter editing, and extended page toggle
 - Keyboard fallback controls (seamstress)
 - Musically useful default patterns out of the box
+- Sprite visualization layer (seamstress)
+
+### Norns
+
+- [nb](https://github.com/sixolet/nb) voice output (engines, MIDI, crow)
+
+### Seamstress
+
+- Direct MIDI output (one device per track, configurable channel)
+- Keyboard controls (no encoders/keys needed)
+- Sprite rendering -- visual feedback on the seamstress screen
 
 ## Requirements
 
@@ -30,11 +41,11 @@ For an interactive visual guide to the grid interface, see [`docs/grid-interface
 
 ### Seamstress
 
-- [Seamstress 2.0](https://github.com/ryleelyman/seamstress) (alpha or later)
+- [seamstress](https://github.com/ryleelyman/seamstress) v1.4.x (v2 is not yet supported)
 - Monome grid (128 recommended)
-- MIDI output device
+- A MIDI device on port 1 (configurable via params)
 
-## Install
+## Install & Run
 
 ### Norns
 
@@ -53,15 +64,22 @@ git clone https://github.com/whit/re.kriate re_kriate
 
 Then select **re.kriate** from the norns script menu.
 
-### Seamstress
+### Seamstress (v1)
 
-Clone and run:
+Clone the repo anywhere:
 
 ```
 git clone https://github.com/whit/re.kriate
 cd re.kriate
-seamstress re_kriate_seamstress.lua
 ```
+
+Run with the `-s` flag:
+
+```
+/opt/homebrew/opt/seamstress@1/bin/seamstress -s re_kriate_seamstress.lua
+```
+
+Make sure a MIDI device is connected before launching. The script sends MIDI on channels 1-4 (one per track) by default, configurable in the params menu.
 
 ## Controls
 
@@ -109,19 +127,18 @@ Row 8 layout:
 | Space | Play / stop |
 | R | Reset all playheads |
 | 1-4 | Select track |
-| Q | Trigger page |
-| W | Note page |
-| E | Octave page |
-| T | Duration page |
-| Y | Velocity page |
+| Q / W / E / T / Y | Select page (trig / note / oct / dur / vel) |
+| Ctrl+1-9 | Save pattern to slot |
+| Shift+1-9 | Load pattern from slot |
 
 ### Parameters
 
-- **root note** — scale root (MIDI note, default 60/C4)
-- **scale** — Major, Natural Minor, Dorian, Mixolydian, Lydian, Phrygian, Locrian, Harmonic Minor, Melodic Minor, Pentatonic Major, Pentatonic Minor, Blues, Whole Tone, Chromatic
-- **track N division** — clock division per track (1/16, 1/12, 1/8, 1/6, 1/4, 1/2, 1/1)
-- **voice N** — nb voice assignment per track (norns only)
-- **track N channel** — MIDI channel per track (seamstress only)
+- **root note** -- scale root (MIDI note, default 60/C4)
+- **scale** -- Major, Natural Minor, Dorian, Mixolydian, Lydian, Phrygian, Locrian, Harmonic Minor, Melodic Minor, Pentatonic Major, Pentatonic Minor, Blues, Whole Tone, Chromatic
+- **track N division** -- clock division per track (1/16 through 1/1)
+- **track N direction** -- playhead direction per track
+- **voice N** -- nb voice assignment per track (norns only)
+- **track N channel** -- MIDI channel per track (seamstress only)
 
 ### Value ranges
 
@@ -130,8 +147,8 @@ Row 8 layout:
 | trigger | 0-1 | on/off |
 | note | 1-7 | scale degree |
 | octave | 1-7 | octave offset (4 = center) |
-| duration | 1-7 | 1/16 beat → 4 beats |
-| velocity | 1-7 | 0.15 → 1.0 |
+| duration | 1-7 | 1/16 beat to 4 beats |
+| velocity | 1-7 | 0.15 to 1.0 |
 | ratchet | 1-7 | note repeats per step (1 = normal) |
 | alt note | 1-7 | degree offset added to note (1 = none) |
 | glide | 1-7 | portamento amount (1 = none) |
@@ -140,34 +157,38 @@ Row 8 layout:
 
 Each track has a direction mode that controls how all its parameters step through the loop:
 
-- **forward** — left to right, wrap at end
-- **reverse** — right to left, wrap at start
-- **pendulum** — bounce back and forth
-- **drunk** — random walk (±1 or stay)
-- **random** — jump to any position in loop
+- **forward** -- left to right, wrap at end
+- **reverse** -- right to left, wrap at start
+- **pendulum** -- bounce back and forth
+- **drunk** -- random walk (+/-1 or stay)
+- **random** -- jump to any position in loop
 
 ## Architecture
 
 ```
-re_kriate.lua                 norns entrypoint (thin global hooks)
-re_kriate_seamstress.lua      seamstress entrypoint (MIDI voices, keyboard)
-lib/
-  app.lua                     init, params, grid, screen, key/enc
-  sequencer.lua               clock-driven step advancement, voice output
-  track.lua                   data model (steps, loops, defaults)
-  grid_ui.lua                 grid display and input
-  scale.lua                   scale quantization via musicutil
-  direction.lua               direction modes (forward, reverse, pendulum, drunk, random)
-  norns/
-    nb_voice.lua              nb voice wrapper for norns
-  seamstress/
-    screen_ui.lua             seamstress screen display
-    keyboard.lua              keyboard input handler
-  voices/
-    midi.lua                  MIDI voice backend
-    recorder.lua              test voice (captures events)
-docs/
-  grid-interface.html         interactive visual guide to the grid UI
+re_kriate.lua              norns entrypoint (thin global hooks)
+re_kriate_seamstress.lua   seamstress entrypoint (MIDI voices, keyboard, sprites)
+
+lib/app.lua                init, params, grid, screen, key/enc
+lib/sequencer.lua          clock-driven step advancement, voice output
+lib/track.lua              data model (steps, loops, defaults)
+lib/grid_ui.lua            grid display and input
+lib/scale.lua              scale quantization via musicutil
+lib/pattern.lua            pattern save/load slots
+lib/direction.lua          playhead direction modes (forward, reverse, pendulum, drunk, random)
+lib/grid_provider.lua      pluggable grid provider interface
+
+lib/voices/midi.lua        direct MIDI voice output
+lib/voices/sprite.lua      visual sprite events
+lib/voices/recorder.lua    test voice (captures events)
+
+lib/norns/nb_voice.lua     nb voice wrapper (norns only)
+
+lib/seamstress/keyboard.lua      keyboard input handler
+lib/seamstress/screen_ui.lua     seamstress screen display
+lib/seamstress/sprite_render.lua sprite drawing
+
+docs/grid-interface.html   interactive visual guide to the grid UI
 ```
 
 All state flows through a single `ctx` table. No custom globals.

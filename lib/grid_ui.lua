@@ -31,11 +31,6 @@ local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration
 local NAV_LOOP = 12
 local NAV_PLAY = 16
 
--- Extended pages: primary -> extended mapping (double-tap toggle)
-local EXTENDED_PAGE = {trigger = "ratchet", note = "alt_note", octave = "glide"}
--- Reverse lookup: extended -> primary
-local EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
-
 function M.redraw(ctx)
   local g = ctx.g
   if not g then return end

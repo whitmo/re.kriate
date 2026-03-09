@@ -49,6 +49,17 @@ local function make_ctx()
   }, buffer
 end
 
+-- Helper: filter note events (exclude portamento/all_notes_off) from voice events
+local function note_events_for(voice)
+  local result = {}
+  for _, e in ipairs(voice:get_events()) do
+    if e.note and e.type ~= "portamento" then
+      table.insert(result, e)
+    end
+  end
+  return result
+end
+
 describe("sequencer", function()
 
   before_each(function()
@@ -65,7 +76,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 1)
       assert.are.equal(events[1].track, 1)
     end)
@@ -120,7 +131,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 1)
       -- scale_mod.to_midi(3, 4, scale_notes) -> scale_notes[(3+0)*7 + 3] = scale_notes[24]
       local expected_note = scale_mod.to_midi(3, 4, ctx.scale_notes)
@@ -137,7 +148,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(events[1].dur, track_mod.DURATION_MAP[5])
     end)
 
@@ -151,7 +162,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(events[1].vel, track_mod.VELOCITY_MAP[6])
     end)
 
@@ -166,8 +177,8 @@ describe("sequencer", function()
       sequencer.step_track(ctx, 1)
       sequencer.step_track(ctx, 3)
 
-      local events1 = ctx.voices[1]:get_events()
-      local events3 = ctx.voices[3]:get_events()
+      local events1 = note_events_for(ctx.voices[1])
+      local events3 = note_events_for(ctx.voices[3])
       assert.are.equal(#events1, 1)
       assert.are.equal(events1[1].track, 1)
       assert.are.equal(#events3, 1)
@@ -418,7 +429,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 1)
     end)
 
@@ -448,7 +459,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 1)
       local expected = scale_mod.to_midi(3, 4, ctx.scale_notes)
       assert.are.equal(events[1].note, expected)
@@ -468,7 +479,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 1)
       -- effective = ((2-1) + (3-1)) % 7 + 1 = (1 + 2) % 7 + 1 = 4
       local expected = scale_mod.to_midi(4, 4, ctx.scale_notes)
@@ -489,7 +500,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 1)
       -- effective = ((6-1) + (5-1)) % 7 + 1 = (5 + 4) % 7 + 1 = 2 + 1 = 3
       local expected = scale_mod.to_midi(3, 4, ctx.scale_notes)
@@ -576,7 +587,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 1)
     end)
 
@@ -590,7 +601,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 3)
     end)
 
@@ -606,7 +617,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 4)
       -- Each sub-note should have duration = 1/4 beat
       for _, ev in ipairs(events) do
@@ -630,7 +641,7 @@ describe("sequencer", function()
 
       sequencer.step_track(ctx, 1)
 
-      local events = ctx.voices[1]:get_events()
+      local events = note_events_for(ctx.voices[1])
       assert.are.equal(#events, 2)
       local expected_note = scale_mod.to_midi(3, 4, ctx.scale_notes)
       local expected_vel = track_mod.VELOCITY_MAP[6]
