@@ -8,6 +8,7 @@ M.NUM_STEPS = 16
 M.PARAM_NAMES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
 M.CORE_PARAMS = {"trigger", "note", "octave", "duration", "velocity"}
 M.EXTENDED_PARAMS = {"ratchet", "alt_note", "glide"}
+M.DEFAULT_LOOP_LEN = 6
 
 -- Step value ranges (1-indexed, matching grid rows 1-7)
 -- trigger: 0 or 1
@@ -46,7 +47,7 @@ function M.new_param(default_val)
   return {
     steps = steps,
     loop_start = 1,
-    loop_end = M.NUM_STEPS,
+    loop_end = M.DEFAULT_LOOP_LEN,
     pos = 1,
   }
 end
