@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate Event System</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --pink: #f778ba;
+    --cyan: #76e3ea;
+    --yellow: #e3b341;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a1e2e 0%, #0d1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 3rem 2rem;
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+  }
+  .header h1 span { color: var(--accent); }
+  .header p {
+    color: var(--text-dim);
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  /* Main content */
+  .content {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  /* Section styling */
+  section {
+    margin-bottom: 3rem;
+  }
+  section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--accent);
+  }
+  section h3 {
+    font-size: 1.15rem;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--text);
+  }
+  section p {
+    color: var(--text-dim);
+    margin-bottom: 1rem;
+  }
+
+  /* Architecture diagram */
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+  .diagram svg {
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Event flow */
+  .flow-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 1.5rem 0;
+  }
+  .flow-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    text-align: center;
+    min-width: 120px;
+  }
+  .flow-box.publisher { border-color: var(--green); }
+  .flow-box.bus { border-color: var(--accent); background: var(--surface-2); }
+  .flow-box.subscriber { border-color: var(--purple); }
+  .flow-box .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.25rem;
+  }
+  .flow-box.publisher .label { color: var(--green); }
+  .flow-box.bus .label { color: var(--accent); }
+  .flow-box.subscriber .label { color: var(--purple); }
+  .flow-box .name { font-weight: 600; font-size: 0.95rem; }
+  .flow-arrow {
+    color: var(--text-dim);
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  /* Event taxonomy */
+  .taxonomy {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .category {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .category:hover { border-color: var(--accent); }
+  .category-header {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  .category-header .cat-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .category-header .toggle {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+  }
+  .category.open .toggle { transform: rotate(90deg); }
+  .category-body {
+    display: none;
+    padding: 0 1rem 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+  .category.open .category-body { display: block; }
+  .event-item {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  .event-item:last-child { border-bottom: none; }
+  .event-name {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  .event-desc {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  /* Color coding for categories */
+  .cat-sequencer .cat-name { color: var(--green); }
+  .cat-sequencer .event-name { color: var(--green); }
+  .cat-voice .cat-name { color: var(--orange); }
+  .cat-voice .event-name { color: var(--orange); }
+  .cat-grid .cat-name { color: var(--cyan); }
+  .cat-grid .event-name { color: var(--cyan); }
+  .cat-track .cat-name { color: var(--purple); }
+  .cat-track .event-name { color: var(--purple); }
+  .cat-page .cat-name { color: var(--pink); }
+  .cat-page .event-name { color: var(--pink); }
+  .cat-pattern .cat-name { color: var(--yellow); }
+  .cat-pattern .event-name { color: var(--yellow); }
+  .cat-param .cat-name { color: var(--red); }
+  .cat-param .event-name { color: var(--red); }
+
+  /* Code blocks */
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    margin: 1rem 0;
+  }
+  code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.85rem;
+  }
+  .kw { color: var(--purple); }
+  .fn { color: var(--accent); }
+  .str { color: var(--green); }
+  .cm { color: var(--text-dim); font-style: italic; }
+  .num { color: var(--orange); }
+
+  /* Wildcard visualization */
+  .wildcard-demo {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .wild-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0.75rem 0;
+    flex-wrap: wrap;
+  }
+  .wild-pattern {
+    font-family: monospace;
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 130px;
+    font-size: 0.95rem;
+  }
+  .wild-events {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .wild-event {
+    font-family: monospace;
+    font-size: 0.8rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    transition: all 0.2s;
+  }
+  .wild-event.match {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(63, 185, 80, 0.1);
+  }
+  .wild-event.no-match {
+    border-color: var(--red);
+    color: var(--red);
+    opacity: 0.5;
+  }
+
+  /* Testing section */
+  .test-benefit {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+    align-items: flex-start;
+  }
+  .test-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .test-text h4 {
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+  }
+  .test-text p {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin: 0;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .header h1 { font-size: 1.75rem; }
+    .content { padding: 1rem; }
+    .taxonomy { grid-template-columns: 1fr; }
+    .flow-container { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>re.<span>kriate</span> Event System</h1>
+  <p>A lightweight pub/sub event bus for decoupled communication between sequencer, voice, grid, and UI modules.</p>
+</div>
+
+<div class="content">
+
+<!-- Architecture -->
+<section>
+  <h2>Architecture</h2>
+  <p>The event bus sits at the center of re.kriate, allowing modules to communicate without direct references to each other. Publishers emit events; subscribers react to them. Neither needs to know the other exists.</p>
+
+  <div class="diagram">
+    <svg width="820" height="280" viewBox="0 0 820 280">
+      <!-- Publishers -->
+      <rect x="20" y="30" width="140" height="50" rx="8" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="90" y="50" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="600">PUBLISHER</text>
+      <text x="90" y="67" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Sequencer</text>
+
+      <rect x="20" y="100" width="140" height="50" rx="8" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="90" y="120" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="600">PUBLISHER</text>
+      <text x="90" y="137" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Grid UI</text>
+
+      <rect x="20" y="170" width="140" height="50" rx="8" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+      <text x="90" y="190" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="600">PUBLISHER</text>
+      <text x="90" y="207" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Params</text>
+
+      <!-- Arrows to bus -->
+      <line x1="160" y1="55" x2="300" y2="130" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="160" y1="125" x2="300" y2="130" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="160" y1="195" x2="300" y2="140" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Bus -->
+      <rect x="310" y="80" width="200" height="110" rx="12" fill="#1c2333" stroke="#58a6ff" stroke-width="2"/>
+      <text x="410" y="115" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="600" letter-spacing="2">EVENT BUS</text>
+      <text x="410" y="140" text-anchor="middle" fill="#e6edf3" font-size="16" font-weight="700">bus:emit()</text>
+      <text x="410" y="165" text-anchor="middle" fill="#8b949e" font-size="11">route + deliver</text>
+
+      <!-- Arrows from bus -->
+      <line x1="510" y1="120" x2="650" y2="55" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="510" y1="135" x2="650" y2="125" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="510" y1="145" x2="650" y2="195" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Subscribers -->
+      <rect x="660" y="30" width="140" height="50" rx="8" fill="none" stroke="#bc8cff" stroke-width="1.5"/>
+      <text x="730" y="50" text-anchor="middle" fill="#bc8cff" font-size="10" font-weight="600">SUBSCRIBER</text>
+      <text x="730" y="67" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">MIDI Voice</text>
+
+      <rect x="660" y="100" width="140" height="50" rx="8" fill="none" stroke="#bc8cff" stroke-width="1.5"/>
+      <text x="730" y="120" text-anchor="middle" fill="#bc8cff" font-size="10" font-weight="600">SUBSCRIBER</text>
+      <text x="730" y="137" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Screen UI</text>
+
+      <rect x="660" y="170" width="140" height="50" rx="8" fill="none" stroke="#bc8cff" stroke-width="1.5"/>
+      <text x="730" y="190" text-anchor="middle" fill="#bc8cff" font-size="10" font-weight="600">SUBSCRIBER</text>
+      <text x="730" y="207" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Grid LEDs</text>
+
+      <!-- Labels on arrows -->
+      <text x="220" y="78" text-anchor="middle" fill="#3fb950" font-size="10" font-family="monospace">sequencer:step</text>
+      <text x="215" y="120" text-anchor="middle" fill="#3fb950" font-size="10" font-family="monospace">grid:key</text>
+      <text x="220" y="180" text-anchor="middle" fill="#3fb950" font-size="10" font-family="monospace">param:change</text>
+
+      <text x="600" y="75" text-anchor="middle" fill="#bc8cff" font-size="10" font-family="monospace">voice:note</text>
+      <text x="595" y="120" text-anchor="middle" fill="#bc8cff" font-size="10" font-family="monospace">sequencer:*</text>
+      <text x="600" y="180" text-anchor="middle" fill="#bc8cff" font-size="10" font-family="monospace">grid:redraw</text>
+
+      <!-- Note at bottom -->
+      <text x="410" y="260" text-anchor="middle" fill="#8b949e" font-size="11">Modules never reference each other directly. The bus is the only shared dependency.</text>
+
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#30363d"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+</section>
+
+<!-- Event Flow -->
+<section>
+  <h2>Event Flow Example</h2>
+  <p>When the sequencer advances a step, here is what happens:</p>
+
+  <div class="flow-container">
+    <div class="flow-box publisher">
+      <div class="label">1. Sequencer</div>
+      <div class="name">advance step</div>
+    </div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-box bus">
+      <div class="label">2. Event Bus</div>
+      <div class="name">emit("sequencer:step")</div>
+    </div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-box subscriber">
+      <div class="label">3a. Voice</div>
+      <div class="name">play note</div>
+    </div>
+  </div>
+  <div class="flow-container">
+    <div style="min-width: 130px"></div>
+    <div style="min-width: 1.5rem"></div>
+    <div style="min-width: 120px"></div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-box subscriber">
+      <div class="label">3b. Grid UI</div>
+      <div class="name">update LEDs</div>
+    </div>
+  </div>
+  <div class="flow-container">
+    <div style="min-width: 130px"></div>
+    <div style="min-width: 1.5rem"></div>
+    <div style="min-width: 120px"></div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-box subscriber">
+      <div class="label">3c. Screen</div>
+      <div class="name">redraw display</div>
+    </div>
+  </div>
+
+  <p style="margin-top: 1rem;">All three subscribers react independently. The sequencer does not need to know about voices, grids, or screens.</p>
+</section>
+
+<!-- Event Taxonomy -->
+<section>
+  <h2>Event Taxonomy</h2>
+  <p>Events use colon-separated namespaces. Click a category to expand its events.</p>
+
+  <div class="taxonomy">
+    <div class="category cat-sequencer open" onclick="this.classList.toggle('open')">
+      <div class="category-header">
+        <span class="cat-name">sequencer</span>
+        <span class="toggle">&#9654;</span>
+      </div>
+      <div class="category-body">
+        <div class="event-item"><span class="event-name">sequencer:start</span><span class="event-desc">playback started</span></div>
+        <div class="event-item"><span class="event-name">sequencer:stop</span><span class="event-desc">playback stopped</span></div>
+        <div class="event-item"><span class="event-name">sequencer:reset</span><span class="event-desc">playheads reset</span></div>
+        <div class="event-item"><span class="event-name">sequencer:step</span><span class="event-desc">{track, step_num, vals}</span></div>
+      </div>
+    </div>
+
+    <div class="category cat-voice" onclick="this.classList.toggle('open')">
+      <div class="category-header">
+        <span class="cat-name">voice</span>
+        <span class="toggle">&#9654;</span>
+      </div>
+      <div class="category-body">
+        <div class="event-item"><span class="event-name">voice:note</span><span class="event-desc">{track, note, vel, dur}</span></div>
+        <div class="event-item"><span class="event-name">voice:all_off</span><span class="event-desc">{track}</span></div>
+      </div>
+    </div>
+
+    <div class="category cat-grid" onclick="this.classList.toggle('open')">
+      <div class="category-header">
+        <span class="cat-name">grid</span>
+        <span class="toggle">&#9654;</span>
+      </div>
+      <div class="category-body">
+        <div class="event-item"><span class="event-name">grid:key</span><span class="event-desc">{x, y, z}</span></div>
+        <div class="event-item"><span class="event-name">grid:redraw</span><span class="event-desc">{}</span></div>
+      </div>
+    </div>
+
+    <div class="category cat-track" onclick="this.classList.toggle('open')">
+      <div class="category-header">
+        <span class="cat-name">track</span>
+        <span class="toggle">&#9654;</span>
+      </div>
+      <div class="category-body">
+        <div class="event-item"><span class="event-name">track:select</span><span class="event-desc">{track}</span></div>
+      </div>
+    </div>
+
+    <div class="category cat-page" onclick="this.classList.toggle('open')">
+      <div class="category-header">
+        <span class="cat-name">page</span>
+        <span class="toggle">&#9654;</span>
+      </div>
+      <div class="category-body">
+        <div class="event-item"><span class="event-name">page:select</span><span class="event-desc">{page, prev_page}</span></div>
+      </div>
+    </div>
+
+    <div class="category cat-pattern" onclick="this.classList.toggle('open')">
+      <div class="category-header">
+        <span class="cat-name">pattern</span>
+        <span class="toggle">&#9654;</span>
+      </div>
+      <div class="category-body">
+        <div class="event-item"><span class="event-name">pattern:save</span><span class="event-desc">{slot}</span></div>
+        <div class="event-item"><span class="event-name">pattern:load</span><span class="event-desc">{slot}</span></div>
+      </div>
+    </div>
+
+    <div class="category cat-param" onclick="this.classList.toggle('open')">
+      <div class="category-header">
+        <span class="cat-name">param</span>
+        <span class="toggle">&#9654;</span>
+      </div>
+      <div class="category-body">
+        <div class="event-item"><span class="event-name">param:change</span><span class="event-desc">{id, value, old_value}</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Wildcard Matching -->
+<section>
+  <h2>Wildcard Matching</h2>
+  <p>Subscribe with <code>"prefix:*"</code> to match all events in a namespace. The wildcard matches any suffix after the first colon.</p>
+
+  <div class="wildcard-demo">
+    <div class="wild-row">
+      <span class="wild-pattern">sequencer:*</span>
+      <div class="wild-events">
+        <span class="wild-event match">sequencer:start</span>
+        <span class="wild-event match">sequencer:stop</span>
+        <span class="wild-event match">sequencer:step</span>
+        <span class="wild-event no-match">sequencer</span>
+        <span class="wild-event no-match">voice:note</span>
+      </div>
+    </div>
+    <div class="wild-row">
+      <span class="wild-pattern">voice:*</span>
+      <div class="wild-events">
+        <span class="wild-event match">voice:note</span>
+        <span class="wild-event match">voice:all_off</span>
+        <span class="wild-event no-match">voice</span>
+        <span class="wild-event no-match">grid:key</span>
+      </div>
+    </div>
+    <div class="wild-row">
+      <span class="wild-pattern">grid:*</span>
+      <div class="wild-events">
+        <span class="wild-event match">grid:key</span>
+        <span class="wild-event match">grid:redraw</span>
+        <span class="wild-event no-match">grid</span>
+        <span class="wild-event no-match">track:select</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>Wildcard handler signature</h3>
+  <p>Wildcard handlers receive the full event name as the first argument, so you can distinguish which specific event fired:</p>
+  <pre><span class="cm">-- Exact match: handler(data)</span>
+bus:<span class="fn">on</span>(<span class="str">"voice:note"</span>, <span class="kw">function</span>(data)
+  print(data.note)  <span class="cm">-- data is the first arg</span>
+<span class="kw">end</span>)
+
+<span class="cm">-- Wildcard: handler(event_name, data)</span>
+bus:<span class="fn">on</span>(<span class="str">"voice:*"</span>, <span class="kw">function</span>(event_name, data)
+  print(event_name)  <span class="cm">-- "voice:note" or "voice:all_off"</span>
+  print(data.note)
+<span class="kw">end</span>)</pre>
+</section>
+
+<!-- Code Examples -->
+<section>
+  <h2>Common Patterns</h2>
+
+  <h3>Basic usage</h3>
+  <pre><span class="kw">local</span> events = <span class="fn">require</span>(<span class="str">"lib/events"</span>)
+<span class="kw">local</span> bus = events.<span class="fn">new</span>()
+
+<span class="cm">-- Subscribe</span>
+<span class="kw">local</span> unsub = bus:<span class="fn">on</span>(<span class="str">"voice:note"</span>, <span class="kw">function</span>(data)
+  print(<span class="str">"Note:"</span>, data.note, <span class="str">"Track:"</span>, data.track)
+<span class="kw">end</span>)
+
+<span class="cm">-- Emit</span>
+bus:<span class="fn">emit</span>(<span class="str">"voice:note"</span>, {track = <span class="num">1</span>, note = <span class="num">60</span>, vel = <span class="num">0.8</span>})
+
+<span class="cm">-- Unsubscribe</span>
+<span class="fn">unsub</span>()</pre>
+
+  <h3>Integration with context object</h3>
+  <pre><span class="cm">-- In app.init(), create the bus on the context</span>
+<span class="kw">function</span> M.<span class="fn">init</span>()
+  <span class="kw">local</span> ctx = {}
+  ctx.events = events.<span class="fn">new</span>()
+
+  <span class="cm">-- Wire up voice to respond to sequencer steps</span>
+  ctx.events:<span class="fn">on</span>(<span class="str">"sequencer:step"</span>, <span class="kw">function</span>(data)
+    voice.<span class="fn">play</span>(ctx, data.track, data.note, data.vel, data.dur)
+  <span class="kw">end</span>)
+
+  <span class="kw">return</span> ctx
+<span class="kw">end</span></pre>
+
+  <h3>One-shot events</h3>
+  <pre><span class="cm">-- React to the first start only</span>
+bus:<span class="fn">once</span>(<span class="str">"sequencer:start"</span>, <span class="kw">function</span>(data)
+  print(<span class="str">"Sequencer started for the first time!"</span>)
+<span class="kw">end</span>)</pre>
+
+  <h3>Logging / debugging</h3>
+  <pre><span class="cm">-- Log every event in a namespace</span>
+bus:<span class="fn">on</span>(<span class="str">"sequencer:*"</span>, <span class="kw">function</span>(event_name, data)
+  print(<span class="str">"[debug]"</span>, event_name, <span class="fn">inspect</span>(data))
+<span class="kw">end</span>)</pre>
+</section>
+
+<!-- Testing benefits -->
+<section>
+  <h2>Decoupled Testing</h2>
+  <p>The event bus makes modules independently testable. Instead of mocking complex module interfaces, subscribe to events and assert on the data.</p>
+
+  <div class="test-benefit">
+    <div class="test-icon" style="color: var(--green);">&#10003;</div>
+    <div class="test-text">
+      <h4>Assert on emitted events</h4>
+      <p>Subscribe in tests, collect events, assert that the right events were emitted with the right data.</p>
+    </div>
+  </div>
+  <div class="test-benefit">
+    <div class="test-icon" style="color: var(--green);">&#10003;</div>
+    <div class="test-text">
+      <h4>No module mocking needed</h4>
+      <p>Modules communicate through the bus. To test the sequencer, you do not need to mock the voice -- just check the events.</p>
+    </div>
+  </div>
+  <div class="test-benefit">
+    <div class="test-icon" style="color: var(--green);">&#10003;</div>
+    <div class="test-text">
+      <h4>Replay and simulate</h4>
+      <p>Emit events programmatically to simulate grid presses, sequencer steps, or param changes without hardware.</p>
+    </div>
+  </div>
+
+  <pre><span class="cm">-- Test example: verify sequencer emits step events</span>
+<span class="kw">local</span> bus = events.<span class="fn">new</span>()
+<span class="kw">local</span> received = {}
+bus:<span class="fn">on</span>(<span class="str">"sequencer:step"</span>, <span class="kw">function</span>(data)
+  table.<span class="fn">insert</span>(received, data)
+<span class="kw">end</span>)
+
+sequencer.<span class="fn">advance</span>(ctx)  <span class="cm">-- triggers bus:emit internally</span>
+
+assert.are.<span class="fn">equal</span>(<span class="num">1</span>, #received)
+assert.are.<span class="fn">equal</span>(<span class="num">1</span>, received[<span class="num">1</span>].track)</pre>
+</section>
+
+</div>
+
+<div class="footer">
+  re.kriate event system &middot; lib/events.lua &middot; lightweight pub/sub for decoupled sequencer modules
+</div>
+
+</body>
+</html>
