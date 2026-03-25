@@ -1,18 +1,13 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 -> 1.1.0
+- Version change: 1.1.0 -> 1.2.0
 - Modified principles:
-  - V. Spec-Driven Delivery and Documentation -> V. Spec-Driven Delivery, Automation, and Documentation
-- Added sections:
-  - None
-- Removed sections:
-  - None
+  - V. Expanded to require full speckit pipeline flow and autonomous operation support
+- Modified sections:
+  - Operational Constraints: added feature-queue.md requirement
+  - Delivery Workflow: rewritten as 10-step speckit-driven pipeline with autonomous mode
 - Templates requiring updates:
-  - ✅ updated: .specify/templates/plan-template.md
-  - ✅ updated: .specify/templates/spec-template.md
-  - ✅ updated: .specify/templates/tasks-template.md
-  - ✅ updated: README.md
-  - ⚠ pending (not present in repository): .specify/templates/commands/*.md
+  - ✅ updated: ralph.yml (TDD speckit pipeline with 6 hats)
 - Follow-up TODOs:
   - None
 -->
@@ -57,11 +52,14 @@ musical trust depends on stable timing even when resources are constrained.
 ### V. Spec-Driven Delivery, Automation, and Documentation
 Each material feature change MUST be tracked in `specs/<feature>/` with clear requirements,
 design, and an implementation plan before merge. Public-facing behavior changes MUST update
-`README.md` and relevant docs in the same change set. When Ralph orchestrator automation is
-used, orchestration behavior MUST be defined in `ralph.yml`, and hats MUST be explicitly
-defined with consistent event contracts (`triggers` and `publishes`) that match the feature
-spec and task plan. Rationale: shared understanding and operational continuity depend on
-current specs, docs, and reproducible automation contracts.
+`README.md` and relevant docs in the same change set. Ralph orchestrator automation MUST be
+defined in `ralph.yml`, with hats explicitly defined with consistent event contracts
+(`triggers` and `publishes`) that match the speckit pipeline (specify → plan → tasks →
+analyze → implement → verify). Features MUST flow through the full speckit pipeline before
+implementation begins. Autonomous operation MUST be supported: hats MUST make informed
+decisions rather than blocking on human input, and MUST document assumptions explicitly.
+Rationale: shared understanding and operational continuity depend on current specs, docs,
+and reproducible automation contracts that enable both human-driven and autonomous workflows.
 
 ## Operational Constraints
 
@@ -71,19 +69,27 @@ current specs, docs, and reproducible automation contracts.
   patterns unless a deliberate breaking change is approved under Governance.
 - UI and control mappings MUST preserve the current interaction model unless explicitly
   versioned and documented as a behavioral change.
-- `ralph.yml` is the source of truth for orchestrator behavior; if hats are used, hat names,
-  triggers, and published events MUST be unique, documented, and kept consistent with specs.
+- `ralph.yml` is the source of truth for orchestrator behavior; hat names, triggers, and
+  published events MUST be unique, documented, and kept consistent with specs.
+- Feature work MUST be queued in `.ralph/agent/feature-queue.md` for autonomous operation.
+  Each feature is a single line: `- [ ] <description>` (pending), `- [~] <description>`
+  (in-progress), or `- [x] <description>` (done).
 
 ## Delivery Workflow & Quality Gates
 
-1. Define feature scope in spec documents before implementation.
-2. Add or update failing tests first for behavior-changing work.
-3. Implement minimal change to satisfy tests and constraints.
-4. Validate platform parity for shared behavior (norns + seamstress where applicable).
-5. If automation is in scope, update `ralph.yml` and verify hat event contracts align with
-   spec requirements and implementation tasks.
-6. Update operator/user documentation in the same PR.
-7. Record any accepted constitutional violations in plan complexity tracking.
+1. Queue feature in `.ralph/agent/feature-queue.md`.
+2. Specifier creates spec via speckit pipeline (`/speckit.specify`).
+3. Planner creates technical plan with constitution check (`/speckit.plan`).
+4. Task Maker generates TDD-ordered tasks (`/speckit.tasks`).
+5. Analyzer validates consistency across spec/plan/tasks (`/speckit.analyze`).
+6. TDD Implementer works test-first: write failing test → implement → verify green.
+7. Verifier validates: lint, full test suite, structural checks, TDD compliance.
+8. Repeat steps 6-7 until all tasks complete, then advance to next queued feature.
+9. Update operator/user documentation in the same change set.
+10. Record any accepted constitutional violations in plan complexity tracking.
+
+For autonomous operation (ralph-driven), steps 2-8 run without human intervention.
+Hats MUST make informed decisions rather than blocking. Assumptions MUST be documented.
 
 ## Governance
 
@@ -108,4 +114,4 @@ Compliance review expectations:
   complete or explicitly deferred with rationale.
 - Periodic compliance audits SHOULD occur at least once per release cycle.
 
-**Version**: 1.1.0 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-03-08
+**Version**: 1.2.0 | **Ratified**: 2026-03-08 | **Last Amended**: 2026-03-24
