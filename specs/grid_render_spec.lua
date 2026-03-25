@@ -104,38 +104,38 @@ describe("grid_render", function()
   -- Phase 5: Visual display — grid_render.draw() (US1)
   -- ========================================================================
 
-  describe("draw", function()
-
-    local function make_mock_grid()
-      local leds = {}
-      return {
-        get_led = function(self, x, y) return leds[y * 16 + x] or 0 end,
-        led = function(self, x, y, b) leds[y * 16 + x] = b end,
-        all = function(self, b)
-          leds = {}
-          if b and b > 0 then
-            for y2 = 1, 8 do
-              for x2 = 1, 16 do leds[y2 * 16 + x2] = b end
-            end
+  local function make_mock_grid()
+    local leds = {}
+    return {
+      get_led = function(self, x, y) return leds[y * 16 + x] or 0 end,
+      led = function(self, x, y, b) leds[y * 16 + x] = b end,
+      all = function(self, b)
+        leds = {}
+        if b and b > 0 then
+          for y2 = 1, 8 do
+            for x2 = 1, 16 do leds[y2 * 16 + x2] = b end
           end
-        end,
-        cols = function() return 16 end,
-        rows = function() return 8 end,
-      }
-    end
+        end
+      end,
+      cols = function() return 16 end,
+      rows = function() return 8 end,
+    }
+  end
 
-    local function make_mock_screen()
-      local calls = {}
-      return {
-        calls = calls,
-        color = function(self, r, g, b)
-          calls[#calls + 1] = {type = "color", r = r, g = g, b = b}
-        end,
-        rect_fill = function(self, x, y, w, h)
-          calls[#calls + 1] = {type = "rect_fill", x = x, y = y, w = w, h = h}
-        end,
-      }
-    end
+  local function make_mock_screen()
+    local calls = {}
+    return {
+      calls = calls,
+      color = function(self, r, g, b)
+        calls[#calls + 1] = {type = "color", r = r, g = g, b = b}
+      end,
+      rect_fill = function(self, x, y, w, h)
+        calls[#calls + 1] = {type = "rect_fill", x = x, y = y, w = w, h = h}
+      end,
+    }
+  end
+
+  describe("draw", function()
 
     -- T024: draw calls screen.color and screen.rect_fill for each of 128 cells
     it("calls screen.color and screen.rect_fill for each of 128 cells", function()
@@ -187,6 +187,61 @@ describe("grid_render", function()
           assert.are.equal(0, call.r)
           assert.are.equal(0, call.g)
           assert.are.equal(0, call.b)
+        end
+      end
+    end)
+
+  end)
+
+  -- ========================================================================
+  -- Phase 9: Performance (US5)
+  -- ========================================================================
+
+  describe("performance", function()
+
+    -- T040: 100 consecutive draws complete in under 500ms
+    it("100 draws complete in under 500ms (< 5ms avg)", function()
+      local mock_grid = make_mock_grid()
+      mock_grid:all(8) -- set some non-zero brightness
+      local mock_screen = make_mock_screen()
+      local start = os.clock()
+      for _ = 1, 100 do
+        grid_render.draw(mock_grid, mock_screen)
+      end
+      local elapsed = (os.clock() - start) * 1000  -- ms
+      assert.is_true(elapsed < 500, "100 draws took " .. elapsed .. "ms (> 500ms limit)")
+    end)
+
+  end)
+
+  -- ========================================================================
+  -- Phase 10: Edge cases
+  -- ========================================================================
+
+  describe("edge cases", function()
+
+    -- T042: gap click — pixel (15,15) inside gap area maps to cell (1,1)
+    it("gap pixel (15,15) maps to cell (1,1) via floor division", function()
+      local gx, gy = grid_render.pixel_to_grid(15, 15)
+      assert.are.equal(1, gx)
+      assert.are.equal(1, gy)
+    end)
+
+    -- T045: cleanup mid-render — cleanup resets LED state, next draw renders all-black
+    it("cleanup resets LED state so next draw renders all-black", function()
+      local mock_grid = make_mock_grid()
+      mock_grid:led(5, 3, 15)
+      mock_grid:led(10, 7, 10)
+      -- Cleanup
+      mock_grid:all(0)
+      -- Draw should now produce all-black
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen)
+      for _, call in ipairs(mock_screen.calls) do
+        if call.type == "color" then
+          assert.are.equal(0, call.r, "expected R=0 after cleanup")
+          assert.are.equal(0, call.g, "expected G=0 after cleanup")
+          assert.are.equal(0, call.b, "expected B=0 after cleanup")
         end
       end
     end)
