@@ -334,4 +334,63 @@ describe("osc voice integration", function()
 
   end)
 
+  -- Phase 5: OSC Target Update on Param Change (FR-005)
+  describe("osc target update on param change", function()
+
+    it("T018: changing osc_port while backend is osc calls set_target", function()
+      local ctx = seamstress_init()
+      params:set("voice_backend_1", 2) -- switch to osc
+      -- Spy on set_target
+      local set_target_calls = {}
+      ctx.voices[1].set_target = function(self, h, p)
+        table.insert(set_target_calls, {h, p})
+      end
+      params:set("osc_port_1", 7400)
+      assert.are.equal(1, #set_target_calls,
+        "set_target should be called once")
+      assert.are.same({"127.0.0.1", 7400}, set_target_calls[1],
+        "set_target should receive current host and new port")
+    end)
+
+    it("T019: changing osc_host while backend is osc calls set_target", function()
+      local ctx = seamstress_init()
+      params:set("voice_backend_1", 2) -- switch to osc
+      local set_target_calls = {}
+      ctx.voices[1].set_target = function(self, h, p)
+        table.insert(set_target_calls, {h, p})
+      end
+      params:set("osc_host_1", "10.0.0.1")
+      assert.are.equal(1, #set_target_calls,
+        "set_target should be called once")
+      assert.are.same({"10.0.0.1", 57120}, set_target_calls[1],
+        "set_target should receive new host and current port")
+    end)
+
+    it("T020: changing osc_port while backend is midi does NOT call set_target", function()
+      local ctx = seamstress_init()
+      -- Backend stays midi (default)
+      -- MIDI voices don't have set_target, so no call should happen
+      -- If it tried to call set_target on a MIDI voice, it would error
+      local no_error = true
+      local ok, err = pcall(function()
+        params:set("osc_port_1", 7400)
+      end)
+      assert.is_true(ok, "changing osc_port with midi backend should not error: " .. tostring(err))
+    end)
+
+    it("T021: after changing host/port, play_note sends to updated target", function()
+      local ctx = seamstress_init()
+      params:set("voice_backend_1", 2) -- switch to osc
+      osc_sent = {}
+      params:set("osc_port_1", 7400)
+      params:set("osc_host_1", "10.0.0.1")
+      osc_sent = {}
+      ctx.voices[1]:play_note(60, 0.8, 1)
+      assert.are.equal(1, #osc_sent)
+      assert.are.same({"10.0.0.1", 7400}, osc_sent[1].target,
+        "play_note should send to updated target")
+    end)
+
+  end)
+
 end)
