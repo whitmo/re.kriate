@@ -25,6 +25,11 @@ function M.new(param_id)
     all_notes_off = function(self)
       -- nb handles cleanup through its own mechanisms
     end,
+
+    set_portamento = function(self, time)
+      local player = params:lookup_param(self.param_id):get_player()
+      if player and player.set_slew then player:set_slew(time) end
+    end,
   }
 end
 
