@@ -220,6 +220,98 @@ describe("track", function()
     end)
   end)
 
+  describe("loop boundary edge cases", function()
+    it("T002: single-step loop stays on same step", function()
+      local p = track.new_param(0)
+      p.steps = {10, 20, 30, 40, 50, 60, 70, 80, 0, 0, 0, 0, 0, 0, 0, 0}
+      track.set_loop(p, 5, 5)
+      -- advance N times, should always return same value and stay on step 5
+      for _ = 1, 10 do
+        local v = track.advance(p)
+        assert.are.equal(50, v)
+        assert.are.equal(5, p.pos)
+      end
+    end)
+
+    it("T003: full-range loop cycles through all 16 steps twice", function()
+      local p = track.new_param(0)
+      for i = 1, 16 do p.steps[i] = i end
+      p.loop_start = 1
+      p.loop_end = 16
+      p.pos = 1
+      local vals = {}
+      for _ = 1, 32 do
+        table.insert(vals, track.advance(p))
+      end
+      -- should be 1..16, 1..16
+      for i = 1, 32 do
+        assert.are.equal((i - 1) % 16 + 1, vals[i])
+      end
+    end)
+
+    it("T004: loop boundary change mid-playback clamps position", function()
+      local p = track.new_param(0)
+      for i = 1, 16 do p.steps[i] = i * 10 end
+      track.set_loop(p, 1, 8)
+      p.pos = 3
+      -- change loop to 5-12 while at step 3 (outside new loop)
+      track.set_loop(p, 5, 12)
+      -- pos should clamp to loop_start (5)
+      assert.are.equal(5, p.pos)
+      -- advance should return value at step 5
+      local v = track.advance(p)
+      assert.are.equal(50, v)
+    end)
+
+    it("T005: last-two-steps wrapping returns to step 15 not step 1", function()
+      local p = track.new_param(0)
+      for i = 1, 16 do p.steps[i] = i end
+      track.set_loop(p, 15, 16)
+      local vals = {}
+      for _ = 1, 6 do
+        table.insert(vals, track.advance(p))
+      end
+      -- should cycle 15,16,15,16,15,16
+      assert.are.same({15, 16, 15, 16, 15, 16}, vals)
+    end)
+
+    it("T006: polymetric independence — 8 params with different loop lengths", function()
+      local t = track.new_track(1)
+      -- set each param to a different loop length
+      local lengths = {2, 3, 4, 5, 6, 7, 8, 16}
+      local param_names = track.PARAM_NAMES
+      for i, name in ipairs(param_names) do
+        local p = t.params[name]
+        for s = 1, 16 do p.steps[s] = s end
+        track.set_loop(p, 1, lengths[i])
+        p.pos = 1
+      end
+      -- advance all params 100 times and verify each wraps independently
+      for step = 1, 100 do
+        for i, name in ipairs(param_names) do
+          local p = t.params[name]
+          local val = track.advance(p)
+          -- expected position before advance was: ((step-1) % lengths[i]) + 1
+          local expected_val = ((step - 1) % lengths[i]) + 1
+          assert.are.equal(expected_val, val,
+            string.format("param %s step %d: expected %d got %d", name, step, expected_val, val))
+        end
+      end
+    end)
+
+    it("T007: set_loop rejects loop_start > loop_end", function()
+      local p = track.new_param(0)
+      -- original boundaries
+      assert.are.equal(1, p.loop_start)
+      assert.are.equal(16, p.loop_end)
+      -- attempt invalid: start > end
+      track.set_loop(p, 8, 3)
+      -- should be unchanged
+      assert.are.equal(1, p.loop_start)
+      assert.are.equal(16, p.loop_end)
+    end)
+  end)
+
   describe("direction field", function()
     it("new_track has direction defaulting to forward", function()
       local t = track.new_track(1)
