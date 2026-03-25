@@ -8,6 +8,7 @@ local grid_ui = require("lib/grid_ui")
 local pattern = require("lib/pattern")
 local direction = require("lib/direction")
 local grid_provider = require("lib/grid_provider")
+local log = require("lib/log")
 
 local M = {}
 
@@ -69,20 +70,20 @@ function M.init(config)
 
   -- grid (pluggable: config.grid_provider selects backend)
   ctx.g = grid_provider.connect(config.grid_provider, config.grid_opts)
-  ctx.g.key = function(x, y, z)
+  ctx.g.key = log.wrap(function(x, y, z)
     grid_ui.key(ctx, x, y, z)
     ctx.grid_dirty = true
-  end
+  end, "grid_key")
 
   -- grid redraw metro
   ctx.grid_metro = metro.init()
   ctx.grid_metro.time = 1 / 30
-  ctx.grid_metro.event = function()
+  ctx.grid_metro.event = log.wrap(function()
     if ctx.grid_dirty then
       grid_ui.redraw(ctx)
       ctx.grid_dirty = false
     end
-  end
+  end, "grid_metro")
   ctx.grid_metro:start()
 
   return ctx
@@ -91,7 +92,10 @@ end
 function M.rebuild_scale(ctx)
   local root = params:get("root_note")
   local scale_type = SCALE_NAMES[params:get("scale_type")]
-  ctx.scale_notes = scale_mod.build_scale(root, scale_type)
+  local notes = scale_mod.build_scale(root, scale_type)
+  if notes then
+    ctx.scale_notes = notes
+  end
 end
 
 function M.redraw(ctx)

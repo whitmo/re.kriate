@@ -1,6 +1,8 @@
 -- lib/voices/midi.lua
 -- MIDI voice backend: sends note_on/note_off with clock-based note-off timing
 
+local log = require("lib/log")
+
 local M = {}
 
 function M.new(midi_dev, channel)
@@ -17,11 +19,11 @@ function M.new(midi_dev, channel)
         self.midi_dev:note_off(note, 0, self.channel)
       end
       self.midi_dev:note_on(note, math.floor(vel * 127), self.channel)
-      local coro_id = clock.run(function()
+      local coro_id = clock.run(log.wrap(function()
         clock.sync(dur)
         self.midi_dev:note_off(note, 0, self.channel)
         self.active_notes[key] = nil
-      end)
+      end, "note_off:ch" .. self.channel))
       self.active_notes[key] = coro_id
     end,
 

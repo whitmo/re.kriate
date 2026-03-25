@@ -9,6 +9,7 @@
 local script_dir = debug.getinfo(1, "S").source:match("@(.*/)") or "./"
 package.path = script_dir .. "?.lua;" .. script_dir .. "?/init.lua;" .. package.path
 
+local log = require("lib/log")
 local app = require("lib/app")
 local midi_voice = require("lib/voices/midi")
 local sprite_voice = require("lib/voices/sprite")
@@ -20,6 +21,8 @@ local track_mod = require("lib/track")
 local ctx
 
 function init()
+  log.session_start()
+
   -- MIDI device setup
   local midi_dev = midi.connect(1)
 
@@ -51,17 +54,19 @@ function init()
   })
 
   -- Keyboard input
-  screen.key = function(char, modifiers, is_repeat, state)
+  screen.key = log.wrap(function(char, modifiers, is_repeat, state)
     keyboard.key(ctx, char, modifiers, is_repeat, state)
-  end
+  end, "keyboard")
 
   -- Screen refresh metro
   ctx.screen_metro = metro.init()
   ctx.screen_metro.time = 1 / 30
-  ctx.screen_metro.event = function()
+  ctx.screen_metro.event = log.wrap(function()
     redraw()
-  end
+  end, "screen_metro")
   ctx.screen_metro:start()
+
+  log.info("init complete")
 end
 
 function redraw()
@@ -80,4 +85,6 @@ function cleanup()
   if ctx and ctx.screen_metro then
     ctx.screen_metro:stop()
   end
+  log.info("cleanup complete")
+  log.close()
 end

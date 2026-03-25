@@ -4,6 +4,7 @@
 local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
 local direction_mod = require("lib/direction")
+local log = require("lib/log")
 
 local M = {}
 
@@ -40,9 +41,9 @@ function M.start(ctx)
   -- one clock coroutine per track
   ctx.clock_ids = {}
   for t = 1, track_mod.NUM_TRACKS do
-    ctx.clock_ids[t] = clock.run(function()
+    ctx.clock_ids[t] = clock.run(log.wrap(function()
       M.track_clock(ctx, t)
-    end)
+    end, "track_clock:" .. t))
   end
 end
 
@@ -124,14 +125,14 @@ function M.step_track(ctx, track_num)
     local ratchet_count = vals.ratchet or 1
     if ratchet_count > 1 then
       local sub_dur = duration / ratchet_count
-      clock.run(function()
+      clock.run(log.wrap(function()
         for i = 1, ratchet_count do
           M.play_note(ctx, track_num, midi_note, velocity, sub_dur)
           if i < ratchet_count then
             clock.sync(sub_dur)
           end
         end
-      end)
+      end, "ratchet:" .. track_num))
     else
       M.play_note(ctx, track_num, midi_note, velocity, duration)
     end
