@@ -68,10 +68,21 @@ function init()
   end
 
   -- OSC target params (per track)
+  -- Note: params are always visible — seamstress doesn't support conditional visibility
   params:add_separator("osc_config", "OSC")
   for t = 1, track_mod.NUM_TRACKS do
     params:add_text("osc_host_" .. t, "track " .. t .. " osc host", "127.0.0.1")
     params:add_number("osc_port_" .. t, "track " .. t .. " osc port", 1, 65535, 57120)
+    params:set_action("osc_host_" .. t, function(val)
+      if ctx and ctx.voices[t] and params:get("voice_backend_" .. t) == 2 then
+        ctx.voices[t]:set_target(val, params:get("osc_port_" .. t))
+      end
+    end)
+    params:set_action("osc_port_" .. t, function(val)
+      if ctx and ctx.voices[t] and params:get("voice_backend_" .. t) == 2 then
+        ctx.voices[t]:set_target(params:get("osc_host_" .. t), val)
+      end
+    end)
   end
 
   ctx = app.init({

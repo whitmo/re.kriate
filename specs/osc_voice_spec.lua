@@ -188,6 +188,20 @@ local function seamstress_init()
     end)
   end
 
+  -- Wire OSC target param actions (needs ctx reference)
+  for t = 1, track_mod.NUM_TRACKS do
+    params:set_action("osc_host_" .. t, function(val)
+      if ctx and ctx.voices[t] and params:get("voice_backend_" .. t) == 2 then
+        ctx.voices[t]:set_target(val, params:get("osc_port_" .. t))
+      end
+    end)
+    params:set_action("osc_port_" .. t, function(val)
+      if ctx and ctx.voices[t] and params:get("voice_backend_" .. t) == 2 then
+        ctx.voices[t]:set_target(params:get("osc_host_" .. t), val)
+      end
+    end)
+  end
+
   return ctx
 end
 
