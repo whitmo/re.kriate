@@ -3,6 +3,10 @@
 #
 # Flow: work.start → specify → plan → tasks → analyze → implement → verify → (loop or LOOP_COMPLETE)
 # TDD is non-negotiable (constitution principle III).
+#
+# Multiclaude is available for parallel work on [P]-marked tasks.
+# Start with: ralph loops  (or /mc swarm from within a hat)
+# Each parallel loop gets its own worktree and merges back on completion.
 
 cli:
   backend: "claude"
@@ -87,6 +91,12 @@ hats:
          - Phase structure: setup → foundational → per-story (test → impl) → polish
       4. Emit `tasks.ready` with the tasks path and count
 
+      ## Multiclaude parallelism
+      Mark tasks [P] aggressively when they touch different files with no data
+      dependencies. Group [P] tasks into swarm dispatch blocks in the tasks.md
+      Parallel Opportunities section — the implementer uses these to launch
+      `ralph loops` for concurrent execution in isolated worktrees.
+
       ## On analysis.fix.tasks
       Read analyzer findings. Regenerate or patch tasks.md to resolve issues.
       Emit `tasks.ready` when fixed.
@@ -156,6 +166,15 @@ hats:
       - NEVER mark a task complete if any test is failing
       - NEVER skip a test task to get to the implementation faster
       - If a test unexpectedly passes (already covered), note it and move on
+
+      ## Multiclaude dispatch
+      When tasks.md has a batch of [P]-marked tasks (3+ tasks touching different
+      files), use `ralph loops` to dispatch them as parallel loops. Each loop gets
+      an isolated worktree. Monitor with `ralph loops list`, merge completed loops
+      with `ralph loops merge`. Wait for all parallel loops to complete before
+      emitting `batch.done`.
+
+      For sequential tasks or small batches (<3 parallel), work inline.
 
       ## Conventions (CLAUDE.md)
       - All state on ctx — no globals, no module-level mutable state
