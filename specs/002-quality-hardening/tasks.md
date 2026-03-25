@@ -136,10 +136,10 @@
 
 ### Tests & Fixes for User Story 6
 
-- [ ] T025 [P] [US6] Add mute-advance-unmute position test — mute track at step 5, advance 3 steps, unmute, verify next note plays from step 8. File: `specs/sequencer_spec.lua` under "mute fix" describe
-- [ ] T026 [P] [US6] Add double-mute safety test — mute an already-muted track, verify it remains muted with no error. File: `specs/sequencer_spec.lua`
-- [ ] T027 [US6] Add all-tracks-muted test — mute all 4 tracks, play for several beats, verify zero notes output but all playheads advance correctly. File: `specs/sequencer_spec.lua`
-- [ ] T028 [US6] Add muted playhead position verification test — mute track, advance N steps, check each track's playhead position matches expected advance count. File: `specs/sequencer_spec.lua`
+- [x] T025 [P] [US6] Add mute-advance-unmute position test — mute track at step 5, advance 3 steps, unmute, verify next note plays from step 8. File: `specs/sequencer_spec.lua` under "mute fix" describe
+- [x] T026 [P] [US6] Add double-mute safety test — mute an already-muted track, verify it remains muted with no error. File: `specs/sequencer_spec.lua`
+- [x] T027 [US6] Add all-tracks-muted test — mute all 4 tracks, play for several beats, verify zero notes output but all playheads advance correctly. File: `specs/sequencer_spec.lua`
+- [x] T028 [US6] Add muted playhead position verification test — mute track, advance N steps, check each track's playhead position matches expected advance count. File: `specs/sequencer_spec.lua`
 
 **Checkpoint**: All mute timing scenarios covered. Run `busted specs/sequencer_spec.lua` — all pass.
 
@@ -155,9 +155,9 @@
 
 ### Tests & Fixes for User Story 7
 
-- [ ] T029 [P] [US7] Add scale change next-note test — play with major scale, change to minor, trigger next note, verify it uses minor scale quantization. File: `specs/sequencer_spec.lua` or `specs/scale_spec.lua` (whichever tests the sequencer→scale integration)
-- [ ] T030 [P] [US7] Add degree wrapping with shorter scale test — set note value to 7 (7th degree), change to a scale with fewer than 7 degrees, verify degree wraps correctly without error. File: `specs/scale_spec.lua`
-- [ ] T031 [US7] Add already-sounding notes not re-pitched test — play a note, change scale while note is sounding, verify no retroactive pitch change (only new note-ons use new scale). File: `specs/sequencer_spec.lua`
+- [x] T029 [P] [US7] Add scale change next-note test — play with major scale, change to minor, trigger next note, verify it uses minor scale quantization. File: `specs/sequencer_spec.lua` or `specs/scale_spec.lua` (whichever tests the sequencer→scale integration)
+- [x] T030 [P] [US7] Add degree wrapping with shorter scale test — set note value to 7 (7th degree), change to a scale with fewer than 7 degrees, verify degree wraps correctly without error. File: `specs/scale_spec.lua`
+- [x] T031 [US7] Add already-sounding notes not re-pitched test — play a note, change scale while note is sounding, verify no retroactive pitch change (only new note-ons use new scale). File: `specs/sequencer_spec.lua`
 
 **Checkpoint**: All scale change scenarios covered. Run `busted specs/scale_spec.lua` and `busted specs/sequencer_spec.lua` — all pass.
 
