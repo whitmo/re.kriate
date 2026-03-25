@@ -667,6 +667,113 @@ describe("sequencer", function()
 
   end)
 
+  describe("clock stop/start idempotency", function()
+
+    local clock_run_count
+    local clock_cancel_count
+    local original_clock_run
+    local original_clock_cancel
+
+    before_each(function()
+      clock_run_count = 0
+      clock_cancel_count = 0
+      original_clock_run = clock.run
+      original_clock_cancel = clock.cancel
+      clock.run = function(fn)
+        clock_run_count = clock_run_count + 1
+        if clock_run_immediate then fn() end
+        return clock_run_count
+      end
+      clock.cancel = function(id)
+        clock_cancel_count = clock_cancel_count + 1
+      end
+    end)
+
+    after_each(function()
+      clock.run = original_clock_run
+      clock.cancel = original_clock_cancel
+    end)
+
+    it("double-start creates no duplicate coroutines (T012)", function()
+      local ctx = make_ctx()
+      sequencer.start(ctx)
+      local first_count = clock_run_count
+      assert.are.equal(track_mod.NUM_TRACKS, first_count)
+
+      sequencer.start(ctx)
+      -- No additional coroutines created
+      assert.are.equal(first_count, clock_run_count)
+      assert.is_true(ctx.playing)
+    end)
+
+    it("double-stop causes no error and state remains stopped (T013)", function()
+      local ctx = make_ctx()
+      ctx.playing = false
+
+      sequencer.stop(ctx)
+      assert.is_false(ctx.playing)
+
+      sequencer.stop(ctx)
+      assert.is_false(ctx.playing)
+
+      -- Nothing to cancel when already stopped
+      assert.are.equal(0, clock_cancel_count)
+    end)
+
+    it("rapid start/stop 50x toggle produces consistent end state (T014)", function()
+      local ctx = make_ctx()
+
+      for i = 1, 50 do
+        if i % 2 == 1 then
+          sequencer.start(ctx)
+        else
+          sequencer.stop(ctx)
+        end
+      end
+
+      -- 50 iterations: odd=start, even=stop -> ends stopped
+      assert.is_false(ctx.playing)
+      assert.is_nil(ctx.clock_ids)
+
+      -- 25 starts × NUM_TRACKS coroutines each, 25 stops × NUM_TRACKS cancels each
+      assert.are.equal(25 * track_mod.NUM_TRACKS, clock_run_count)
+      assert.are.equal(25 * track_mod.NUM_TRACKS, clock_cancel_count)
+    end)
+
+    it("stop then start resumes from current playhead, not reset (T015)", function()
+      local ctx = make_ctx()
+
+      -- Advance all tracks to step 5
+      for t = 1, track_mod.NUM_TRACKS do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          ctx.tracks[t].params[name].pos = 5
+        end
+      end
+
+      sequencer.start(ctx)
+      sequencer.stop(ctx)
+
+      -- Playheads NOT reset
+      for t = 1, track_mod.NUM_TRACKS do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          assert.are.equal(5, ctx.tracks[t].params[name].pos,
+            "track " .. t .. " " .. name .. " should remain at step 5")
+        end
+      end
+
+      -- Restart — still at 5
+      sequencer.start(ctx)
+      assert.is_true(ctx.playing)
+      for t = 1, track_mod.NUM_TRACKS do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          assert.are.equal(5, ctx.tracks[t].params[name].pos,
+            "track " .. t .. " " .. name .. " should still be at step 5 after restart")
+        end
+      end
+    end)
+
+  end)
+
   describe("track model additions", function()
 
     it("tracks have direction field defaulting to forward", function()

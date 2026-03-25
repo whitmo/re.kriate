@@ -12,12 +12,14 @@ function M.new(midi_dev, channel)
     active_notes = {},
 
     play_note = function(self, note, vel, dur)
-      local key = self.channel * 128 + note
-      -- retrigger: cancel pending note-off, send note-off before new note-on
-      if self.active_notes[key] then
-        clock.cancel(self.active_notes[key])
-        self.midi_dev:note_off(note, 0, self.channel)
+      -- monophonic: cancel all active notes before new note-on
+      for existing_key, coro_id in pairs(self.active_notes) do
+        clock.cancel(coro_id)
+        local existing_note = existing_key % 128
+        self.midi_dev:note_off(existing_note, 0, self.channel)
       end
+      self.active_notes = {}
+      local key = self.channel * 128 + note
       self.midi_dev:note_on(note, math.floor(vel * 127), self.channel)
       local coro_id = clock.run(log.wrap(function()
         clock.sync(dur)
