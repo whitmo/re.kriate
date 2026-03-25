@@ -97,11 +97,11 @@
 
 ### Tests & Fixes for User Story 4
 
-- [ ] T016 [P] [US4] Add extended params roundtrip test — set non-default ratchet, alt_note, glide values on tracks, save, load, assert all extended param values match. File: `specs/pattern_spec.lua`
-- [ ] T017 [P] [US4] Add direction mode roundtrip test — set different direction modes (reverse, pendulum, drunk, random) on 4 tracks, save, load, assert each track's direction preserved. File: `specs/pattern_spec.lua`
-- [ ] T018 [US4] Add all-params-all-tracks comprehensive roundtrip test — set custom values for all 8 params × 4 tracks including loop boundaries and positions, save, load, deep-compare every field. File: `specs/pattern_spec.lua`
-- [ ] T019 [US4] Add slot overwrite test — save slot A, modify tracks, save slot B, load slot A, verify original state restored (modifications discarded). File: `specs/pattern_spec.lua`
-- [ ] T020 [US4] Add empty/default slot load test — load a slot that was never saved, verify no error and sequencer has default values. File: `specs/pattern_spec.lua`
+- [x] T016 [P] [US4] Add extended params roundtrip test — set non-default ratchet, alt_note, glide values on tracks, save, load, assert all extended param values match. File: `specs/pattern_spec.lua`
+- [x] T017 [P] [US4] Add direction mode roundtrip test — set different direction modes (reverse, pendulum, drunk, random) on 4 tracks, save, load, assert each track's direction preserved. File: `specs/pattern_spec.lua`
+- [x] T018 [US4] Add all-params-all-tracks comprehensive roundtrip test — set custom values for all 8 params × 4 tracks including loop boundaries and positions, save, load, deep-compare every field. File: `specs/pattern_spec.lua`
+- [x] T019 [US4] Add slot overwrite test — save slot A, modify tracks, save slot B, load slot A, verify original state restored (modifications discarded). File: `specs/pattern_spec.lua`
+- [x] T020 [US4] Add empty/default slot load test — load a slot that was never saved, verify no error and sequencer has default values. File: `specs/pattern_spec.lua`
 
 **Checkpoint**: All pattern roundtrip scenarios covered. Run `busted specs/pattern_spec.lua` — all pass.
 
@@ -117,10 +117,10 @@
 
 ### Tests & Fixes for User Story 5
 
-- [ ] T021 [P] [US5] Add forward-to-reverse mid-sequence test — play forward to step 8, change to reverse, verify next step is 7. File: `specs/direction_spec.lua`
-- [ ] T022 [P] [US5] Add pendulum-to-forward transition test — play in pendulum mode, change to forward mid-bounce, verify playhead continues forward from current position. File: `specs/direction_spec.lua`
-- [ ] T023 [US5] Add single-step loop direction change test — set single-step loop, change direction to each mode (reverse, pendulum, drunk, random), verify playhead stays on that step. File: `specs/direction_spec.lua`
-- [ ] T024 [US5] Add drunk mid-change boundary test — play forward, change to drunk, advance multiple times, verify all steps stay within loop bounds. File: `specs/direction_spec.lua`
+- [x] T021 [P] [US5] Add forward-to-reverse mid-sequence test — play forward to step 8, change to reverse, verify next step is 7. File: `specs/direction_spec.lua`
+- [x] T022 [P] [US5] Add pendulum-to-forward transition test — play in pendulum mode, change to forward mid-bounce, verify playhead continues forward from current position. File: `specs/direction_spec.lua`
+- [x] T023 [US5] Add single-step loop direction change test — set single-step loop, change direction to each mode (reverse, pendulum, drunk, random), verify playhead stays on that step. File: `specs/direction_spec.lua`
+- [x] T024 [US5] Add drunk mid-change boundary test — play forward, change to drunk, advance multiple times, verify all steps stay within loop bounds. File: `specs/direction_spec.lua`
 
 **Checkpoint**: All direction transition scenarios covered. Run `busted specs/direction_spec.lua` — all pass.
 

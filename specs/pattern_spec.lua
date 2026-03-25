@@ -215,4 +215,171 @@ describe("pattern", function()
     end)
   end)
 
+  -- T016-T020: Quality hardening — pattern save/load roundtrip fidelity
+  describe("roundtrip fidelity", function()
+
+    -- T016: extended params roundtrip
+    it("preserves non-default ratchet, alt_note, glide values through save/load", function()
+      local ctx = make_ctx()
+
+      -- Set non-default extended param values across tracks
+      for t = 1, 4 do
+        for step = 1, 16 do
+          ctx.tracks[t].params.ratchet.steps[step] = ((t + step) % 7) + 1
+          ctx.tracks[t].params.alt_note.steps[step] = ((t * step) % 7) + 1
+          ctx.tracks[t].params.glide.steps[step] = ((t + step * 2) % 7) + 1
+        end
+        -- Also set non-default loop boundaries on extended params
+        ctx.tracks[t].params.ratchet.loop_start = 2
+        ctx.tracks[t].params.ratchet.loop_end = 12
+        ctx.tracks[t].params.alt_note.loop_start = 3
+        ctx.tracks[t].params.alt_note.loop_end = 10
+        ctx.tracks[t].params.glide.loop_start = 1
+        ctx.tracks[t].params.glide.loop_end = 8
+      end
+
+      pattern.save(ctx, 1)
+      local saved_tracks = ctx.tracks
+      ctx.tracks = track_mod.new_tracks()
+      pattern.load(ctx, 1)
+
+      for t = 1, 4 do
+        for step = 1, 16 do
+          assert.are.equal(((t + step) % 7) + 1, ctx.tracks[t].params.ratchet.steps[step],
+            "track " .. t .. " ratchet step " .. step)
+          assert.are.equal(((t * step) % 7) + 1, ctx.tracks[t].params.alt_note.steps[step],
+            "track " .. t .. " alt_note step " .. step)
+          assert.are.equal(((t + step * 2) % 7) + 1, ctx.tracks[t].params.glide.steps[step],
+            "track " .. t .. " glide step " .. step)
+        end
+        assert.are.equal(2, ctx.tracks[t].params.ratchet.loop_start)
+        assert.are.equal(12, ctx.tracks[t].params.ratchet.loop_end)
+        assert.are.equal(3, ctx.tracks[t].params.alt_note.loop_start)
+        assert.are.equal(10, ctx.tracks[t].params.alt_note.loop_end)
+        assert.are.equal(1, ctx.tracks[t].params.glide.loop_start)
+        assert.are.equal(8, ctx.tracks[t].params.glide.loop_end)
+      end
+    end)
+
+    -- T017: direction mode roundtrip
+    it("preserves different direction modes on each track through save/load", function()
+      local ctx = make_ctx()
+      local modes = {"reverse", "pendulum", "drunk", "random"}
+
+      for t = 1, 4 do
+        ctx.tracks[t].direction = modes[t]
+      end
+
+      pattern.save(ctx, 3)
+      ctx.tracks = track_mod.new_tracks()
+
+      -- Verify defaults are "forward" before load
+      for t = 1, 4 do
+        assert.are.equal("forward", ctx.tracks[t].direction)
+      end
+
+      pattern.load(ctx, 3)
+
+      for t = 1, 4 do
+        assert.are.equal(modes[t], ctx.tracks[t].direction,
+          "track " .. t .. " direction should be " .. modes[t])
+      end
+    end)
+
+    -- T018: all-params-all-tracks comprehensive roundtrip
+    it("preserves all 8 params x 4 tracks including loop boundaries and positions", function()
+      local ctx = make_ctx()
+      local param_names = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
+
+      -- Set unique values for every param on every track
+      for t = 1, 4 do
+        ctx.tracks[t].division = t + 1
+        ctx.tracks[t].muted = (t % 2 == 0)
+        ctx.tracks[t].direction = ({"forward", "reverse", "pendulum", "drunk"})[t]
+
+        for _, pname in ipairs(param_names) do
+          local p = ctx.tracks[t].params[pname]
+          for step = 1, 16 do
+            p.steps[step] = (t * 10 + step) % 8
+          end
+          p.loop_start = math.min(t, 16)
+          p.loop_end = math.min(t + 8, 16)
+          p.pos = math.min(t + 2, p.loop_end)
+        end
+      end
+
+      pattern.save(ctx, 7)
+      ctx.tracks = track_mod.new_tracks()
+      pattern.load(ctx, 7)
+
+      for t = 1, 4 do
+        assert.are.equal(t + 1, ctx.tracks[t].division, "track " .. t .. " division")
+        assert.are.equal(t % 2 == 0, ctx.tracks[t].muted, "track " .. t .. " muted")
+        assert.are.equal(({"forward", "reverse", "pendulum", "drunk"})[t],
+          ctx.tracks[t].direction, "track " .. t .. " direction")
+
+        for _, pname in ipairs(param_names) do
+          local p = ctx.tracks[t].params[pname]
+          for step = 1, 16 do
+            assert.are.equal((t * 10 + step) % 8, p.steps[step],
+              "track " .. t .. " " .. pname .. " step " .. step)
+          end
+          assert.are.equal(math.min(t, 16), p.loop_start,
+            "track " .. t .. " " .. pname .. " loop_start")
+          assert.are.equal(math.min(t + 8, 16), p.loop_end,
+            "track " .. t .. " " .. pname .. " loop_end")
+          assert.are.equal(math.min(t + 2, p.loop_end), p.pos,
+            "track " .. t .. " " .. pname .. " pos")
+        end
+      end
+    end)
+
+    -- T019: slot overwrite — save A, modify, save B, load A restores original
+    it("loading slot A after saving slot B restores slot A's original state", function()
+      local ctx = make_ctx()
+
+      -- State A: specific trigger pattern
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[1].params.trigger.steps[2] = 1
+      ctx.tracks[1].params.note.steps[1] = 7
+      ctx.tracks[1].division = 3
+      ctx.tracks[1].direction = "reverse"
+      pattern.save(ctx, 1)
+
+      -- Modify to state B
+      ctx.tracks[1].params.trigger.steps[1] = 0
+      ctx.tracks[1].params.trigger.steps[2] = 0
+      ctx.tracks[1].params.note.steps[1] = 1
+      ctx.tracks[1].division = 6
+      ctx.tracks[1].direction = "pendulum"
+      pattern.save(ctx, 2)
+
+      -- Load slot A — modifications should be discarded, original restored
+      pattern.load(ctx, 1)
+
+      assert.are.equal(1, ctx.tracks[1].params.trigger.steps[1])
+      assert.are.equal(1, ctx.tracks[1].params.trigger.steps[2])
+      assert.are.equal(7, ctx.tracks[1].params.note.steps[1])
+      assert.are.equal(3, ctx.tracks[1].division)
+      assert.are.equal("reverse", ctx.tracks[1].direction)
+    end)
+
+    -- T020: empty/default slot load — no error, no corruption
+    it("loading an empty slot does not error and leaves tracks unchanged", function()
+      local ctx = make_ctx()
+
+      -- Set distinctive values
+      ctx.tracks[1].division = 42
+      ctx.tracks[2].params.note.steps[5] = 7
+
+      -- Load from never-saved slot — should be a no-op
+      pattern.load(ctx, 10)
+
+      -- Tracks should be unchanged
+      assert.are.equal(42, ctx.tracks[1].division)
+      assert.are.equal(7, ctx.tracks[2].params.note.steps[5])
+    end)
+
+  end)
+
 end)
