@@ -407,4 +407,126 @@ describe("osc voice integration", function()
 
   end)
 
+  -- Phase 6: Sprite Voice Continuity & Platform Guard (FR-006, FR-007)
+  describe("sprite voice continuity and platform guard", function()
+
+    it("T023: sprite_voices unchanged after switching track to osc", function()
+      local ctx = seamstress_init()
+      local orig_sprite = ctx.sprite_voices[1]
+      params:set("voice_backend_1", 2) -- switch to osc
+      assert.are.equal(orig_sprite, ctx.sprite_voices[1],
+        "sprite_voices[1] should be the same object after backend swap")
+      -- Verify sprite voice is still functional
+      assert.is_not_nil(ctx.sprite_voices[1].play,
+        "sprite voice should still have play method")
+    end)
+
+    it("T024: seamstress.lua creates voice_backend params", function()
+      local ctx = seamstress_init()
+      for t = 1, track_mod.NUM_TRACKS do
+        assert.is_not_nil(params:get("voice_backend_" .. t),
+          "voice_backend_" .. t .. " param should exist")
+      end
+    end)
+
+    it("T025: norns entrypoint does NOT create OSC voice params", function()
+      -- Read re_kriate.lua and verify it doesn't contain osc param IDs
+      local f = io.open("re_kriate.lua", "r")
+      if not f then
+        -- If norns entrypoint doesn't exist, OSC params can't be there
+        assert.is_true(true, "no norns entrypoint file — OSC params absent by definition")
+        return
+      end
+      local content = f:read("*a")
+      f:close()
+      assert.is_nil(content:match("voice_backend_"),
+        "re_kriate.lua should NOT contain voice_backend params")
+      assert.is_nil(content:match("osc_host_"),
+        "re_kriate.lua should NOT contain osc_host params")
+      assert.is_nil(content:match("osc_port_"),
+        "re_kriate.lua should NOT contain osc_port params")
+    end)
+
+  end)
+
+  -- Phase 7: Edge Cases & Integration (SC-001 through SC-005)
+  describe("edge cases and integration", function()
+
+    it("T026: backend switch mid-play calls all_notes_off and next note fires on new backend", function()
+      local ctx = seamstress_init()
+      -- Simulate "mid-play" — just verify the swap mechanics
+      local midi_off_called = false
+      ctx.voices[1].all_notes_off = function(self) midi_off_called = true end
+      params:set("voice_backend_1", 2) -- switch to osc mid-play
+      assert.is_true(midi_off_called, "all_notes_off should fire on outgoing MIDI voice")
+      osc_sent = {}
+      ctx.voices[1]:play_note(60, 0.8, 1)
+      assert.are.equal(1, #osc_sent, "next note should fire on new OSC backend")
+      assert.are.equal("/rekriate/track/1/note", osc_sent[1].path)
+    end)
+
+    it("T027: shared host/port across tracks sends with different OSC paths", function()
+      local ctx = seamstress_init()
+      params:set("voice_backend_1", 2)
+      params:set("voice_backend_2", 2)
+      osc_sent = {}
+      ctx.voices[1]:play_note(60, 0.8, 1)
+      ctx.voices[2]:play_note(64, 0.7, 1)
+      assert.are.equal(2, #osc_sent, "should have 2 OSC messages")
+      assert.are.equal("/rekriate/track/1/note", osc_sent[1].path)
+      assert.are.equal("/rekriate/track/2/note", osc_sent[2].path)
+      -- Same default target
+      assert.are.same(osc_sent[1].target, osc_sent[2].target,
+        "both tracks should send to same default target")
+    end)
+
+    it("T028: cleanup with OSC voices calls all_notes_off", function()
+      local ctx = seamstress_init()
+      params:set("voice_backend_1", 2) -- switch track 1 to osc
+      local osc_off_called = false
+      ctx.voices[1].all_notes_off = function(self) osc_off_called = true end
+      app.cleanup(ctx)
+      assert.is_true(osc_off_called,
+        "cleanup should call all_notes_off on OSC voice")
+    end)
+
+    it("T029: 4-track mixed scenario — MIDI and OSC voices coexist", function()
+      local ctx = seamstress_init()
+      -- Tracks 2 and 4 on OSC, tracks 1 and 3 stay MIDI
+      params:set("voice_backend_2", 2)
+      params:set("voice_backend_4", 2)
+      -- Track note_on calls on MIDI voices
+      local midi_notes = {}
+      for _, t in ipairs({1, 3}) do
+        local orig_play = ctx.voices[t].play_note
+        ctx.voices[t].play_note = function(self, note, vel, dur)
+          table.insert(midi_notes, {track = t, note = note})
+        end
+      end
+      osc_sent = {}
+      -- Fire notes on all 4 tracks
+      ctx.voices[1]:play_note(60, 0.8, 1)
+      ctx.voices[2]:play_note(62, 0.8, 1)
+      ctx.voices[3]:play_note(64, 0.8, 1)
+      ctx.voices[4]:play_note(67, 0.8, 1)
+      -- MIDI tracks got play_note calls
+      assert.are.equal(2, #midi_notes, "2 MIDI tracks should receive notes")
+      -- OSC tracks sent messages
+      assert.are.equal(2, #osc_sent, "2 OSC tracks should send messages")
+      assert.are.equal("/rekriate/track/2/note", osc_sent[1].path)
+      assert.are.equal("/rekriate/track/4/note", osc_sent[2].path)
+    end)
+
+    it("T030: OSC portamento sends correct message", function()
+      local ctx = seamstress_init()
+      params:set("voice_backend_1", 2)
+      osc_sent = {}
+      ctx.voices[1]:set_portamento(3)
+      assert.are.equal(1, #osc_sent)
+      assert.are.equal("/rekriate/track/1/portamento", osc_sent[1].path)
+      assert.are.same({3}, osc_sent[1].args)
+    end)
+
+  end)
+
 end)

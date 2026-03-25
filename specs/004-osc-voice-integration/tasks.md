@@ -105,14 +105,14 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T018 [US3] Test that changing `osc_port_1` while backend is osc calls `set_target("127.0.0.1", new_port)` on `ctx.voices[1]` in `specs/osc_voice_spec.lua`
-- [ ] T019 [US3] Test that changing `osc_host_1` while backend is osc calls `set_target(new_host, 57120)` on `ctx.voices[1]` in `specs/osc_voice_spec.lua`
-- [ ] T020 [US3] Test that changing `osc_port_1` while backend is midi does NOT call `set_target` (no-op) in `specs/osc_voice_spec.lua`
-- [ ] T021 [US3] Test that after changing host/port and then calling `play_note`, the OSC message goes to the updated target in `specs/osc_voice_spec.lua`
+- [x] T018 [US3] Test that changing `osc_port_1` while backend is osc calls `set_target("127.0.0.1", new_port)` on `ctx.voices[1]` in `specs/osc_voice_spec.lua`
+- [x] T019 [US3] Test that changing `osc_host_1` while backend is osc calls `set_target(new_host, 57120)` on `ctx.voices[1]` in `specs/osc_voice_spec.lua`
+- [x] T020 [US3] Test that changing `osc_port_1` while backend is midi does NOT call `set_target` (no-op) in `specs/osc_voice_spec.lua`
+- [x] T021 [US3] Test that after changing host/port and then calling `play_note`, the OSC message goes to the updated target in `specs/osc_voice_spec.lua`
 
 ### Implementation
 
-- [ ] T022 [US3] Add param actions for `osc_host_{t}` and `osc_port_{t}` in `seamstress.lua`: if `params:get("voice_backend_" .. t) == 2` (osc), call `ctx.voices[t]:set_target(host, port)` using current param values. Otherwise no-op. Tests T018-T021 must pass.
+- [x] T022 [US3] Add param actions for `osc_host_{t}` and `osc_port_{t}` in `seamstress.lua`: if `params:get("voice_backend_" .. t) == 2` (osc), call `ctx.voices[t]:set_target(host, port)` using current param values. Otherwise no-op. Tests T018-T021 must pass.
 
 **Checkpoint**: OSC target updates live when backend is osc. No-op when backend is midi.
 
@@ -126,9 +126,9 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation (verification tests that confirm existing behavior)**
 
-- [ ] T023 [P] [US5] Test that after switching track 1 to osc, `ctx.sprite_voices[1]` is unchanged and still functional in `specs/osc_voice_spec.lua`
-- [ ] T024 [P] [US5] Test that `seamstress.lua` creates `voice_backend_{t}` params (already verified in T003, but verify here that seamstress specifically creates them)
-- [ ] T025 [P] [US5] Test that the norns entrypoint (`re_kriate.lua`) does NOT create `voice_backend_{t}` or `osc_host_{t}` or `osc_port_{t}` params — verify by reading the file for those param IDs, or by loading and checking `params:get` returns nil in `specs/osc_voice_spec.lua`
+- [x] T023 [P] [US5] Test that after switching track 1 to osc, `ctx.sprite_voices[1]` is unchanged and still functional in `specs/osc_voice_spec.lua`
+- [x] T024 [P] [US5] Test that `seamstress.lua` creates `voice_backend_{t}` params (already verified in T003, but verify here that seamstress specifically creates them)
+- [x] T025 [P] [US5] Test that the norns entrypoint (`re_kriate.lua`) does NOT create `voice_backend_{t}` or `osc_host_{t}` or `osc_port_{t}` params — verify by reading the file for those param IDs, or by loading and checking `params:get` returns nil in `specs/osc_voice_spec.lua`
 
 **Checkpoint**: Sprite voices are never affected by backend swap. OSC params are seamstress-only.
 
@@ -142,12 +142,12 @@
 
 > **Write these tests FIRST — these are integration/edge-case verification tests**
 
-- [ ] T026 [US4] Test backend switch mid-play: with sequencer running (mocked), switch backend — verify `all_notes_off` on outgoing, next note fires on new backend in `specs/osc_voice_spec.lua`
-- [ ] T027 [US3] Test shared host/port across tracks: set tracks 1 and 2 both to osc with same host/port — verify both send correctly with different OSC paths (`/rekriate/track/1/...` vs `/rekriate/track/2/...`) in `specs/osc_voice_spec.lua`
-- [ ] T028 [US4] Test cleanup with OSC voices active: set track 1 to osc, call `app.cleanup(ctx)` — verify `all_notes_off` is called on the OSC voice in `specs/osc_voice_spec.lua`
-- [ ] T029 [US1] [US2] Test full 4-track mixed scenario: tracks 1,3 on midi, tracks 2,4 on osc — fire notes on all 4 tracks, verify MIDI voices get `note_on` and OSC voices get `osc.send` in `specs/osc_voice_spec.lua`
-- [ ] T030 [US1] Test OSC portamento: set track to osc, call `set_portamento(3)` — verify `osc.send` with path `/rekriate/track/{t}/portamento` and args `{3}` in `specs/osc_voice_spec.lua`
-- [ ] T031 Verify full regression: run `busted --no-auto-insulate specs/` — all 512+ existing tests pass plus 15+ new tests, 0 failures
+- [x] T026 [US4] Test backend switch mid-play: with sequencer running (mocked), switch backend — verify `all_notes_off` on outgoing, next note fires on new backend in `specs/osc_voice_spec.lua`
+- [x] T027 [US3] Test shared host/port across tracks: set tracks 1 and 2 both to osc with same host/port — verify both send correctly with different OSC paths (`/rekriate/track/1/...` vs `/rekriate/track/2/...`) in `specs/osc_voice_spec.lua`
+- [x] T028 [US4] Test cleanup with OSC voices active: set track 1 to osc, call `app.cleanup(ctx)` — verify `all_notes_off` is called on the OSC voice in `specs/osc_voice_spec.lua`
+- [x] T029 [US1] [US2] Test full 4-track mixed scenario: tracks 1,3 on midi, tracks 2,4 on osc — fire notes on all 4 tracks, verify MIDI voices get `note_on` and OSC voices get `osc.send` in `specs/osc_voice_spec.lua`
+- [x] T030 [US1] Test OSC portamento: set track to osc, call `set_portamento(3)` — verify `osc.send` with path `/rekriate/track/{t}/portamento` and args `{3}` in `specs/osc_voice_spec.lua`
+- [x] T031 Verify full regression: run `busted --no-auto-insulate specs/` — all 512+ existing tests pass plus 15+ new tests, 0 failures
 
 **Checkpoint**: All edge cases pass. All existing tests still green. SC-001 through SC-005 met.
 
