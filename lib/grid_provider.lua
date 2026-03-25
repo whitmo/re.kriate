@@ -177,4 +177,64 @@ M.register("virtual", function(opts)
   return g
 end)
 
+------------------------------------------------------------------------
+-- Built-in provider: simulated (screen-rendered grid for seamstress)
+------------------------------------------------------------------------
+
+M.register("simulated", function(opts)
+  local cols = opts.cols or 16
+  local rows = opts.rows or 8
+  local leds = {}
+
+  local g = {
+    key = nil, -- callback: set by app.lua
+
+    all = function(self, brightness)
+      leds = {}
+      if brightness and brightness > 0 then
+        for y = 1, rows do
+          for x = 1, cols do
+            leds[y * cols + x] = brightness
+          end
+        end
+      end
+    end,
+
+    led = function(self, x, y, brightness)
+      if x < 1 or x > cols or y < 1 or y > rows then return end
+      leds[y * cols + x] = brightness
+    end,
+
+    refresh = function(self)
+      if self.on_refresh then
+        self:on_refresh()
+      end
+    end,
+
+    cols = function() return cols end,
+    rows = function() return rows end,
+
+    get_led = function(self, x, y)
+      return leds[y * cols + x] or 0
+    end,
+
+    get_state = function(self)
+      local state = {}
+      for y = 1, rows do
+        state[y] = {}
+        for x = 1, cols do
+          state[y][x] = leds[y * cols + x] or 0
+        end
+      end
+      return state
+    end,
+
+    cleanup = function(self)
+      leds = {}
+    end,
+  }
+
+  return g
+end)
+
 return M
