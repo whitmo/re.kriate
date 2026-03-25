@@ -12,6 +12,7 @@ package.path = script_dir .. "?.lua;" .. script_dir .. "?/init.lua;" .. package.
 local log = require("lib/log")
 local app = require("lib/app")
 local midi_voice = require("lib/voices/midi")
+local osc_voice = require("lib/voices/osc")
 local sprite_voice = require("lib/voices/sprite")
 local screen_ui = require("lib/seamstress/screen_ui")
 local sprite_render = require("lib/seamstress/sprite_render")
@@ -46,6 +47,19 @@ function init()
     params:set_action("midi_ch_" .. t, function(val)
       voices[t].channel = val
     end)
+  end
+
+  -- Voice backend params (midi/osc per track)
+  params:add_separator("voice_config", "Voice")
+  for t = 1, track_mod.NUM_TRACKS do
+    params:add_option("voice_backend_" .. t, "track " .. t .. " voice", {"midi", "osc"}, 1)
+  end
+
+  -- OSC target params (per track)
+  params:add_separator("osc_config", "OSC")
+  for t = 1, track_mod.NUM_TRACKS do
+    params:add_text("osc_host_" .. t, "track " .. t .. " osc host", "127.0.0.1")
+    params:add_number("osc_port_" .. t, "track " .. t .. " osc port", 1, 65535, 57120)
   end
 
   ctx = app.init({

@@ -152,13 +152,22 @@ local function seamstress_init()
       voices[t].channel = val
     end)
   end
-  -- Load seamstress.lua voice/osc param setup (to be implemented)
-  -- For now, call app.init directly
+  -- Voice backend params (midi/osc per track)
+  params:add_separator("voice_config", "Voice")
+  for t = 1, track_mod.NUM_TRACKS do
+    params:add_option("voice_backend_" .. t, "track " .. t .. " voice", {"midi", "osc"}, 1)
+  end
+  -- OSC target params (per track)
+  params:add_separator("osc_config", "OSC")
+  for t = 1, track_mod.NUM_TRACKS do
+    params:add_text("osc_host_" .. t, "track " .. t .. " osc host", "127.0.0.1")
+    params:add_number("osc_port_" .. t, "track " .. t .. " osc port", 1, 65535, 57120)
+  end
+
   local ctx = app.init({
     voices = voices,
     sprite_voices = sprite_voices,
   })
-  ctx._voices_ref = voices
   ctx._midi_dev = midi_dev
   return ctx
 end
