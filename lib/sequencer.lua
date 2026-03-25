@@ -32,6 +32,27 @@ M.DIVISION_MAP = {
   [7] = 4,     -- whole
 }
 
+-- Minimum even-step fraction of pair duration (floor to prevent zero/negative sync)
+M.MIN_SWING_RATIO = 0.01
+
+-- Compute swing-adjusted duration for a single step
+-- div: base division sync value
+-- swing: integer 0-100
+-- is_odd: true for odd steps (1st, 3rd, 5th...)
+function M.swing_duration(div, swing, is_odd)
+  if swing == 0 then return div end
+  local pair = 2 * div
+  local odd_dur = pair / (2 - swing / 100)
+  local even_dur = pair - odd_dur
+  local floor = pair * M.MIN_SWING_RATIO
+  if even_dur < floor then even_dur = floor end
+  if is_odd then
+    return pair - even_dur  -- recalc odd to preserve pair sum when floor applied
+  else
+    return even_dur
+  end
+end
+
 -- Number of scale degrees in a heptatonic scale
 local SCALE_DEGREES = 7
 
@@ -80,9 +101,12 @@ end
 
 function M.track_clock(ctx, track_num)
   local track = ctx.tracks[track_num]
+  local step_count = 0
   while ctx.playing do
     local div = M.DIVISION_MAP[track.division] or M.DIVISION_MAP[1]
-    clock.sync(div)
+    step_count = step_count + 1
+    local is_odd = (step_count % 2 == 1)
+    clock.sync(M.swing_duration(div, track.swing or 0, is_odd))
     if ctx.playing then
       M.step_track(ctx, track_num)  -- always advance, mute checked inside
     end
