@@ -80,16 +80,16 @@
 
 > **Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T011 [US4] Test that changing `voice_backend_1` from midi to osc calls `all_notes_off()` on the outgoing MIDI voice in `specs/osc_voice_spec.lua`
-- [ ] T012 [US4] Test that after changing `voice_backend_1` to osc, `ctx.voices[1]` is an OSC voice (has `track_num` field, responds to `play_note`) in `specs/osc_voice_spec.lua`
-- [ ] T013 [US1] Test that after switching to osc, calling `ctx.voices[1]:play_note(60, 0.8, 1)` triggers `osc.send` with path `/rekriate/track/1/note` and args `{60, 0.8, 1}` in `specs/osc_voice_spec.lua`
-- [ ] T014 [US4] Test that changing `voice_backend_1` from osc back to midi calls `all_notes_off()` on the outgoing OSC voice, and `ctx.voices[1]` is a MIDI voice again in `specs/osc_voice_spec.lua`
-- [ ] T015 [US2] Test that track 1 on midi and track 2 on osc can coexist — `ctx.voices[1]` is MIDI, `ctx.voices[2]` is OSC in `specs/osc_voice_spec.lua`
-- [ ] T016 [US1] Test that OSC voice uses current host/port params: set `osc_host_1` to "10.0.0.1" and `osc_port_1` to 7400 before switching to osc, verify `osc.send` target is `{"10.0.0.1", 7400}` in `specs/osc_voice_spec.lua`
+- [x] T011 [US4] Test that changing `voice_backend_1` from midi to osc calls `all_notes_off()` on the outgoing MIDI voice in `specs/osc_voice_spec.lua`
+- [x] T012 [US4] Test that after changing `voice_backend_1` to osc, `ctx.voices[1]` is an OSC voice (has `track_num` field, responds to `play_note`) in `specs/osc_voice_spec.lua`
+- [x] T013 [US1] Test that after switching to osc, calling `ctx.voices[1]:play_note(60, 0.8, 1)` triggers `osc.send` with path `/rekriate/track/1/note` and args `{60, 0.8, 1}` in `specs/osc_voice_spec.lua`
+- [x] T014 [US4] Test that changing `voice_backend_1` from osc back to midi calls `all_notes_off()` on the outgoing OSC voice, and `ctx.voices[1]` is a MIDI voice again in `specs/osc_voice_spec.lua`
+- [x] T015 [US2] Test that track 1 on midi and track 2 on osc can coexist — `ctx.voices[1]` is MIDI, `ctx.voices[2]` is OSC in `specs/osc_voice_spec.lua`
+- [x] T016 [US1] Test that OSC voice uses current host/port params: set `osc_host_1` to "10.0.0.1" and `osc_port_1` to 7400 before switching to osc, verify `osc.send` target is `{"10.0.0.1", 7400}` in `specs/osc_voice_spec.lua`
 
 ### Implementation
 
-- [ ] T017 [US4] Add voice backend param action in `seamstress.lua`: on change, call `all_notes_off()` on current `ctx.voices[t]`, create new voice instance (MIDI via `midi_voice.new(midi_dev, channel)` or OSC via `osc.new(t, host, port)` using current param values), assign to `ctx.voices[t]`. Store `midi_dev` as local in init scope per research decision 6. Require `lib/voices/osc` at top of file. Tests T011-T016 must pass.
+- [x] T017 [US4] Add voice backend param action in `seamstress.lua`: on change, call `all_notes_off()` on current `ctx.voices[t]`, create new voice instance (MIDI via `midi_voice.new(midi_dev, channel)` or OSC via `osc.new(t, host, port)` using current param values), assign to `ctx.voices[t]`. Store `midi_dev` as local in init scope per research decision 6. Require `lib/voices/osc` at top of file. Tests T011-T016 must pass.
 
 **Checkpoint**: Voice swap works in both directions (midi→osc, osc→midi), all_notes_off fires on outgoing, new voice receives notes. Mixed backends across tracks work.
 

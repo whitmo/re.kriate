@@ -157,6 +157,8 @@ local function seamstress_init()
   for t = 1, track_mod.NUM_TRACKS do
     params:add_option("voice_backend_" .. t, "track " .. t .. " voice", {"midi", "osc"}, 1)
   end
+  -- Voice backend swap actions (wired after ctx is created below)
+  -- Deferred: see after app.init call
   -- OSC target params (per track)
   params:add_separator("osc_config", "OSC")
   for t = 1, track_mod.NUM_TRACKS do
@@ -169,6 +171,23 @@ local function seamstress_init()
     sprite_voices = sprite_voices,
   })
   ctx._midi_dev = midi_dev
+
+  -- Wire voice backend swap actions (needs ctx reference)
+  for t = 1, track_mod.NUM_TRACKS do
+    params:set_action("voice_backend_" .. t, function(val)
+      if ctx and ctx.voices[t] then
+        ctx.voices[t]:all_notes_off()
+        if val == 2 then -- osc
+          local host = params:get("osc_host_" .. t)
+          local port = params:get("osc_port_" .. t)
+          ctx.voices[t] = osc_voice.new(t, host, port)
+        else -- midi
+          ctx.voices[t] = midi_voice.new(midi_dev, t)
+        end
+      end
+    end)
+  end
+
   return ctx
 end
 
