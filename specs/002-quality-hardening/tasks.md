@@ -173,14 +173,14 @@
 
 ### Tests & Fixes for Edge Cases
 
-- [ ] T032 [P] Add loop_start > loop_end handling test — verify rejection or swap behavior in integration context. File: `specs/integration_spec.lua`
-- [ ] T033 [P] Add all-zero triggers track test — set all 16 trigger values to 0, advance, verify playhead still advances but no notes fire. File: `specs/integration_spec.lua`
-- [ ] T034 [P] Add load-never-saved-slot test — call pattern.load on a slot that was never saved, verify defaults loaded gracefully with no error. File: `specs/integration_spec.lua`
-- [ ] T035 [P] Add 4-tracks-random-direction-single-step test — set all 4 tracks to direction=random with single-step loops, advance multiple times, verify no crash. File: `specs/integration_spec.lua`
-- [ ] T036 [P] Add 1-degree scale test — set scale to single degree, play notes, verify all notes map to single pitch. File: `specs/integration_spec.lua`
-- [ ] T037 [P] Add extreme clock tempo test — set clock division to min and max values, advance sequencer, verify it still functions. File: `specs/integration_spec.lua`
-- [ ] T038 Add cleanup-mid-step test — trigger a note-on (with pending note-off), call cleanup, verify all notes are silenced via all_notes_off. File: `specs/integration_spec.lua`
-- [ ] T039 Add muted-track-grid-editing test — mute a track, edit step values, verify the data reflects edits even though no sound is produced. File: `specs/integration_spec.lua`
+- [x] T032 [P] Add loop_start > loop_end handling test — verify rejection or swap behavior in integration context. File: `specs/integration_spec.lua`
+- [x] T033 [P] Add all-zero triggers track test — set all 16 trigger values to 0, advance, verify playhead still advances but no notes fire. File: `specs/integration_spec.lua`
+- [x] T034 [P] Add load-never-saved-slot test — call pattern.load on a slot that was never saved, verify defaults loaded gracefully with no error. File: `specs/integration_spec.lua`
+- [x] T035 [P] Add 4-tracks-random-direction-single-step test — set all 4 tracks to direction=random with single-step loops, advance multiple times, verify no crash. File: `specs/integration_spec.lua`
+- [x] T036 [P] Add 1-degree scale test — set scale to single degree, play notes, verify all notes map to single pitch. File: `specs/integration_spec.lua`
+- [x] T037 [P] Add extreme clock tempo test — set clock division to min and max values, advance sequencer, verify it still functions. File: `specs/integration_spec.lua`
+- [x] T038 Add cleanup-mid-step test — trigger a note-on (with pending note-off), call cleanup, verify all notes are silenced via all_notes_off. File: `specs/integration_spec.lua`
+- [x] T039 Add muted-track-grid-editing test — mute a track, edit step values, verify the data reflects edits even though no sound is produced. File: `specs/integration_spec.lua`
 
 **Checkpoint**: All 8 edge cases from spec covered. Run `busted specs/integration_spec.lua` — all pass.
 
@@ -196,7 +196,7 @@
 
 ### Tests & Fixes for User Story 8
 
-- [ ] T040 Create seamstress load test — launch seamstress with `-s re_kriate`, verify init completes without errors, run for 30 seconds, verify cleanup runs and no resources are leaked. File: `specs/seamstress_load_spec.lua` (new file, gated on seamstress availability)
+- [x] T040 Create seamstress load test — launch seamstress with `-s re_kriate`, verify init completes without errors, run for 30 seconds, verify cleanup runs and no resources are leaked. File: `specs/seamstress_load_spec.lua` (new file, gated on seamstress availability)
 
 **Checkpoint**: Seamstress load test passes when runtime is available.
 
@@ -206,9 +206,9 @@
 
 **Purpose**: Validate all new tests pass alongside existing 442, verify performance budget
 
-- [ ] T041 Run full test suite `busted --no-auto-insulate specs/` — verify all 442 + ~39 new tests pass with 0 failures
-- [ ] T042 Verify test suite completes in under 5 seconds (SC-006)
-- [ ] T043 Run `busted specs/` one final time and record exact test count, confirming SC-002 (at least 30 new tests added)
+- [x] T041 Run full test suite `busted --no-auto-insulate specs/` — verify all 442 + ~39 new tests pass with 0 failures
+- [x] T042 Verify test suite completes in under 5 seconds (SC-006)
+- [x] T043 Run `busted specs/` one final time and record exact test count, confirming SC-002 (at least 30 new tests added)
 
 **Checkpoint**: All success criteria met. Feature complete.
 
