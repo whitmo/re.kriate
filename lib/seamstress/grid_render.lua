@@ -45,15 +45,16 @@ end
 
 --- Draw the simulated grid to the screen.
 --- @param grid table  Grid provider with get_led(x, y)
---- @param scr table  Screen object with color(r,g,b) and rect_fill(x,y,w,h)
+--- @param scr table  Screen object with color(r,g,b,a), move(x,y), rect_fill(w,h)
 function M.draw(grid, scr)
   for y = 1, GRID_ROWS do
     for x = 1, GRID_COLS do
       local brightness = grid:get_led(x, y)
       local r, g, b = M.brightness_to_rgb(brightness)
-      scr:color(r, g, b)
+      scr.color(r, g, b, 255)
       local px, py = M.grid_to_pixel(x, y)
-      scr:rect_fill(px, py, CELL_SIZE, CELL_SIZE)
+      scr.move(px, py)
+      scr.rect_fill(CELL_SIZE, CELL_SIZE)
     end
   end
 end

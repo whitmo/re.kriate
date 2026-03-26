@@ -199,11 +199,12 @@ describe("simulated grid", function()
       g:led(8, 4, 10)
       local calls = {}
       local mock_screen = {
-        color = function(self, r, gc, b) calls[#calls + 1] = {type = "color", r = r, g = gc, b = b} end,
-        rect_fill = function(self, x, y, w, h) calls[#calls + 1] = {type = "rect_fill", x = x, y = y} end,
+        color = function(r, gc, b, a) calls[#calls + 1] = {type = "color", r = r, g = gc, b = b} end,
+        move = function(x, y) calls[#calls + 1] = {type = "move", x = x, y = y} end,
+        rect_fill = function(w, h) calls[#calls + 1] = {type = "rect_fill", w = w, h = h} end,
       }
       grid_render.draw(g, mock_screen)
-      -- 128 cells drawn
+      -- 128 cells drawn (color + move + rect_fill per cell = 384 calls)
       local colors = 0
       for _, c in ipairs(calls) do if c.type == "color" then colors = colors + 1 end end
       assert.are.equal(128, colors)
@@ -347,11 +348,12 @@ describe("simulated grid", function()
       -- Draw to mock screen
       local draw_calls = {}
       local mock_screen = {
-        color = function(self, r, gc, b) draw_calls[#draw_calls + 1] = "color" end,
-        rect_fill = function(self, x, y, w, h) draw_calls[#draw_calls + 1] = "rect" end,
+        color = function(r, gc, b, a) draw_calls[#draw_calls + 1] = "color" end,
+        move = function(x, y) draw_calls[#draw_calls + 1] = "move" end,
+        rect_fill = function(w, h) draw_calls[#draw_calls + 1] = "rect" end,
       }
       grid_render.draw(g, mock_screen)
-      assert.are.equal(256, #draw_calls)  -- 128 color + 128 rect
+      assert.are.equal(384, #draw_calls)  -- 128 color + 128 move + 128 rect
       -- Click on cell (5,3) — pixel (64, 32)
       local key_event = nil
       g.key = function(x, y, z) key_event = {x = x, y = y, z = z} end

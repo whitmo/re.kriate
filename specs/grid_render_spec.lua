@@ -126,11 +126,14 @@ describe("grid_render", function()
     local calls = {}
     return {
       calls = calls,
-      color = function(self, r, g, b)
-        calls[#calls + 1] = {type = "color", r = r, g = g, b = b}
+      color = function(r, g, b, a)
+        calls[#calls + 1] = {type = "color", r = r, g = g, b = b, a = a}
       end,
-      rect_fill = function(self, x, y, w, h)
-        calls[#calls + 1] = {type = "rect_fill", x = x, y = y, w = w, h = h}
+      move = function(x, y)
+        calls[#calls + 1] = {type = "move", x = x, y = y}
+      end,
+      rect_fill = function(w, h)
+        calls[#calls + 1] = {type = "rect_fill", w = w, h = h}
       end,
     }
   end
@@ -158,21 +161,21 @@ describe("grid_render", function()
       mock_grid:led(3, 2, 15)
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
-      -- Find the color+rect pair for cell (3,2) — pixel (32, 16)
-      local found_color, found_rect = false, false
+      -- Find the move+rect pair for cell (3,2) — pixel (32, 16)
+      local found_color, found_move = false, false
       for i, call in ipairs(mock_screen.calls) do
-        if call.type == "rect_fill" and call.x == 32 and call.y == 16 then
-          found_rect = true
-          -- The color call should be immediately before
-          local prev = mock_screen.calls[i - 1]
-          assert.are.equal("color", prev.type)
-          assert.are.equal(255, prev.r)
-          assert.are.equal(178, prev.g)
-          assert.are.equal(102, prev.b)
+        if call.type == "move" and call.x == 32 and call.y == 16 then
+          found_move = true
+          -- color call should be 2 before (color, move, rect_fill)
+          local color_call = mock_screen.calls[i - 1]
+          assert.are.equal("color", color_call.type)
+          assert.are.equal(255, color_call.r)
+          assert.are.equal(178, color_call.g)
+          assert.are.equal(102, color_call.b)
           found_color = true
         end
       end
-      assert.is_true(found_rect, "expected rect_fill at (32, 16)")
+      assert.is_true(found_move, "expected move to (32, 16)")
       assert.is_true(found_color, "expected warm amber color for brightness 15")
     end)
 
