@@ -5,6 +5,7 @@
 --   Row 8: navigation (track select, page select)
 
 local track_mod = require("lib/track")
+local pattern = require("lib/pattern")
 
 local M = {}
 
@@ -23,12 +24,16 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 -- x=8: octave page (double-tap: glide)
 -- x=9: duration page
 -- x=10: velocity page
+-- x=5: mute toggle
 -- x=12: loop modifier (hold)
+-- x=14: pattern mode (hold)
 -- x=16: play/stop
 
 local NAV_TRACK = {1, 2, 3, 4} -- @@ unused
+local NAV_MUTE = 5
 local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration", [10] = "velocity"}
 local NAV_LOOP = 12
+local NAV_PATTERN = 14
 local NAV_PLAY = 16
 
 function M.redraw(ctx)
@@ -36,13 +41,18 @@ function M.redraw(ctx)
   if not g then return end
   g:all(0)
 
-  local page = ctx.active_page
-
-  if page == "trigger" then
-    M.draw_trigger_page(ctx, g)
+  if ctx.pattern_held then
+    -- pattern mode: show pattern slots on rows 1-2, cols 1-8
+    M.draw_pattern_slots(ctx, g)
   else
-    -- All other pages (including extended: ratchet, alt_note, glide) use value display
-    M.draw_value_page(ctx, g, page)
+    local page = ctx.active_page
+
+    if page == "trigger" then
+      M.draw_trigger_page(ctx, g)
+    else
+      -- All other pages (including extended: ratchet, alt_note, glide) use value display
+      M.draw_value_page(ctx, g, page)
+    end
   end
 
   M.draw_nav(ctx, g)
@@ -102,6 +112,26 @@ function M.draw_value_page(ctx, g, page)
   end
 end
 
+-- Pattern slots display: rows 1-2, cols 1-8 (16 slots total)
+function M.draw_pattern_slots(ctx, g)
+  if not ctx.patterns then return end
+  for slot = 1, 16 do
+    local col = ((slot - 1) % 8) + 1
+    local row = ((slot - 1) < 8) and 1 or 2
+    local populated = pattern.is_populated(ctx.patterns, slot)
+    local is_current = (slot == ctx.pattern_slot)
+    local brightness = 2
+    if populated and is_current then
+      brightness = 15
+    elseif populated then
+      brightness = 10
+    elseif is_current then
+      brightness = 6
+    end
+    g:led(col, row, brightness)
+  end
+end
+
 -- Navigation row
 function M.draw_nav(ctx, g)
   local y = 8
@@ -109,6 +139,9 @@ function M.draw_nav(ctx, g)
   for i = 1, 4 do
     g:led(i, y, i == ctx.active_track and 12 or 3)
   end
+  -- mute indicator (x=5)
+  local muted = ctx.tracks[ctx.active_track] and ctx.tracks[ctx.active_track].muted
+  g:led(NAV_MUTE, y, muted and 12 or 3)
   -- page select (highlight correct button even when on extended page)
   local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
   for x, page in pairs(NAV_PAGE) do
@@ -116,11 +149,18 @@ function M.draw_nav(ctx, g)
   end
   -- loop modifier
   g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
+  -- pattern mode
+  g:led(NAV_PATTERN, y, ctx.pattern_held and 12 or 3)
   -- play/stop
   g:led(NAV_PLAY, y, ctx.playing and 12 or 3)
 end
 
 function M.key(ctx, x, y, z)
+  -- emit grid:key event for all key presses
+  if ctx.events then
+    ctx.events:emit("grid:key", {x=x, y=y, z=z})
+  end
+
   if y == 8 then
     M.nav_key(ctx, x, z)
   elseif y >= 1 and y <= 7 then
@@ -132,9 +172,21 @@ function M.nav_key(ctx, x, z)
   -- track select (momentary not needed, select on press)
   if x >= 1 and x <= 4 and z == 1 then
     ctx.active_track = x
+    if ctx.events then
+      ctx.events:emit("track:select", {track=x})
+    end
+  end
+  -- mute toggle (x=5)
+  if x == NAV_MUTE and z == 1 then
+    local track = ctx.tracks[ctx.active_track]
+    track.muted = not track.muted
+    if ctx.events then
+      ctx.events:emit("track:mute", {track=ctx.active_track, muted=track.muted})
+    end
   end
   -- page select with extended page toggle
   if NAV_PAGE[x] and z == 1 then
+    local old_page = ctx.active_page
     local target_page = NAV_PAGE[x]
     if ctx.active_page == target_page then
       -- Same button pressed: toggle to extended page if one exists
@@ -149,6 +201,9 @@ function M.nav_key(ctx, x, z)
       -- Different page button: switch to primary page (clear extended)
       ctx.active_page = target_page
     end
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
   end
   -- loop modifier (hold)
   if x == NAV_LOOP then
@@ -156,6 +211,10 @@ function M.nav_key(ctx, x, z)
     if z == 0 then
       ctx.loop_first_press = nil
     end
+  end
+  -- pattern mode (hold x=14)
+  if x == NAV_PATTERN then
+    ctx.pattern_held = (z == 1)
   end
   -- play/stop
   if x == NAV_PLAY and z == 1 then
@@ -170,6 +229,12 @@ end
 
 function M.grid_key(ctx, x, y, z)
   if z == 0 then return end -- only act on press
+
+  -- pattern slot selection mode
+  if ctx.pattern_held then
+    M.pattern_key(ctx, x, y)
+    return
+  end
 
   local page = ctx.active_page
 
@@ -222,6 +287,17 @@ function M.loop_key(ctx, x, page)
     local e = math.max(ctx.loop_first_press, x)
     track_mod.set_loop(param, s, e)
     ctx.loop_first_press = nil
+  end
+end
+
+-- Pattern slot selection: rows 1-2, cols 1-8 = 16 slots
+function M.pattern_key(ctx, x, y)
+  if x < 1 or x > 8 or y < 1 or y > 2 then return end
+  local slot = (y - 1) * 8 + x
+  ctx.pattern_slot = slot
+  pattern.load(ctx, slot)
+  if ctx.events then
+    ctx.events:emit("pattern:load", {slot=slot})
   end
 end
 
