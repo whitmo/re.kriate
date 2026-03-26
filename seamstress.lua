@@ -11,28 +11,18 @@ package.path = script_dir .. "?.lua;" .. script_dir .. "?/init.lua;" .. package.
 
 local log = require("lib/log")
 local app = require("lib/app")
-local midi_voice = require("lib/voices/midi")
-local osc_voice = require("lib/voices/osc")
 local sprite_voice = require("lib/voices/sprite")
 local screen_ui = require("lib/seamstress/screen_ui")
 local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
 local grid_render = require("lib/seamstress/grid_render")
 local track_mod = require("lib/track")
+local log = require("lib/log")
 
 local ctx
 
 function init()
   log.session_start()
-
-  -- MIDI device setup
-  local midi_dev = midi.connect(1)
-
-  -- Create MIDI voices (one per track, channel = track number)
-  local voices = {}
-  for t = 1, track_mod.NUM_TRACKS do
-    voices[t] = midi_voice.new(midi_dev, t)
-  end
 
   -- Sprite voices (additive visual output, one per track)
   local sprite_voices = {}
@@ -40,53 +30,8 @@ function init()
     sprite_voices[t] = sprite_voice.new(t)
   end
 
-  -- MIDI channel params
-  params:add_separator("midi_config", "MIDI")
-  for t = 1, track_mod.NUM_TRACKS do
-    params:add_number("midi_ch_" .. t, "track " .. t .. " channel", 1, 16, t)
-    params:set_action("midi_ch_" .. t, function(val)
-      voices[t].channel = val
-    end)
-  end
-
-  -- Voice backend params (midi/osc per track)
-  params:add_separator("voice_config", "Voice")
-  for t = 1, track_mod.NUM_TRACKS do
-    params:add_option("voice_backend_" .. t, "track " .. t .. " voice", {"midi", "osc"}, 1)
-    params:set_action("voice_backend_" .. t, function(val)
-      if ctx and ctx.voices[t] then
-        ctx.voices[t]:all_notes_off()
-        if val == 2 then -- osc
-          local host = params:get("osc_host_" .. t)
-          local port = params:get("osc_port_" .. t)
-          ctx.voices[t] = osc_voice.new(t, host, port)
-        else -- midi
-          ctx.voices[t] = midi_voice.new(midi_dev, t)
-        end
-      end
-    end)
-  end
-
-  -- OSC target params (per track)
-  -- Note: params are always visible — seamstress doesn't support conditional visibility
-  params:add_separator("osc_config", "OSC")
-  for t = 1, track_mod.NUM_TRACKS do
-    params:add_text("osc_host_" .. t, "track " .. t .. " osc host", "127.0.0.1")
-    params:add_number("osc_port_" .. t, "track " .. t .. " osc port", 1, 65535, 57120)
-    params:set_action("osc_host_" .. t, function(val)
-      if ctx and ctx.voices[t] and params:get("voice_backend_" .. t) == 2 then
-        ctx.voices[t]:set_target(val, params:get("osc_port_" .. t))
-      end
-    end)
-    params:set_action("osc_port_" .. t, function(val)
-      if ctx and ctx.voices[t] and params:get("voice_backend_" .. t) == 2 then
-        ctx.voices[t]:set_target(params:get("osc_host_" .. t), val)
-      end
-    end)
-  end
-
   ctx = app.init({
-    voices = voices,
+    midi_dev = midi.connect(1),
     sprite_voices = sprite_voices,
     screen_mod = screen_ui,
     grid_provider = "simulated",
@@ -95,7 +40,7 @@ function init()
   -- Keyboard input
   screen.key = log.wrap(function(char, modifiers, is_repeat, state)
     keyboard.key(ctx, char, modifiers, is_repeat, state)
-  end, "keyboard")
+  end, "screen.key")
 
   -- Mouse input → simulated grid
   screen.click = log.wrap(function(x, y, state, button)
@@ -107,7 +52,7 @@ function init()
   ctx.screen_metro.time = 1 / 30
   ctx.screen_metro.event = log.wrap(function()
     redraw()
-  end, "screen_metro")
+  end, "screen_metro.event")
   ctx.screen_metro:start()
 
   log.info("init complete")
@@ -131,6 +76,5 @@ function cleanup()
   if ctx and ctx.screen_metro then
     ctx.screen_metro:stop()
   end
-  log.info("cleanup complete")
   log.close()
 end

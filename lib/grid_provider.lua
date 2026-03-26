@@ -237,4 +237,119 @@ M.register("simulated", function(opts)
   return g
 end)
 
+------------------------------------------------------------------------
+-- Built-in provider: synthetic (testing grid with dump & key simulation)
+------------------------------------------------------------------------
+-- Extends "virtual" with:
+--   :dump()                -> formatted text string of LED state
+--   :get_led(x, y)        -> brightness at position (0-15)
+--   :simulate_key(x, y, z) -> fire key callback as if hardware button pressed
+--   :get_state()           -> full LED state as rows[y][x]
+--   :clear_state()         -> reset all LEDs to 0
+--
+-- LED brightness display in dump():
+--   .  = 0 (off)
+--   1-9 = brightness 1-9
+--   A  = 10, B = 11, C = 12, D = 13, E = 14, F = 15
+
+M.register("synthetic", function(opts)
+  local cols = opts.cols or 16
+  local rows = opts.rows or 8
+  local leds = {}
+
+  -- Brightness-to-character mapping for dump()
+  local brightness_char = {
+    [0] = ".", [1] = "1", [2] = "2", [3] = "3", [4] = "4",
+    [5] = "5", [6] = "6", [7] = "7", [8] = "8", [9] = "9",
+    [10] = "A", [11] = "B", [12] = "C", [13] = "D", [14] = "E", [15] = "F",
+  }
+
+  local g = {
+    key = nil, -- callback: set by app.lua or test code
+
+    all = function(self, brightness)
+      leds = {}
+      if brightness and brightness > 0 then
+        for y = 1, rows do
+          for x = 1, cols do
+            leds[y * cols + x] = brightness
+          end
+        end
+      end
+    end,
+
+    led = function(self, x, y, brightness)
+      leds[y * cols + x] = brightness
+    end,
+
+    refresh = function(self)
+      if self.on_refresh then
+        self:on_refresh()
+      end
+    end,
+
+    cols = function() return cols end,
+    rows = function() return rows end,
+
+    -- Read LED state at position
+    get_led = function(self, x, y)
+      return leds[y * cols + x] or 0
+    end,
+
+    -- Get full LED state as table: state[y][x] = brightness
+    get_state = function(self)
+      local state = {}
+      for y = 1, rows do
+        state[y] = {}
+        for x = 1, cols do
+          state[y][x] = leds[y * cols + x] or 0
+        end
+      end
+      return state
+    end,
+
+    -- Format LED state as readable text for test assertions
+    dump = function(self)
+      local lines = {}
+      -- Header row with column numbers
+      local header = "    "
+      for x = 1, cols do
+        header = header .. string.format("%2d ", x)
+      end
+      lines[#lines + 1] = header
+      -- Data rows
+      for y = 1, rows do
+        local row = string.format("%2d: ", y)
+        for x = 1, cols do
+          local b = leds[y * cols + x] or 0
+          -- Clamp to valid range
+          if b < 0 then b = 0 end
+          if b > 15 then b = 15 end
+          row = row .. string.format(" %s ", brightness_char[b])
+        end
+        lines[#lines + 1] = row
+      end
+      return table.concat(lines, "\n")
+    end,
+
+    -- Simulate a key press/release (fires the key callback)
+    simulate_key = function(self, x, y, z)
+      if self.key then
+        self.key(x, y, z)
+      end
+    end,
+
+    -- Reset all LEDs to 0
+    clear_state = function(self)
+      leds = {}
+    end,
+
+    cleanup = function(self)
+      leds = {}
+    end,
+  }
+
+  return g
+end)
+
 return M

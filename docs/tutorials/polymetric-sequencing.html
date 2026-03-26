@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polymetric Sequencing in re.kriate</title>
+<style>
+  :root {
+    --bg: #1a1a1a;
+    --bg-panel: #222;
+    --bg-step: #2a2a2a;
+    --bg-step-active: #3a3a3a;
+    --amber: #f0a030;
+    --amber-dim: #805818;
+    --amber-glow: #f0a03040;
+    --amber-bright: #ffc060;
+    --text: #d0c8b8;
+    --text-dim: #807868;
+    --text-bright: #f0e8d8;
+    --border: #333;
+    --track1: #f0a030;
+    --track2: #e07828;
+    --track3: #d05820;
+    --track4: #c04018;
+    --mono: 'Menlo', 'Monaco', 'Courier New', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  h1 {
+    font-size: 28px;
+    color: var(--amber);
+    margin-bottom: 8px;
+    font-weight: 400;
+    letter-spacing: 1px;
+  }
+
+  h2 {
+    font-size: 18px;
+    color: var(--amber-bright);
+    margin: 48px 0 16px;
+    font-weight: 400;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+
+  h3 {
+    font-size: 15px;
+    color: var(--amber);
+    margin: 24px 0 12px;
+    font-weight: 400;
+  }
+
+  p {
+    margin-bottom: 16px;
+    max-width: 680px;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 32px;
+  }
+
+  .concept-box {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber);
+    padding: 16px 20px;
+    margin: 20px 0;
+    border-radius: 2px;
+  }
+
+  .concept-box strong {
+    color: var(--amber);
+  }
+
+  code {
+    background: var(--bg-panel);
+    color: var(--amber);
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 13px;
+  }
+
+  /* ---- Single Loop Ring Diagram ---- */
+  .loop-rings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    justify-content: center;
+    margin: 24px 0;
+  }
+
+  .ring-label {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  .ring-label .param-name {
+    color: var(--amber);
+    font-size: 13px;
+  }
+
+  .ring-label .loop-info {
+    font-size: 11px;
+  }
+
+  /* ---- Interactive Polymetric Playground ---- */
+  .playground {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin: 24px 0;
+  }
+
+  .playground-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .playground-title {
+    color: var(--amber);
+    font-size: 15px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn {
+    background: var(--bg-step);
+    border: 1px solid var(--border);
+    color: var(--amber);
+    padding: 6px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.15s;
+  }
+
+  .btn:hover {
+    background: var(--bg-step-active);
+  }
+
+  .btn.active {
+    background: var(--amber);
+    color: var(--bg);
+  }
+
+  .tempo-display {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  /* Track rows */
+  .track-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+
+  .track-label {
+    width: 80px;
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    text-align: right;
+    padding-right: 8px;
+  }
+
+  .track-label .name {
+    color: var(--amber);
+    font-size: 12px;
+  }
+
+  .steps-container {
+    display: flex;
+    gap: 3px;
+    flex-grow: 1;
+  }
+
+  .step {
+    width: 100%;
+    max-width: 40px;
+    aspect-ratio: 1;
+    background: var(--bg-step);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    position: relative;
+    transition: background 0.1s, border-color 0.1s;
+    cursor: pointer;
+  }
+
+  .step.in-loop {
+    background: var(--bg-step-active);
+  }
+
+  .step.active {
+    background: var(--amber-dim);
+    border-color: var(--amber);
+  }
+
+  .step.playhead {
+    border-color: var(--amber-bright);
+    box-shadow: 0 0 6px var(--amber-glow);
+  }
+
+  .step.playhead.active {
+    background: var(--amber);
+    box-shadow: 0 0 12px var(--amber-glow);
+  }
+
+  .step.out-of-loop {
+    opacity: 0.25;
+  }
+
+  .step-value {
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+    font-size: 9px;
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  .step.playhead .step-value {
+    color: var(--text-bright);
+  }
+
+  /* Loop length control */
+  .loop-control {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 80px;
+  }
+
+  .loop-len-btn {
+    background: var(--bg-step);
+    border: 1px solid var(--border);
+    color: var(--amber);
+    width: 22px;
+    height: 22px;
+    font-family: var(--mono);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .loop-len-btn:hover {
+    background: var(--amber-dim);
+  }
+
+  .loop-len-display {
+    font-size: 12px;
+    color: var(--amber);
+    width: 28px;
+    text-align: center;
+  }
+
+  /* Step counter */
+  .step-counter {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .step-counter .count {
+    color: var(--amber);
+    font-size: 16px;
+  }
+
+  .step-counter .total {
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  /* ---- Animated Phase Diagram ---- */
+  .phase-canvas-container {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin: 24px 0;
+    text-align: center;
+  }
+
+  canvas {
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* ---- Combination Counter ---- */
+  .combo-display {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin: 24px 0;
+    text-align: center;
+  }
+
+  .combo-number {
+    font-size: 48px;
+    color: var(--amber);
+    margin: 8px 0;
+    font-weight: 400;
+  }
+
+  .combo-label {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .combo-formula {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-top: 8px;
+  }
+
+  /* ---- Multi-track section ---- */
+  .multi-track-playground {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin: 24px 0;
+  }
+
+  .track-section {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .track-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .track-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .track-name {
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  .track-name.t1 { color: var(--track1); }
+  .track-name.t2 { color: var(--track2); }
+  .track-name.t3 { color: var(--track3); }
+  .track-name.t4 { color: var(--track4); }
+
+  .track-info {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* Output log */
+  .output-log {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 12px;
+    margin-top: 16px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .output-log .event {
+    margin-bottom: 2px;
+  }
+
+  .output-log .event .tick {
+    color: var(--text-dim);
+  }
+
+  .output-log .event.t1 .note { color: var(--track1); }
+  .output-log .event.t2 .note { color: var(--track2); }
+  .output-log .event.t3 .note { color: var(--track3); }
+  .output-log .event.t4 .note { color: var(--track4); }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 640px) {
+    .container { padding: 20px 12px; }
+    h1 { font-size: 22px; }
+    .step { max-width: 28px; }
+    .track-label { width: 60px; font-size: 10px; }
+    .loop-control { width: 64px; }
+  }
+
+  /* Section transitions */
+  .section {
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.5s, transform 0.5s;
+  }
+
+  .section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Scroll indicator */
+  .scroll-hint {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-top: 32px;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+  }
+
+  /* Tooltip for steps */
+  .step[title] {
+    cursor: pointer;
+  }
+
+  /* LCM visualization */
+  .lcm-bar {
+    display: flex;
+    align-items: stretch;
+    height: 24px;
+    margin: 4px 0;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .lcm-segment {
+    flex-grow: 1;
+    border-right: 1px solid var(--bg-panel);
+    transition: background 0.2s;
+  }
+
+  .lcm-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .lcm-label {
+    width: 80px;
+    text-align: right;
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .lcm-label .pname { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="section" id="sec-header">
+    <h1>polymetric sequencing</h1>
+    <div class="subtitle">re.kriate tutorial &mdash; per-parameter loop lengths &amp; evolving patterns</div>
+    <p>
+      In most sequencers, all parameters share the same loop length. Step 1 of the trigger pattern
+      always plays with step 1 of the note pattern. The result is a fixed phrase that repeats identically.
+    </p>
+    <p>
+      re.kriate does something different. Each parameter &mdash;
+      <code>trigger</code>, <code>note</code>, <code>octave</code>, <code>duration</code>,
+      <code>velocity</code> &mdash; has its own independent loop length. They cycle at different rates,
+      creating combinations that don't repeat for a very long time.
+    </p>
+    <p>This is <strong style="color:var(--amber)">polymetric sequencing</strong>.</p>
+  </div>
+
+  <!-- SECTION 1: What is a per-parameter loop? -->
+  <div class="section" id="sec-loops">
+    <h2>1. per-parameter loops</h2>
+
+    <div class="concept-box">
+      <p>
+        Each parameter has its own <strong>loop_start</strong> and <strong>loop_end</strong>.
+        When a parameter's playhead reaches <code>loop_end</code>, it wraps back to <code>loop_start</code>.
+        Meanwhile, other parameters keep advancing at their own pace.
+      </p>
+    </div>
+
+    <p>
+      Imagine five runners on circular tracks of different sizes. They all start at the same moment,
+      but each returns to the start line at a different time. The combination of their positions
+      is always shifting.
+    </p>
+
+    <h3>try it: single-track parameter loops</h3>
+    <p>
+      Click <strong style="color:var(--amber)">+</strong> / <strong style="color:var(--amber)">&minus;</strong>
+      to change each parameter's loop length. Press <strong style="color:var(--amber)">play</strong> to watch
+      them advance independently.
+    </p>
+
+    <div class="playground" id="playground-single">
+      <div class="playground-header">
+        <span class="playground-title">track 1 &mdash; parameter loops</span>
+        <div class="controls">
+          <button class="btn" id="btn-play-single">play</button>
+          <button class="btn" id="btn-reset-single">reset</button>
+          <span class="tempo-display" id="tempo-single">step 0</span>
+        </div>
+      </div>
+      <div id="single-track-rows"></div>
+      <div class="step-counter">
+        <div>unique combinations before full repeat:</div>
+        <div class="count" id="lcm-display">16</div>
+        <div class="total" id="lcm-formula"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 2: LCM visual -->
+  <div class="section" id="sec-lcm">
+    <h2>2. the math: least common multiple</h2>
+
+    <p>
+      When do all parameters realign? At the <strong style="color:var(--amber)">LCM</strong>
+      (least common multiple) of their loop lengths. With loops of 3 and 4, you get
+      12 unique steps before the pattern repeats. With 5 different prime-ish lengths,
+      the LCM can be enormous.
+    </p>
+
+    <div class="phase-canvas-container">
+      <canvas id="phase-canvas" width="480" height="280"></canvas>
+      <div style="margin-top:8px; font-size:11px; color:var(--text-dim)">
+        ring diagram &mdash; watch how different loop lengths create phase relationships
+      </div>
+    </div>
+
+    <div class="combo-display">
+      <div class="combo-label">with the current loop lengths, the full cycle is</div>
+      <div class="combo-number" id="combo-number">16</div>
+      <div class="combo-label">steps before the exact same combination recurs</div>
+      <div class="combo-formula" id="combo-formula"></div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: Multi-track -->
+  <div class="section" id="sec-multi">
+    <h2>3. four tracks, infinite variation</h2>
+
+    <p>
+      re.kriate runs <strong style="color:var(--amber)">4 tracks</strong> simultaneously, each with
+      its own clock division and 5 independent parameter loops. That's up to 20 independent cycles
+      generating an ever-shifting musical texture.
+    </p>
+
+    <div class="concept-box">
+      <p>
+        Each track also has its own <strong>direction</strong> mode: forward, reverse, pendulum,
+        drunk (random walk), or random. Combined with per-parameter loops, even a few programmed
+        steps produce vast generative sequences.
+      </p>
+    </div>
+
+    <h3>try it: 4-track polymetric playground</h3>
+    <p>
+      Each track shows its <code>trigger</code> row. Adjust loop lengths per track
+      and watch how the combined rhythm evolves.
+    </p>
+
+    <div class="multi-track-playground" id="playground-multi">
+      <div class="playground-header">
+        <span class="playground-title">4-track trigger patterns</span>
+        <div class="controls">
+          <button class="btn" id="btn-play-multi">play</button>
+          <button class="btn" id="btn-reset-multi">reset</button>
+          <span class="tempo-display" id="tempo-multi">step 0</span>
+        </div>
+      </div>
+      <div id="multi-track-rows"></div>
+      <div class="output-log" id="output-log"></div>
+    </div>
+  </div>
+
+  <!-- SECTION 4: LCM timeline -->
+  <div class="section" id="sec-timeline">
+    <h2>4. visualizing the phase space</h2>
+
+    <p>
+      Below, each row represents one parameter's loop cycling over time. The colored segments
+      show where each loop wraps. Notice how the wrap points rarely align &mdash; that's the magic.
+    </p>
+
+    <div class="playground" id="playground-timeline">
+      <div class="playground-header">
+        <span class="playground-title">loop phase timeline</span>
+        <div class="controls">
+          <span class="tempo-display">showing first 64 steps</span>
+        </div>
+      </div>
+      <div id="timeline-rows"></div>
+    </div>
+  </div>
+
+  <!-- SECTION 5: Summary -->
+  <div class="section" id="sec-summary">
+    <h2>5. putting it together</h2>
+
+    <div class="concept-box">
+      <p><strong>trigger</strong> (loop 1&ndash;16) &mdash; when a note fires (binary on/off)</p>
+      <p><strong>note</strong> (loop 1&ndash;16) &mdash; scale degree (1&ndash;7)</p>
+      <p><strong>octave</strong> (loop 1&ndash;16) &mdash; octave offset (1&ndash;7, center = 4)</p>
+      <p><strong>duration</strong> (loop 1&ndash;16) &mdash; note length (1/16 to 4 beats)</p>
+      <p><strong>velocity</strong> (loop 1&ndash;16) &mdash; amplitude (0.15 to 1.0)</p>
+    </div>
+
+    <p>
+      By programming short melodic fragments into <code>note</code> and <code>octave</code>,
+      rhythmic patterns into <code>trigger</code>, and varying <code>duration</code> and <code>velocity</code>
+      with different loop lengths, you create sequences that breathe and evolve &mdash;
+      always recognizable, never quite the same.
+    </p>
+
+    <p>
+      On the grid, hold the <strong style="color:var(--amber)">loop modifier</strong> button (row 8, col 12)
+      and press two steps to set loop start/end for the active parameter. Each parameter page
+      shows its own loop region independently.
+    </p>
+
+    <p style="color:var(--text-dim); font-size:12px; margin-top:32px;">
+      re.kriate &mdash; a norns sequencer inspired by monome kria
+    </p>
+  </div>
+
+</div>
+
+<script>
+// ===== UTILITIES =====
+function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+function lcm(a, b) { return (a * b) / gcd(a, b); }
+function lcmArray(arr) { return arr.reduce((a, b) => lcm(a, b), 1); }
+
+// ===== PARAMETER CONFIG =====
+const PARAMS = [
+  { name: 'trigger',  defaultLoop: 16, color: '#f0a030', values: [1,0,1,0,1,1,0,1,0,1,0,1,1,0,1,0] },
+  { name: 'note',     defaultLoop: 12, color: '#e8922a', values: [3,5,2,7,1,4,6,3,5,1,7,2,4,6,3,5] },
+  { name: 'octave',   defaultLoop: 8,  color: '#e07828', values: [4,4,5,4,4,3,4,5,4,4,4,5,3,4,4,4] },
+  { name: 'duration', defaultLoop: 6,  color: '#d86020', values: [2,3,1,4,2,1,3,2,4,1,2,3,1,4,2,3] },
+  { name: 'velocity', defaultLoop: 10, color: '#d05820', values: [5,3,6,4,7,2,5,4,6,3,7,5,4,6,3,2] }
+];
+
+const NUM_STEPS = 16;
+const TICK_MS = 280;
+
+// ===== SINGLE-TRACK PLAYGROUND =====
+(function() {
+  const state = {
+    params: PARAMS.map(p => ({
+      name: p.name,
+      color: p.color,
+      loopLen: p.defaultLoop,
+      values: [...p.values],
+      pos: 0
+    })),
+    playing: false,
+    tick: 0,
+    interval: null
+  };
+
+  function render() {
+    const container = document.getElementById('single-track-rows');
+    container.innerHTML = '';
+
+    state.params.forEach((param, pi) => {
+      const row = document.createElement('div');
+      row.className = 'track-row';
+
+      const label = document.createElement('div');
+      label.className = 'track-label';
+      label.innerHTML = `<div class="name" style="color:${param.color}">${param.name}</div>`;
+      row.appendChild(label);
+
+      const steps = document.createElement('div');
+      steps.className = 'steps-container';
+
+      for (let i = 0; i < NUM_STEPS; i++) {
+        const step = document.createElement('div');
+        step.className = 'step';
+        const inLoop = i < param.loopLen;
+        if (inLoop) step.classList.add('in-loop');
+        else step.classList.add('out-of-loop');
+        if (inLoop && param.values[i]) step.classList.add('active');
+        if (i === param.pos && inLoop) step.classList.add('playhead');
+
+        // Click to toggle step value
+        step.addEventListener('click', () => {
+          if (i < param.loopLen) {
+            if (param.name === 'trigger') {
+              param.values[i] = param.values[i] ? 0 : 1;
+            } else {
+              param.values[i] = (param.values[i] % 7) + 1;
+            }
+            render();
+          }
+        });
+
+        const val = document.createElement('div');
+        val.className = 'step-value';
+        val.textContent = inLoop ? param.values[i] : '';
+        step.appendChild(val);
+        steps.appendChild(step);
+      }
+      row.appendChild(steps);
+
+      // Loop length control
+      const ctrl = document.createElement('div');
+      ctrl.className = 'loop-control';
+
+      const btnMinus = document.createElement('button');
+      btnMinus.className = 'loop-len-btn';
+      btnMinus.textContent = '\u2212';
+      btnMinus.addEventListener('click', () => {
+        if (param.loopLen > 1) {
+          param.loopLen--;
+          if (param.pos >= param.loopLen) param.pos = 0;
+          updateAll();
+        }
+      });
+
+      const lenDisp = document.createElement('div');
+      lenDisp.className = 'loop-len-display';
+      lenDisp.textContent = param.loopLen;
+
+      const btnPlus = document.createElement('button');
+      btnPlus.className = 'loop-len-btn';
+      btnPlus.textContent = '+';
+      btnPlus.addEventListener('click', () => {
+        if (param.loopLen < NUM_STEPS) {
+          param.loopLen++;
+          updateAll();
+        }
+      });
+
+      ctrl.appendChild(btnMinus);
+      ctrl.appendChild(lenDisp);
+      ctrl.appendChild(btnPlus);
+      row.appendChild(ctrl);
+
+      container.appendChild(row);
+    });
+  }
+
+  function updateLCM() {
+    const lengths = state.params.map(p => p.loopLen);
+    const total = lcmArray(lengths);
+    document.getElementById('lcm-display').textContent = total.toLocaleString();
+    document.getElementById('lcm-formula').textContent =
+      'LCM(' + lengths.join(', ') + ') = ' + total.toLocaleString();
+
+    // Also update phase diagram section
+    document.getElementById('combo-number').textContent = total.toLocaleString();
+    document.getElementById('combo-formula').textContent =
+      'LCM(' + lengths.join(', ') + ') = ' + total.toLocaleString();
+  }
+
+  function updateTimeline() {
+    renderTimeline(state.params.map(p => ({ name: p.name, color: p.color, loopLen: p.loopLen })));
+  }
+
+  function updateAll() {
+    render();
+    updateLCM();
+    updateTimeline();
+    drawPhaseRings();
+  }
+
+  function advance() {
+    state.tick++;
+    state.params.forEach(p => {
+      p.pos = (p.pos + 1) % p.loopLen;
+    });
+    document.getElementById('tempo-single').textContent = 'step ' + state.tick;
+    render();
+    drawPhaseRings();
+  }
+
+  document.getElementById('btn-play-single').addEventListener('click', function() {
+    if (state.playing) {
+      clearInterval(state.interval);
+      state.playing = false;
+      this.textContent = 'play';
+      this.classList.remove('active');
+    } else {
+      state.playing = true;
+      this.textContent = 'stop';
+      this.classList.add('active');
+      state.interval = setInterval(advance, TICK_MS);
+    }
+  });
+
+  document.getElementById('btn-reset-single').addEventListener('click', () => {
+    if (state.playing) {
+      clearInterval(state.interval);
+      state.playing = false;
+      document.getElementById('btn-play-single').textContent = 'play';
+      document.getElementById('btn-play-single').classList.remove('active');
+    }
+    state.tick = 0;
+    state.params.forEach(p => p.pos = 0);
+    document.getElementById('tempo-single').textContent = 'step 0';
+    updateAll();
+  });
+
+  // Expose for phase diagram
+  window.singleState = state;
+
+  updateAll();
+})();
+
+// ===== PHASE RING DIAGRAM =====
+function drawPhaseRings() {
+  const canvas = document.getElementById('phase-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const state = window.singleState;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = W / 2;
+  const cy = H / 2;
+  const maxR = Math.min(W, H) / 2 - 20;
+  const ringSpacing = maxR / (state.params.length + 1);
+
+  state.params.forEach((param, i) => {
+    const r = ringSpacing * (i + 1.5);
+    const steps = param.loopLen;
+
+    // Draw ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = param.color + '30';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Draw step markers
+    for (let s = 0; s < steps; s++) {
+      const angle = (s / steps) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+
+      const isPlayhead = s === param.pos;
+      const isActive = param.values[s] > 0;
+
+      ctx.beginPath();
+      ctx.arc(x, y, isPlayhead ? 5 : 3, 0, Math.PI * 2);
+
+      if (isPlayhead) {
+        ctx.fillStyle = param.color;
+        ctx.shadowColor = param.color;
+        ctx.shadowBlur = 8;
+      } else if (isActive) {
+        ctx.fillStyle = param.color + '60';
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = param.color + '25';
+        ctx.shadowBlur = 0;
+      }
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // Label
+    const labelAngle = -Math.PI / 2;
+    const lx = cx + Math.cos(labelAngle) * (r + 12);
+    const ly = cy + Math.sin(labelAngle) * (r + 12);
+    ctx.fillStyle = param.color + '80';
+    ctx.font = '10px Menlo, Monaco, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(param.name + ' [' + steps + ']', lx, ly);
+  });
+}
+
+// ===== TIMELINE VISUALIZATION =====
+function renderTimeline(params) {
+  const container = document.getElementById('timeline-rows');
+  container.innerHTML = '';
+  const totalSteps = 64;
+
+  params.forEach(param => {
+    const row = document.createElement('div');
+    row.className = 'lcm-row';
+
+    const label = document.createElement('div');
+    label.className = 'lcm-label';
+    label.innerHTML = `<span class="pname" style="color:${param.color}">${param.name}</span> [${param.loopLen}]`;
+    row.appendChild(label);
+
+    const bar = document.createElement('div');
+    bar.className = 'lcm-bar';
+    bar.style.flexGrow = '1';
+
+    for (let i = 0; i < totalSteps; i++) {
+      const seg = document.createElement('div');
+      seg.className = 'lcm-segment';
+      const cyclePos = i % param.loopLen;
+      const brightness = Math.round(20 + (cyclePos / param.loopLen) * 40);
+      const isWrap = cyclePos === 0 && i > 0;
+      seg.style.background = isWrap
+        ? param.color
+        : param.color + (brightness < 16 ? '0' : '') + brightness.toString(16);
+      bar.appendChild(seg);
+    }
+    row.appendChild(bar);
+
+    container.appendChild(row);
+  });
+}
+
+// ===== MULTI-TRACK PLAYGROUND =====
+(function() {
+  const trackColors = ['#f0a030', '#e07828', '#d05820', '#c04018'];
+  const trackDefaults = [
+    { name: 'track 1', triggers: [1,0,1,0,1,1,0,1,0,1,0,1,1,0,1,0], loop: 16 },
+    { name: 'track 2', triggers: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], loop: 12 },
+    { name: 'track 3', triggers: [0,1,0,1,0,0,1,0,1,0,1,0,0,1,0,0], loop: 10 },
+    { name: 'track 4', triggers: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], loop: 7 }
+  ];
+
+  const state = {
+    tracks: trackDefaults.map((t, i) => ({
+      name: t.name,
+      color: trackColors[i],
+      triggers: [...t.triggers],
+      loopLen: t.loop,
+      pos: 0
+    })),
+    playing: false,
+    tick: 0,
+    interval: null,
+    log: []
+  };
+
+  const noteNames = ['C3','D3','E3','F3','G3','A3','B3','C4','D4','E4','F4','G4','A4','B4','C5','D5'];
+
+  function render() {
+    const container = document.getElementById('multi-track-rows');
+    container.innerHTML = '';
+
+    state.tracks.forEach((track, ti) => {
+      const section = document.createElement('div');
+      section.className = 'track-section';
+
+      const header = document.createElement('div');
+      header.className = 'track-header';
+      header.innerHTML = `
+        <span class="track-name t${ti+1}">${track.name}</span>
+        <span class="track-info">loop: ${track.loopLen} steps</span>
+      `;
+      section.appendChild(header);
+
+      const row = document.createElement('div');
+      row.className = 'track-row';
+
+      const label = document.createElement('div');
+      label.className = 'track-label';
+      label.innerHTML = '<div class="name" style="color:' + track.color + '">trigger</div>';
+      row.appendChild(label);
+
+      const steps = document.createElement('div');
+      steps.className = 'steps-container';
+
+      for (let i = 0; i < NUM_STEPS; i++) {
+        const step = document.createElement('div');
+        step.className = 'step';
+        const inLoop = i < track.loopLen;
+        if (inLoop) step.classList.add('in-loop');
+        else step.classList.add('out-of-loop');
+        if (inLoop && track.triggers[i]) step.classList.add('active');
+        if (i === track.pos && inLoop) step.classList.add('playhead');
+
+        step.addEventListener('click', () => {
+          if (i < track.loopLen) {
+            track.triggers[i] = track.triggers[i] ? 0 : 1;
+            render();
+          }
+        });
+
+        steps.appendChild(step);
+      }
+      row.appendChild(steps);
+
+      const ctrl = document.createElement('div');
+      ctrl.className = 'loop-control';
+      const btnM = document.createElement('button');
+      btnM.className = 'loop-len-btn';
+      btnM.textContent = '\u2212';
+      btnM.addEventListener('click', () => {
+        if (track.loopLen > 1) {
+          track.loopLen--;
+          if (track.pos >= track.loopLen) track.pos = 0;
+          render();
+        }
+      });
+      const disp = document.createElement('div');
+      disp.className = 'loop-len-display';
+      disp.textContent = track.loopLen;
+      const btnP = document.createElement('button');
+      btnP.className = 'loop-len-btn';
+      btnP.textContent = '+';
+      btnP.addEventListener('click', () => {
+        if (track.loopLen < NUM_STEPS) {
+          track.loopLen++;
+          render();
+        }
+      });
+      ctrl.appendChild(btnM);
+      ctrl.appendChild(disp);
+      ctrl.appendChild(btnP);
+      row.appendChild(ctrl);
+
+      section.appendChild(row);
+      container.appendChild(section);
+    });
+  }
+
+  function addLogEntry(tick, trackIdx, noteName) {
+    const log = document.getElementById('output-log');
+    state.log.push({ tick, track: trackIdx, note: noteName });
+    if (state.log.length > 40) state.log.shift();
+
+    log.innerHTML = state.log.map(e =>
+      `<div class="event t${e.track+1}"><span class="tick">${String(e.tick).padStart(4, ' ')}:</span> <span class="note">${state.tracks[e.track].name} \u25B6 ${e.note}</span></div>`
+    ).join('');
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function advance() {
+    state.tick++;
+    state.tracks.forEach((track, ti) => {
+      track.pos = (track.pos + 1) % track.loopLen;
+      if (track.triggers[track.pos]) {
+        addLogEntry(state.tick, ti, noteNames[(track.pos + ti * 3) % noteNames.length]);
+      }
+    });
+    document.getElementById('tempo-multi').textContent = 'step ' + state.tick;
+    render();
+  }
+
+  document.getElementById('btn-play-multi').addEventListener('click', function() {
+    if (state.playing) {
+      clearInterval(state.interval);
+      state.playing = false;
+      this.textContent = 'play';
+      this.classList.remove('active');
+    } else {
+      state.playing = true;
+      this.textContent = 'stop';
+      this.classList.add('active');
+      state.interval = setInterval(advance, TICK_MS);
+    }
+  });
+
+  document.getElementById('btn-reset-multi').addEventListener('click', () => {
+    if (state.playing) {
+      clearInterval(state.interval);
+      state.playing = false;
+      document.getElementById('btn-play-multi').textContent = 'play';
+      document.getElementById('btn-play-multi').classList.remove('active');
+    }
+    state.tick = 0;
+    state.tracks.forEach(t => t.pos = 0);
+    state.log = [];
+    document.getElementById('output-log').innerHTML = '';
+    document.getElementById('tempo-multi').textContent = 'step 0';
+    render();
+  });
+
+  render();
+})();
+
+// ===== SCROLL REVEAL =====
+(function() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) e.target.classList.add('visible');
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.section').forEach(s => observer.observe(s));
+})();
+</script>
+
+</body>
+</html>
