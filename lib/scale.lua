@@ -7,8 +7,9 @@ local M = {}
 -- Uses musicutil.generate_scale to build the note lookup
 function M.build_scale(root, scale_type)
   local mu = require("musicutil")
-  -- Generate 7 octaves of scale centered around root
+  -- Generate 8 octaves of scale starting below root
   -- root is MIDI note (e.g. 60 = middle C)
+  -- Clamp so generate_scale always gets a valid MIDI note (0-127)
   local start = math.max(0, math.min(127, root - 36))
   local notes = mu.generate_scale(start, scale_type, 8)
   return notes

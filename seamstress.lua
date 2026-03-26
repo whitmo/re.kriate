@@ -9,6 +9,7 @@
 local script_dir = debug.getinfo(1, "S").source:match("@(.*/)") or "./"
 package.path = script_dir .. "?.lua;" .. script_dir .. "?/init.lua;" .. package.path
 
+local log = require("lib/log")
 local app = require("lib/app")
 local sprite_voice = require("lib/voices/sprite")
 local screen_ui = require("lib/seamstress/screen_ui")
@@ -46,6 +47,8 @@ function init()
     redraw()
   end, "screen_metro.event")
   ctx.screen_metro:start()
+
+  log.info("init complete")
 end
 
 function redraw()

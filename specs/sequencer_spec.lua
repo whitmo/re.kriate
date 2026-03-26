@@ -443,6 +443,118 @@ describe("sequencer", function()
 
   end)
 
+  describe("mute/unmute timing", function()
+
+    it("mute-advance-unmute resumes from correct position (T025)", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      -- Enable triggers on all steps
+      for i = 1, 16 do
+        track.params.trigger.steps[i] = 1
+      end
+      -- Start at step 5
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        track.params[name].pos = 5
+      end
+
+      -- Mute and advance 3 steps
+      track.muted = true
+      for _ = 1, 3 do
+        sequencer.step_track(ctx, 1)
+      end
+
+      -- No notes should have fired while muted
+      local events = ctx.voices[1]:get_events()
+      assert.are.equal(0, #events)
+
+      -- Playhead should be at step 8 (5 -> 6 -> 7 -> 8)
+      assert.are.equal(8, track.params.trigger.pos)
+
+      -- Unmute and step — should fire from step 8
+      track.muted = false
+      sequencer.step_track(ctx, 1)
+
+      local note_evts = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #note_evts)
+      -- Playhead advanced to 9 after firing from 8
+      assert.are.equal(9, track.params.trigger.pos)
+    end)
+
+    it("double-mute remains muted with no error (T026)", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.muted = true
+
+      -- Mute again (double-mute)
+      track.muted = true
+      assert.is_true(track.muted)
+
+      -- Step should produce no notes and no error
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      sequencer.step_track(ctx, 1)
+      local events = ctx.voices[1]:get_events()
+      assert.are.equal(0, #events)
+      -- Playhead still advances
+      assert.are.equal(2, track.params.trigger.pos)
+    end)
+
+    it("all 4 tracks muted produces zero notes but all playheads advance (T027)", function()
+      local ctx, buffer = make_ctx()
+      -- Mute all tracks, enable triggers on all steps
+      for t = 1, track_mod.NUM_TRACKS do
+        ctx.tracks[t].muted = true
+        for i = 1, 16 do
+          ctx.tracks[t].params.trigger.steps[i] = 1
+        end
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          ctx.tracks[t].params[name].pos = 1
+        end
+      end
+
+      -- Advance all tracks 5 steps
+      for _ = 1, 5 do
+        for t = 1, track_mod.NUM_TRACKS do
+          sequencer.step_track(ctx, t)
+        end
+      end
+
+      -- Zero notes across all voices
+      for t = 1, track_mod.NUM_TRACKS do
+        local events = ctx.voices[t]:get_events()
+        assert.are.equal(0, #events, "track " .. t .. " should have 0 events")
+      end
+
+      -- All playheads at step 6
+      for t = 1, track_mod.NUM_TRACKS do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          assert.are.equal(6, ctx.tracks[t].params[name].pos,
+            "track " .. t .. " " .. name .. " should be at step 6")
+        end
+      end
+    end)
+
+    it("muted playhead position matches expected advance count (T028)", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.muted = true
+      track.params.trigger.pos = 3
+
+      -- Advance 10 steps from position 3 (loop 1-16)
+      for _ = 1, 10 do
+        sequencer.step_track(ctx, 1)
+      end
+
+      -- 3 -> 4 -> 5 -> ... -> 12 -> 13 (10 advances from pos 3)
+      assert.are.equal(13, track.params.trigger.pos)
+
+      -- Verify no note events
+      local events = ctx.voices[1]:get_events()
+      assert.are.equal(0, #events)
+    end)
+
+  end)
+
   describe("alt-note", function()
 
     it("alt_note value 1 does not alter the note degree", function()
@@ -663,6 +775,187 @@ describe("sequencer", function()
 
       local events = ctx.voices[1]:get_events()
       assert.are.equal(#events, 0)
+    end)
+
+  end)
+
+  describe("clock stop/start idempotency", function()
+
+    local clock_run_count
+    local clock_cancel_count
+    local original_clock_run
+    local original_clock_cancel
+
+    before_each(function()
+      clock_run_count = 0
+      clock_cancel_count = 0
+      original_clock_run = clock.run
+      original_clock_cancel = clock.cancel
+      clock.run = function(fn)
+        clock_run_count = clock_run_count + 1
+        if clock_run_immediate then fn() end
+        return clock_run_count
+      end
+      clock.cancel = function(id)
+        clock_cancel_count = clock_cancel_count + 1
+      end
+    end)
+
+    after_each(function()
+      clock.run = original_clock_run
+      clock.cancel = original_clock_cancel
+    end)
+
+    it("double-start creates no duplicate coroutines (T012)", function()
+      local ctx = make_ctx()
+      sequencer.start(ctx)
+      local first_count = clock_run_count
+      assert.are.equal(track_mod.NUM_TRACKS, first_count)
+
+      sequencer.start(ctx)
+      -- No additional coroutines created
+      assert.are.equal(first_count, clock_run_count)
+      assert.is_true(ctx.playing)
+    end)
+
+    it("double-stop causes no error and state remains stopped (T013)", function()
+      local ctx = make_ctx()
+      ctx.playing = false
+
+      sequencer.stop(ctx)
+      assert.is_false(ctx.playing)
+
+      sequencer.stop(ctx)
+      assert.is_false(ctx.playing)
+
+      -- Nothing to cancel when already stopped
+      assert.are.equal(0, clock_cancel_count)
+    end)
+
+    it("rapid start/stop 50x toggle produces consistent end state (T014)", function()
+      local ctx = make_ctx()
+
+      for i = 1, 50 do
+        if i % 2 == 1 then
+          sequencer.start(ctx)
+        else
+          sequencer.stop(ctx)
+        end
+      end
+
+      -- 50 iterations: odd=start, even=stop -> ends stopped
+      assert.is_false(ctx.playing)
+      assert.is_nil(ctx.clock_ids)
+
+      -- 25 starts × NUM_TRACKS coroutines each, 25 stops × NUM_TRACKS cancels each
+      assert.are.equal(25 * track_mod.NUM_TRACKS, clock_run_count)
+      assert.are.equal(25 * track_mod.NUM_TRACKS, clock_cancel_count)
+    end)
+
+    it("stop then start resumes from current playhead, not reset (T015)", function()
+      local ctx = make_ctx()
+
+      -- Advance all tracks to step 5
+      for t = 1, track_mod.NUM_TRACKS do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          ctx.tracks[t].params[name].pos = 5
+        end
+      end
+
+      sequencer.start(ctx)
+      sequencer.stop(ctx)
+
+      -- Playheads NOT reset
+      for t = 1, track_mod.NUM_TRACKS do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          assert.are.equal(5, ctx.tracks[t].params[name].pos,
+            "track " .. t .. " " .. name .. " should remain at step 5")
+        end
+      end
+
+      -- Restart — still at 5
+      sequencer.start(ctx)
+      assert.is_true(ctx.playing)
+      for t = 1, track_mod.NUM_TRACKS do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          assert.are.equal(5, ctx.tracks[t].params[name].pos,
+            "track " .. t .. " " .. name .. " should still be at step 5 after restart")
+        end
+      end
+    end)
+
+  end)
+
+  describe("scale change mid-playback", function()
+
+    it("next note uses new scale after scale change (T029)", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.steps[2] = 1
+      track.params.trigger.pos = 1
+      track.params.note.steps[1] = 3
+      track.params.note.steps[2] = 3
+      track.params.note.pos = 1
+      track.params.octave.steps[1] = 4
+      track.params.octave.steps[2] = 4
+      track.params.octave.pos = 1
+      track.params.alt_note.steps[1] = 1
+      track.params.alt_note.steps[2] = 1
+      track.params.alt_note.pos = 1
+
+      -- Step once with original scale
+      sequencer.step_track(ctx, 1)
+      local events1 = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #events1)
+      local note_before = events1[1].note
+
+      -- Build a different scale (shift all notes up by 1 semitone)
+      local new_scale = {}
+      for i = 1, #ctx.scale_notes do
+        new_scale[i] = ctx.scale_notes[i] + 1
+      end
+      ctx.scale_notes = new_scale
+
+      -- Step again — should use the new scale
+      sequencer.step_track(ctx, 1)
+      local events2 = note_events_for(ctx.voices[1])
+      assert.are.equal(2, #events2)
+      local note_after = events2[2].note
+
+      -- The note should differ by exactly 1 semitone (shifted scale)
+      assert.are.equal(note_before + 1, note_after)
+    end)
+
+    it("already-sounding notes not retroactively re-pitched (T031)", function()
+      local ctx, buffer = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.note.steps[1] = 3
+      track.params.note.pos = 1
+      track.params.octave.steps[1] = 4
+      track.params.octave.pos = 1
+      track.params.alt_note.steps[1] = 1
+      track.params.alt_note.pos = 1
+
+      -- Play a note
+      sequencer.step_track(ctx, 1)
+      local events = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #events)
+      local original_note = events[1].note
+
+      -- Change scale
+      local new_scale = {}
+      for i = 1, #ctx.scale_notes do
+        new_scale[i] = ctx.scale_notes[i] + 5
+      end
+      ctx.scale_notes = new_scale
+
+      -- The already-recorded event still has the original pitch
+      local events_after = note_events_for(ctx.voices[1])
+      assert.are.equal(1, #events_after)
+      assert.are.equal(original_note, events_after[1].note)
     end)
 
   end)

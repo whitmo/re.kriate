@@ -319,22 +319,19 @@ describe("midi voice", function()
 
   describe("all_notes_off", function()
     it("cancels coroutines and sends note_off for active notes", function()
+      -- Voice is monophonic: playing 60 then 64 cancels 60 during second play_note
       voice:play_note(60, 0.8, 0.25)
-      voice:play_note(64, 0.6, 0.5)
       local coro1 = 1
-      local coro2 = 2
+      voice:play_note(64, 0.6, 0.5)
+      -- coro1 cancelled during second play_note (monophonic retrigger)
+      assert.is_true(cancelled_coros[coro1])
 
       -- Clear call history to focus on all_notes_off
       for i = #dev.calls, 1, -1 do table.remove(dev.calls, i) end
 
       voice:all_notes_off()
 
-      -- Both coroutines cancelled
-      assert.is_true(cancelled_coros[coro1])
-      assert.is_true(cancelled_coros[coro2])
-
-      -- note_off sent for both notes, plus CC 123
-      -- Note: pairs iteration order is not guaranteed, so check by content
+      -- Only note 64 is active when all_notes_off is called
       local note_offs = {}
       local cc_sent = false
       for _, call in ipairs(dev.calls) do
@@ -347,7 +344,6 @@ describe("midi voice", function()
           assert.are.equal(call.ch, 1)
         end
       end
-      assert.is_true(note_offs[60])
       assert.is_true(note_offs[64])
       assert.is_true(cc_sent)
     end)
@@ -400,6 +396,96 @@ describe("midi voice", function()
       assert.are.equal(dev.calls[1].type, "note_off")
       assert.are.equal(dev.calls[1].note, 60)
       assert.is_nil(voice.active_notes[1 * 128 + 60])
+    end)
+  end)
+
+  describe("note retrigger safety", function()
+    it("sends note-off for previous note before note-on for different note (T008)", function()
+      voice:play_note(60, 0.8, 0.25)  -- C4
+      voice:play_note(62, 0.7, 0.25)  -- D4, before C4 duration expires
+
+      -- Monophonic voice: should see note_on(C4), note_off(C4), note_on(D4)
+      assert.are.equal(3, #dev.calls)
+      assert.are.equal("note_on", dev.calls[1].type)
+      assert.are.equal(60, dev.calls[1].note)
+      assert.are.equal("note_off", dev.calls[2].type)
+      assert.are.equal(60, dev.calls[2].note)
+      assert.are.equal("note_on", dev.calls[3].type)
+      assert.are.equal(62, dev.calls[3].note)
+    end)
+
+    it("sends note-off then fresh note-on for same-note retrigger (T009)", function()
+      voice:play_note(60, 0.8, 0.25)  -- C4
+      voice:play_note(60, 0.7, 0.25)  -- C4 again
+
+      -- Should see note_on(C4), note_off(C4), note_on(C4)
+      assert.are.equal(3, #dev.calls)
+      assert.are.equal("note_on", dev.calls[1].type)
+      assert.are.equal(60, dev.calls[1].note)
+      assert.are.equal("note_off", dev.calls[2].type)
+      assert.are.equal(60, dev.calls[2].note)
+      assert.are.equal("note_on", dev.calls[3].type)
+      assert.are.equal(60, dev.calls[3].note)
+    end)
+
+    it("rapid 16-step all-trigger: each note-on preceded by note-off, zero orphaned notes (T010)", function()
+      -- Simulate 16 sequential steps with different notes and long duration
+      local notes = {60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84, 86}
+      for _, n in ipairs(notes) do
+        voice:play_note(n, 0.8, 4.0)  -- long duration, won't expire during rapid sequence
+      end
+
+      -- First note: just note_on
+      -- Each subsequent note: note_off(prev) + note_on(new)
+      -- Total calls: 1 + 15*2 = 31
+      assert.are.equal(31, #dev.calls)
+
+      -- First event is note_on for first note
+      assert.are.equal("note_on", dev.calls[1].type)
+      assert.are.equal(60, dev.calls[1].note)
+
+      -- Each subsequent pair: note_off(prev), note_on(next)
+      for i = 2, 16 do
+        local off_idx = (i - 1) * 2
+        local on_idx = off_idx + 1
+        assert.are.equal("note_off", dev.calls[off_idx].type)
+        assert.are.equal(notes[i - 1], dev.calls[off_idx].note)
+        assert.are.equal("note_on", dev.calls[on_idx].type)
+        assert.are.equal(notes[i], dev.calls[on_idx].note)
+      end
+
+      -- Only the last note should be active
+      local active_count = 0
+      for _ in pairs(voice.active_notes) do active_count = active_count + 1 end
+      assert.are.equal(1, active_count)
+    end)
+
+    it("all_notes_off on cleanup silences everything (T011)", function()
+      -- Play several notes in sequence (monophonic, so only last is active)
+      voice:play_note(60, 0.8, 4.0)
+      voice:play_note(64, 0.7, 4.0)
+      voice:play_note(67, 0.6, 4.0)
+
+      -- Clear call history to focus on all_notes_off
+      for i = #dev.calls, 1, -1 do table.remove(dev.calls, i) end
+
+      voice:all_notes_off()
+
+      -- Should send note_off for the last active note (67) + CC 123
+      local note_offs = {}
+      local cc_sent = false
+      for _, call in ipairs(dev.calls) do
+        if call.type == "note_off" then
+          note_offs[call.note] = true
+        elseif call.type == "cc" and call.num == 123 then
+          cc_sent = true
+        end
+      end
+      assert.is_true(note_offs[67])
+      assert.is_true(cc_sent)
+
+      -- No active notes remain
+      assert.are.same({}, voice.active_notes)
     end)
   end)
 

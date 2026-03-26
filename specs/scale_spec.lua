@@ -229,4 +229,44 @@ describe("scale", function()
 
   end)
 
+  describe("degree wrapping with shorter scale", function()
+
+    it("degree 7 on a 5-note scale returns a valid note without error (T030)", function()
+      -- Build a pentatonic-like scale (5 notes per octave)
+      local orig = mock_musicutil.generate_scale
+      mock_musicutil.generate_scale = function(root, stype, octaves)
+        local intervals = {0, 2, 4, 7, 9}  -- pentatonic
+        local notes = {}
+        for oct = 0, octaves - 1 do
+          for _, interval in ipairs(intervals) do
+            table.insert(notes, root + oct * 12 + interval)
+          end
+        end
+        table.insert(notes, root + octaves * 12)
+        return notes
+      end
+
+      local penta_notes = scale.build_scale(60, "Pentatonic")
+      mock_musicutil.generate_scale = orig
+
+      -- degree=7 with a pentatonic scale — idx = 3*7+7 = 28
+      -- pentatonic has 5*8+1 = 41 notes, so idx 28 is valid
+      local note = scale.to_midi(7, 4, penta_notes)
+      assert.are.equal(type(note), "number")
+
+      -- Verify it returns a value from the scale
+      local found = false
+      for _, n in ipairs(penta_notes) do
+        if n == note then found = true; break end
+      end
+      assert.is_true(found, "note " .. note .. " should be in pentatonic scale")
+
+      -- Also test degree 7 at high octave — still no crash
+      local high_note = scale.to_midi(7, 7, penta_notes)
+      assert.are.equal(type(high_note), "number")
+      assert.is_true(high_note >= note, "higher octave should give higher or equal note")
+    end)
+
+  end)
+
 end)

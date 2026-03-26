@@ -658,4 +658,182 @@ describe("integration", function()
 
   end)
 
+  describe("edge cases (T032-T039)", function()
+
+    -- T032: loop_start > loop_end is rejected by set_loop
+    it("T032 set_loop rejects loop_start > loop_end in integration context", function()
+      local ctx = make_app()
+      local param = ctx.tracks[1].params.trigger
+      local orig_start = param.loop_start
+      local orig_end = param.loop_end
+      -- Attempt to set invalid loop
+      track_mod.set_loop(param, 12, 4)  -- start > end
+      -- Should be unchanged (set_loop rejects invalid bounds)
+      assert.are.equal(orig_start, param.loop_start)
+      assert.are.equal(orig_end, param.loop_end)
+    end)
+
+    -- T033: all-zero triggers track — playhead advances, no notes fire
+    it("T033 all-zero triggers track advances playhead without firing notes", function()
+      local ctx, buffer = make_app()
+      -- Set all triggers to 0
+      for i = 1, track_mod.NUM_STEPS do
+        ctx.tracks[1].params.trigger.steps[i] = 0
+      end
+      local start_pos = ctx.tracks[1].params.trigger.pos
+
+      -- Step 5 times
+      for _ = 1, 5 do
+        sequencer.step_track(ctx, 1)
+      end
+
+      local notes = note_events(buffer)
+      assert.are.equal(0, #notes, "no notes should fire with all-zero triggers")
+      -- Playhead should have advanced from initial position
+      assert.are_not.equal(start_pos, ctx.tracks[1].params.trigger.pos,
+        "playhead should advance even with no triggers")
+    end)
+
+    -- T034: load never-saved slot — defaults gracefully, no error
+    it("T034 loading a never-saved pattern slot is safe and leaves tracks unchanged", function()
+      local pattern_mod = require("lib/pattern")
+      local ctx = make_app()
+      -- Set a distinctive value so we can detect changes
+      ctx.tracks[1].params.note.steps[1] = 7
+      local before = ctx.tracks[1].params.note.steps[1]
+
+      -- Load slot 5 (never saved)
+      pattern_mod.load(ctx, 5)
+
+      -- Tracks should be unchanged (load returns early if not populated)
+      assert.are.equal(before, ctx.tracks[1].params.note.steps[1],
+        "tracks should be unchanged after loading empty slot")
+    end)
+
+    -- T035: 4 tracks × random direction × single-step loops — no crash
+    it("T035 four tracks with random direction and single-step loops do not crash", function()
+      local ctx, buffer = make_app()
+      for t = 1, track_mod.NUM_TRACKS do
+        params:set("direction_" .. t, 5)  -- 5 = random
+        assert.are.equal("random", ctx.tracks[t].direction)
+        -- Set single-step loops on all params
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          track_mod.set_loop(ctx.tracks[t].params[name], 1, 1)
+        end
+        ctx.tracks[t].params.trigger.steps[1] = 1
+      end
+
+      -- Advance all tracks 20 times — must not crash
+      for _ = 1, 20 do
+        for t = 1, track_mod.NUM_TRACKS do
+          sequencer.step_track(ctx, t)
+        end
+      end
+
+      -- All playheads should still be at step 1 (single-step loop)
+      for t = 1, track_mod.NUM_TRACKS do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          assert.are.equal(1, ctx.tracks[t].params[name].pos,
+            "track " .. t .. " " .. name .. " should stay at step 1")
+        end
+      end
+    end)
+
+    -- T036: 1-degree scale — all notes map to single pitch
+    it("T036 single-degree scale maps all notes to the same pitch", function()
+      local ctx, buffer = make_app()
+      -- Replace scale_notes with a single repeated note
+      ctx.scale_notes = {}
+      for i = 1, 56 do  -- 8 octaves × 7 degrees
+        ctx.scale_notes[i] = 60  -- all map to middle C
+      end
+
+      -- Play several steps with different note degrees
+      for step = 1, 4 do
+        ctx.tracks[1].params.trigger.steps[step] = 1
+        ctx.tracks[1].params.note.steps[step] = step  -- degrees 1,2,3,4
+      end
+      ctx.tracks[1].params.trigger.loop_end = 4
+      ctx.tracks[1].params.note.loop_end = 4
+
+      for _ = 1, 4 do
+        sequencer.step_track(ctx, 1)
+      end
+
+      local notes = note_events(buffer)
+      assert.are.equal(4, #notes, "should fire 4 notes")
+      for i, e in ipairs(notes) do
+        assert.are.equal(60, e.note, "note " .. i .. " should be 60 (single-degree scale)")
+      end
+    end)
+
+    -- T037: extreme clock division (min and max) — sequencer still functions
+    it("T037 extreme clock division values do not break step_track", function()
+      local ctx, buffer = make_app()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+
+      -- Min division (1 = sixteenth notes)
+      ctx.tracks[1].division = 1
+      sequencer.step_track(ctx, 1)
+      local notes1 = note_events(buffer)
+      assert.is_true(#notes1 >= 1, "should fire note at min division")
+
+      -- Clear buffer and reset trigger pos
+      for i = #buffer, 1, -1 do table.remove(buffer, i) end
+      ctx.tracks[1].params.trigger.pos = 1
+
+      -- Max division (7 = whole notes)
+      ctx.tracks[1].division = 7
+      sequencer.step_track(ctx, 1)
+      local notes2 = note_events(buffer)
+      assert.is_true(#notes2 >= 1, "should fire note at max division")
+    end)
+
+    -- T038: cleanup mid-step — note-on sent, pending note-off, cleanup silences all
+    it("T038 cleanup mid-step silences all notes via all_notes_off", function()
+      local ctx, buffer = make_app()
+      -- Play a note (simulates mid-step: note-on sent, note-off pending)
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[1].params.trigger.pos = 1
+      sequencer.step_track(ctx, 1)
+
+      local notes_before = note_events(buffer)
+      assert.is_true(#notes_before >= 1, "should have at least one note-on")
+
+      -- Now call cleanup (while that note is "sounding")
+      app.cleanup(ctx)
+
+      -- Verify all_notes_off was sent for every voice
+      local off_count = 0
+      for _, e in ipairs(buffer) do
+        if e.type == "all_notes_off" then off_count = off_count + 1 end
+      end
+      -- cleanup calls sequencer.stop (which sends all_notes_off for each track)
+      -- plus its own all_notes_off for each voice = 2× per track
+      assert.is_true(off_count >= track_mod.NUM_TRACKS,
+        "should have at least " .. track_mod.NUM_TRACKS .. " all_notes_off events, got " .. off_count)
+    end)
+
+    -- T039: muted track grid editing — data reflects edits even when muted
+    it("T039 muted track accepts step edits while muted", function()
+      local ctx = make_app()
+      ctx.tracks[1].muted = true
+
+      -- Edit step values while muted
+      track_mod.set_step(ctx.tracks[1].params.note, 3, 7)
+      -- Track 1 step 2 defaults to trigger=0, so toggle should set it to 1
+      track_mod.toggle_step(ctx.tracks[1].params.trigger, 2)
+
+      -- Verify edits took effect despite mute
+      assert.are.equal(7, ctx.tracks[1].params.note.steps[3],
+        "note step should be edited while muted")
+      assert.are.equal(1, ctx.tracks[1].params.trigger.steps[2],
+        "trigger toggle should work while muted")
+
+      -- Unmute and play — the edited values should be used
+      ctx.tracks[1].muted = false
+    end)
+
+  end)
+
 end)

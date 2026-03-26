@@ -155,6 +155,77 @@ describe("direction", function()
     end)
   end)
 
+  -- T021-T024: Quality hardening — direction mode transitions
+  describe("direction mode transitions", function()
+
+    -- T021: forward-to-reverse mid-sequence
+    it("changing from forward to reverse at step 8 produces step 7 next", function()
+      local p = make_param({1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}, 1, 16, 1)
+      -- Advance forward to step 8
+      for _ = 1, 7 do
+        direction.advance(p, "forward")
+      end
+      assert.are.equal(8, p.pos)
+
+      -- Switch to reverse — next advance should read step 8, then move to step 7
+      local val = direction.advance(p, "reverse")
+      assert.are.equal(8, val)  -- value at pos 8 before advancing
+      assert.are.equal(7, p.pos)  -- now at step 7
+    end)
+
+    -- T022: pendulum-to-forward transition
+    it("changing from pendulum to forward continues forward from current position", function()
+      local p = make_param({10,20,30,40,50,60,70,80}, 1, 8, 1)
+      p.advancing_forward = true
+
+      -- Advance in pendulum: 1->2->3->4->5->6->7->8->7->6
+      for _ = 1, 9 do
+        direction.advance(p, "pendulum")
+      end
+      -- After 9 advances from pos 1: 1,2,3,4,5,6,7,8,7 -> pos should be 6
+      assert.are.equal(6, p.pos)
+
+      -- Switch to forward — should continue forward from 6
+      local val = direction.advance(p, "forward")
+      assert.are.equal(60, val)  -- value at pos 6
+      assert.are.equal(7, p.pos)  -- moved forward to 7
+
+      val = direction.advance(p, "forward")
+      assert.are.equal(70, val)
+      assert.are.equal(8, p.pos)
+    end)
+
+    -- T023: single-step loop direction change
+    it("single-step loop stays on that step regardless of direction mode", function()
+      local modes = {"forward", "reverse", "pendulum", "drunk", "random"}
+      for _, mode in ipairs(modes) do
+        local p = make_param({42}, 1, 1, 1)
+        p.advancing_forward = true
+        for _ = 1, 10 do
+          local val = direction.advance(p, mode)
+          assert.are.equal(42, val, "value should be 42 in mode: " .. mode)
+          assert.are.equal(1, p.pos, "pos should stay 1 in mode: " .. mode)
+        end
+      end
+    end)
+
+    -- T024: drunk mid-change boundary test
+    it("switching to drunk keeps all subsequent steps within loop bounds", function()
+      local p = make_param({1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}, 5, 12, 5)
+      -- Advance forward a few steps
+      for _ = 1, 3 do
+        direction.advance(p, "forward")
+      end
+      -- Now switch to drunk and verify bounds for many steps
+      for _ = 1, 200 do
+        direction.advance(p, "drunk")
+        assert.is_true(p.pos >= 5, "pos " .. p.pos .. " below loop_start 5")
+        assert.is_true(p.pos <= 12, "pos " .. p.pos .. " above loop_end 12")
+      end
+    end)
+
+  end)
+
   describe("nil/missing direction defaults to forward", function()
     it("treats nil direction as forward", function()
       local p = make_param({10, 20, 30, 40}, 1, 4, 1)
