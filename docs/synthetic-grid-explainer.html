@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate Synthetic Grid Explainer</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --text: #e0e0e0;
+    --text-dim: #8888aa;
+    --accent: #e94560;
+    --accent2: #0f3460;
+    --green: #4ecca3;
+    --yellow: #ffd93d;
+    --blue: #6bcbef;
+    --orange: #ff8c42;
+    --purple: #b56cff;
+    --grid-off: #222233;
+    --grid-dim: #334455;
+    --grid-mid: #5577aa;
+    --grid-bright: #88bbee;
+    --grid-max: #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2rem;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.5px;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+    color: var(--blue);
+    margin: 2rem 0 1rem;
+    border-bottom: 1px solid var(--surface2);
+    padding-bottom: 0.5rem;
+  }
+
+  h3 {
+    font-size: 1.1rem;
+    color: var(--green);
+    margin: 1.5rem 0 0.5rem;
+  }
+
+  p, li {
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+  }
+
+  code {
+    background: var(--surface);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: var(--yellow);
+  }
+
+  pre {
+    background: var(--surface);
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 1rem 0;
+    border: 1px solid var(--surface2);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+
+  .grid-container {
+    display: inline-block;
+    background: var(--surface);
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin: 1rem 0;
+    border: 1px solid var(--surface2);
+  }
+
+  .grid-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+    text-align: center;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 3px;
+  }
+
+  .grid-cell {
+    width: 38px;
+    height: 28px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: bold;
+    transition: all 0.15s;
+    cursor: default;
+    position: relative;
+  }
+
+  .grid-cell.header {
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+  }
+
+  .grid-cell.row-label {
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    width: 28px;
+  }
+
+  /* Brightness levels */
+  .b0  { background: #111122; color: #333; }
+  .b1  { background: #1a1a33; color: #555; }
+  .b2  { background: #222244; color: #777; }
+  .b3  { background: #2a3355; color: #999; }
+  .b4  { background: #334466; color: #aaa; }
+  .b5  { background: #3d5577; color: #bbb; }
+  .b6  { background: #476688; color: #ccc; }
+  .b7  { background: #517799; color: #ddd; }
+  .b8  { background: #5b88aa; color: #eee; }
+  .b9  { background: #6599bb; color: #fff; }
+  .b10 { background: #6faacc; color: #fff; }
+  .b11 { background: #79bbdd; color: #fff; }
+  .b12 { background: #83ccee; color: #fff; }
+  .b13 { background: #8dddee; color: #fff; }
+  .b14 { background: #97eeff; color: #fff; }
+  .b15 { background: #ffffff; color: #111; }
+
+  /* Region highlights */
+  .region-trigger { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .region-nav-track { outline: 2px solid var(--green); outline-offset: -1px; }
+  .region-nav-page { outline: 2px solid var(--yellow); outline-offset: -1px; }
+  .region-nav-loop { outline: 2px solid var(--orange); outline-offset: -1px; }
+  .region-nav-play { outline: 2px solid var(--purple); outline-offset: -1px; }
+
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .legend-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 900px) {
+    .two-col { grid-template-columns: 1fr; }
+    .grid-cell { width: 28px; height: 22px; font-size: 0.55rem; }
+    .grid { gap: 2px; }
+  }
+
+  .scenario {
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .scenario-title {
+    color: var(--yellow);
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--accent);
+    padding: 0.5rem;
+  }
+
+  .dump-box {
+    background: #0d0d1a;
+    border: 1px solid var(--surface2);
+    border-radius: 4px;
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .brightness-bar {
+    display: flex;
+    gap: 2px;
+    margin: 0.5rem 0;
+  }
+
+  .brightness-bar .cell {
+    width: 50px;
+    height: 32px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+  }
+
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--surface2);
+    margin: 2rem 0;
+  }
+
+  ul {
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+  }
+
+  .callout {
+    background: var(--surface);
+    border-left: 3px solid var(--green);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .callout-warn {
+    border-left-color: var(--yellow);
+  }
+</style>
+</head>
+<body>
+
+<h1>re.kriate Synthetic Grid</h1>
+<p class="subtitle">A virtual 16x8 monome grid for testing and visualization &mdash; no hardware required.</p>
+
+<!-- ============================================================ -->
+<h2>Grid Layout (16x8)</h2>
+<p>
+  The monome grid is a 16-column by 8-row matrix of backlit buttons.
+  Each button has an LED with brightness 0&ndash;15 and can detect press (z=1) and release (z=0).
+  re.kriate divides this grid into functional regions:
+</p>
+
+<div class="grid-container">
+  <div class="grid-label">Trigger Page &mdash; Annotated Regions</div>
+  <div class="grid" id="layout-grid"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item">
+    <span class="legend-swatch" style="background: var(--accent);"></span>
+    Rows 1&ndash;4: Step data (trigger / value)
+  </div>
+  <div class="legend-item">
+    <span class="legend-swatch" style="background: var(--green);"></span>
+    Nav: Track select (x=1&ndash;4)
+  </div>
+  <div class="legend-item">
+    <span class="legend-swatch" style="background: var(--yellow);"></span>
+    Nav: Page select (x=6&ndash;10)
+  </div>
+  <div class="legend-item">
+    <span class="legend-swatch" style="background: var(--orange);"></span>
+    Nav: Loop modifier (x=12)
+  </div>
+  <div class="legend-item">
+    <span class="legend-swatch" style="background: var(--purple);"></span>
+    Nav: Play/Stop (x=16)
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Pages:</strong>
+  On the <em>trigger</em> page, rows 1&ndash;4 show all four tracks simultaneously (one track per row).
+  On <em>value</em> pages (note, octave, duration, velocity), rows 1&ndash;7 show the active track's step values as a vertical bar chart (row 1 = value 7, row 7 = value 1).
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<h2>LED Brightness Mapping</h2>
+<p>
+  Each LED has 16 brightness levels (0&ndash;15). The synthetic grid displays these as characters in its text dump:
+</p>
+
+<div class="brightness-bar" id="brightness-bar"></div>
+
+<pre>Dump characters:  .  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+Brightness:       0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15</pre>
+
+<h3>Brightness semantics in re.kriate</h3>
+<ul>
+  <li><strong>0</strong> &mdash; LED off (outside loop, or empty)</li>
+  <li><strong>2</strong> &mdash; In loop region, no data at this step</li>
+  <li><strong>3</strong> &mdash; Unselected nav button, or value bar fill</li>
+  <li><strong>4</strong> &mdash; Value marker outside loop</li>
+  <li><strong>8</strong> &mdash; Active trigger step / data present</li>
+  <li><strong>10</strong> &mdash; Value marker inside loop</li>
+  <li><strong>12</strong> &mdash; Selected nav button (active track/page/loop)</li>
+  <li><strong>15</strong> &mdash; Playhead position (brightest)</li>
+</ul>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<h2>Synthetic Grid Architecture</h2>
+
+<p>
+  The synthetic grid is a provider in the pluggable <code>grid_provider</code> system.
+  It creates an in-memory 16x8 LED matrix that tracks all <code>led()</code> calls
+  and supports key simulation without any hardware dependency.
+</p>
+
+<pre>
+-- Create a synthetic grid
+local grid_provider = require("lib/grid_provider")
+local g = grid_provider.connect("synthetic")
+
+-- Set LEDs (same API as hardware grid)
+g:all(0)              -- clear all
+g:led(5, 3, 12)      -- set LED at col 5, row 3 to brightness 12
+g:refresh()           -- push state (no-op for synthetic)
+
+-- Query LED state
+local b = g:get_led(5, 3)   -- returns 12
+local state = g:get_state() -- returns full 8x16 matrix
+
+-- Dump formatted text
+print(g:dump())       -- prints formatted grid with brightness chars
+
+-- Simulate key press
+g.key = function(x, y, z) ... end  -- register callback
+g:simulate_key(5, 3, 1)            -- fires callback with press
+g:simulate_key(5, 3, 0)            -- fires callback with release
+</pre>
+
+<h3>Test Helpers</h3>
+<p>
+  The <code>specs/lib/synthetic_grid.lua</code> module provides convenience functions
+  for test setup, key simulation, and LED assertions:
+</p>
+
+<pre>
+local synth = require("specs/lib/synthetic_grid")
+
+-- Setup: creates wired ctx + grid (key callback routes through grid_ui)
+local ctx, g = synth.setup({ active_page = "trigger", active_track = 1 })
+
+-- Render the grid (calls grid_ui.redraw)
+synth.render(ctx)
+
+-- Simulate user input
+synth.tap(g, 5, 1)          -- press + release at col 5, row 1
+synth.press(g, 12, 8)       -- hold loop button
+synth.tap_sequence(g, {{3,1}, {8,1}})  -- multiple taps
+
+-- Assert on LED state
+synth.assert_led(g, 1, 8, 12)       -- exact brightness
+synth.assert_led_gte(g, 5, 1, 8)    -- brightness >= 8
+synth.assert_led_lt(g, 2, 1, 8)     -- brightness < 8
+synth.assert_led_on(g, 1, 1)        -- brightness > 0
+synth.assert_led_off(g, 5, 5)       -- brightness == 0
+
+-- Debug output
+print(synth.dump(g))                 -- formatted text dump
+local row = synth.get_row(g, 8)      -- get nav row values
+local lit = synth.count_lit(g, 1, 8) -- count LEDs >= 8 in row 1
+</pre>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<h2>Test Scenarios</h2>
+
+<div class="scenario">
+  <div class="scenario-title">Scenario 1: Trigger Page &mdash; Default State</div>
+  <p>After <code>synth.setup({ active_page = "trigger" })</code> and <code>synth.render(ctx)</code>:</p>
+
+  <div class="grid-container" style="margin-top: 1rem;">
+    <div class="grid-label">Trigger Page (default pattern, stopped)</div>
+    <div class="grid" id="scenario1-grid"></div>
+  </div>
+
+  <div class="dump-box" id="scenario1-dump"></div>
+
+  <div class="callout" style="margin-top: 1rem;">
+    Rows 1&ndash;4 show each track's trigger pattern. Brightness 8 = active trigger step,
+    brightness 2 = in loop but no trigger. Row 8 shows navigation:
+    track 1 selected (C=12), trigger page selected (C=12), other buttons dim (3).
+  </div>
+</div>
+
+<div class="scenario">
+  <div class="scenario-title">Scenario 2: Toggle Trigger &mdash; Before / After</div>
+  <p>Pressing step 2 on track 1 toggles the trigger:</p>
+
+  <div class="two-col">
+    <div>
+      <div class="grid-container">
+        <div class="grid-label">Before: step 2 is OFF (brightness 2)</div>
+        <div class="grid" id="scenario2a-grid"></div>
+      </div>
+    </div>
+    <div>
+      <div class="grid-container">
+        <div class="grid-label">After tap(g, 2, 1): step 2 is ON (brightness 8)</div>
+        <div class="grid" id="scenario2b-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <pre>synth.tap(g, 2, 1)  -- toggle trigger at col 2, row 1 (track 1, step 2)
+synth.render(ctx)    -- re-render to see change</pre>
+</div>
+
+<div class="scenario">
+  <div class="scenario-title">Scenario 3: Playing &mdash; Playhead Visible</div>
+  <p>When <code>ctx.playing = true</code>, the current position lights at maximum brightness (15):</p>
+
+  <div class="grid-container">
+    <div class="grid-label">Trigger Page (playing, position=1)</div>
+    <div class="grid" id="scenario3-grid"></div>
+  </div>
+
+  <div class="callout">
+    Column 1 across all tracks shows brightness 15 (F in dump) &mdash; the playhead.
+    The play button (x=16, y=8) also shows brightness 12 when playing.
+  </div>
+</div>
+
+<div class="scenario">
+  <div class="scenario-title">Scenario 4: Note Page &mdash; Value Display</div>
+  <p>On the note page, rows 1&ndash;7 show the active track's note values as a vertical bar.
+     Row 1 = value 7 (highest), row 7 = value 1 (lowest).</p>
+
+  <div class="grid-container">
+    <div class="grid-label">Note Page (track 1, default pattern)</div>
+    <div class="grid" id="scenario4-grid"></div>
+  </div>
+
+  <div class="callout">
+    The note value at each step is shown as a bright dot (brightness 10 in loop, 4 outside).
+    Steps below the value show a dim fill (brightness 3). The note page button (x=7, y=8)
+    is now selected (C=12) instead of the trigger button.
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<h2>Provider System</h2>
+
+<p>
+  The synthetic grid slots into the existing provider architecture in <code>lib/grid_provider.lua</code>.
+  Providers are registered by name and created via <code>grid_provider.connect(name, opts)</code>.
+</p>
+
+<pre>
+Registered providers:
+  "monome"    -- hardware grid via grid.connect()
+  "midigrid"  -- MIDI controller emulating grid
+  "virtual"   -- basic in-memory grid (remote UIs)
+  "synthetic" -- testing grid with dump() and simulate_key()
+
+All providers implement:
+  :all(brightness)   -- set all LEDs
+  :led(x, y, b)     -- set single LED
+  :refresh()         -- push state
+  .key               -- callback for key events
+  :cols()            -- column count (16)
+  :rows()            -- row count (8)
+  :cleanup()         -- teardown
+
+Synthetic additionally provides:
+  :get_led(x, y)          -- query LED brightness
+  :get_state()            -- full LED matrix
+  :dump()                 -- formatted text
+  :simulate_key(x, y, z)  -- fire key callback
+  :clear_state()          -- reset LEDs
+</pre>
+
+<script>
+// ============================================================
+// Grid rendering logic
+// ============================================================
+
+const COLS = 16;
+const ROWS = 8;
+
+// Default trigger patterns from track.lua
+const TRIGGERS = [
+  [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],  // Track 1
+  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,1],  // Track 2
+  [0,0,1,0, 0,1,0,0, 1,0,0,1, 0,0,1,0],  // Track 3
+  [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,1,0],  // Track 4
+];
+
+// Default note patterns (track 1)
+const NOTES_T1 = [1,2,3,4, 5,4,3,2, 1,3,5,3, 1,2,4,5];
+const NOTE_LOOP_END = 8; // track 1 note loop ends at step 8
+
+// Nav state
+const NAV_PAGE = {6: "trigger", 7: "note", 8: "octave", 9: "duration", 10: "velocity"};
+
+function brightnessClass(b) {
+  return 'b' + Math.min(15, Math.max(0, b));
+}
+
+function brightnessChar(b) {
+  if (b === 0) return '.';
+  if (b <= 9) return String(b);
+  return String.fromCharCode(55 + b); // 10->A, 11->B, etc.
+}
+
+function createGrid(containerId, ledData, options) {
+  options = options || {};
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const b = ledData[y][x] || 0;
+      const cell = document.createElement('div');
+      cell.className = 'grid-cell ' + brightnessClass(b);
+      cell.textContent = brightnessChar(b);
+      cell.title = `(${x+1},${y+1}) = ${b}`;
+
+      // Apply region highlights for layout grid
+      if (options.showRegions) {
+        if (y < 4) cell.classList.add('region-trigger');
+        if (y === 7 && x < 4) cell.classList.add('region-nav-track');
+        if (y === 7 && [5,6,7,8,9].includes(x)) cell.classList.add('region-nav-page');
+        if (y === 7 && x === 11) cell.classList.add('region-nav-loop');
+        if (y === 7 && x === 15) cell.classList.add('region-nav-play');
+      }
+
+      container.appendChild(cell);
+    }
+  }
+}
+
+function computeTriggerPage(playing, pos) {
+  const leds = [];
+  for (let y = 0; y < ROWS; y++) {
+    leds[y] = [];
+    for (let x = 0; x < COLS; x++) {
+      leds[y][x] = 0;
+    }
+  }
+
+  // Rows 0-3: tracks 1-4 trigger data (all in loop by default, loop=1-16)
+  for (let t = 0; t < 4; t++) {
+    for (let x = 0; x < COLS; x++) {
+      let b = 2; // in loop, no trigger
+      if (TRIGGERS[t][x] === 1) b = 8;
+      if (playing && x === pos) b = 15;
+      leds[t][x] = b;
+    }
+  }
+
+  // Rows 4-6: empty on trigger page
+  // Row 7: nav
+  // Track select
+  for (let i = 0; i < 4; i++) {
+    leds[7][i] = (i === 0) ? 12 : 3; // track 1 selected
+  }
+  // Page select
+  for (const x in NAV_PAGE) {
+    leds[7][parseInt(x)-1] = (NAV_PAGE[x] === "trigger") ? 12 : 3;
+  }
+  // Loop
+  leds[7][11] = 3;
+  // Play
+  leds[7][15] = playing ? 12 : 3;
+
+  return leds;
+}
+
+function computeNotePage() {
+  const leds = [];
+  for (let y = 0; y < ROWS; y++) {
+    leds[y] = [];
+    for (let x = 0; x < COLS; x++) {
+      leds[y][x] = 0;
+    }
+  }
+
+  // Rows 0-6: note values for track 1
+  for (let x = 0; x < COLS; x++) {
+    const val = NOTES_T1[x];
+    const inLoop = (x < NOTE_LOOP_END); // 0-indexed: steps 0-7 = steps 1-8
+    for (let y = 0; y < 7; y++) {
+      const rowVal = 7 - y; // row 0 = value 7, row 6 = value 1
+      if (rowVal === val) {
+        leds[y][x] = inLoop ? 10 : 4;
+      } else if (rowVal < val && inLoop) {
+        leds[y][x] = 3;
+      }
+    }
+  }
+
+  // Row 7: nav (note page selected)
+  for (let i = 0; i < 4; i++) {
+    leds[7][i] = (i === 0) ? 12 : 3;
+  }
+  for (const x in NAV_PAGE) {
+    leds[7][parseInt(x)-1] = (NAV_PAGE[x] === "note") ? 12 : 3;
+  }
+  leds[7][11] = 3;
+  leds[7][15] = 3;
+
+  return leds;
+}
+
+function generateDump(leds) {
+  let header = '    ';
+  for (let x = 1; x <= COLS; x++) {
+    header += (x < 10 ? ' ' : '') + x + ' ';
+  }
+  let lines = [header];
+  for (let y = 0; y < ROWS; y++) {
+    let row = (y + 1 < 10 ? ' ' : '') + (y + 1) + ': ';
+    for (let x = 0; x < COLS; x++) {
+      row += ' ' + brightnessChar(leds[y][x]) + ' ';
+    }
+    lines.push(row);
+  }
+  return lines.join('\n');
+}
+
+// ============================================================
+// Render all grids
+// ============================================================
+
+// Layout grid (annotated)
+const layoutData = computeTriggerPage(false, -1);
+createGrid('layout-grid', layoutData, { showRegions: true });
+
+// Brightness bar
+const bar = document.getElementById('brightness-bar');
+for (let b = 0; b <= 15; b++) {
+  const cell = document.createElement('div');
+  cell.className = 'cell ' + brightnessClass(b);
+  cell.textContent = brightnessChar(b);
+  bar.appendChild(cell);
+}
+
+// Scenario 1: default trigger page
+const s1Data = computeTriggerPage(false, -1);
+createGrid('scenario1-grid', s1Data);
+document.getElementById('scenario1-dump').textContent = generateDump(s1Data);
+
+// Scenario 2a: before toggle (step 2 off)
+const s2aData = computeTriggerPage(false, -1);
+createGrid('scenario2a-grid', s2aData);
+
+// Scenario 2b: after toggle (step 2 on)
+const s2bData = computeTriggerPage(false, -1);
+s2bData[0][1] = 8; // step 2 (0-indexed col 1) now active
+createGrid('scenario2b-grid', s2bData);
+
+// Scenario 3: playing, pos=0 (step 1)
+const s3Data = computeTriggerPage(true, 0);
+createGrid('scenario3-grid', s3Data);
+
+// Scenario 4: note page
+const s4Data = computeNotePage();
+createGrid('scenario4-grid', s4Data);
+</script>
+
+</body>
+</html>

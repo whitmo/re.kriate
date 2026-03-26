@@ -13,7 +13,7 @@ describe("track", function()
       assert.are.equal(#p.steps, track.NUM_STEPS)
       assert.are.equal(p.steps[1], 4)
       assert.are.equal(p.loop_start, 1)
-      assert.are.equal(p.loop_end, track.NUM_STEPS)
+      assert.are.equal(p.loop_end, track.DEFAULT_LOOP_LEN)
       assert.are.equal(p.pos, 1)
     end)
   end)
@@ -130,13 +130,13 @@ describe("track", function()
       local p = track.new_param(0)
       track.set_loop(p, 8, 3) -- start > end
       assert.are.equal(p.loop_start, 1)  -- unchanged
-      assert.are.equal(p.loop_end, 16)
+      assert.are.equal(p.loop_end, track.DEFAULT_LOOP_LEN)
 
       track.set_loop(p, 0, 5) -- start < 1
       assert.are.equal(p.loop_start, 1)
 
       track.set_loop(p, 5, 17) -- end > NUM_STEPS
-      assert.are.equal(p.loop_end, 16)
+      assert.are.equal(p.loop_end, track.DEFAULT_LOOP_LEN)
     end)
   end)
 
@@ -214,7 +214,7 @@ describe("track", function()
       local t = track.new_track(1)
       for _, name in ipairs(track.EXTENDED_PARAMS) do
         assert.equals(1, t.params[name].loop_start)
-        assert.equals(16, t.params[name].loop_end)
+        assert.equals(track.DEFAULT_LOOP_LEN, t.params[name].loop_end)
         assert.equals(1, t.params[name].pos)
       end
     end)
