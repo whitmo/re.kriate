@@ -1,10 +1,45 @@
 -- lib/seamstress/screen_ui.lua
 -- Seamstress screen display: title, track/page, play state, step positions
 
+local pattern = require("lib/pattern")
+
 local M = {}
 
 -- Extended page -> primary page mapping
 local EXTENDED_TO_PRIMARY = {ratchet = "trigger", alt_note = "note", glide = "octave"}
+
+-- Pattern slot indicator colors
+local SLOT_DIM = {40, 40, 60, 255}
+local SLOT_MEDIUM = {100, 100, 140, 255}
+local SLOT_BRIGHT = {200, 200, 255, 255}
+
+-- Draw 9 pattern slot indicators
+local function draw_pattern_slots(ctx)
+  for i = 1, 9 do
+    local color = SLOT_DIM
+    if ctx.patterns and pattern.is_populated(ctx.patterns, i) then
+      color = SLOT_MEDIUM
+    end
+    if ctx.active_pattern == i then
+      color = SLOT_BRIGHT
+    end
+    screen.color(color[1], color[2], color[3], color[4])
+    screen.move(10 + (i - 1) * 14, 122)
+    screen.rect_fill(10, 5)
+  end
+end
+
+-- Draw transient pattern message if not expired
+local function draw_pattern_message(ctx)
+  if not ctx.pattern_message then return end
+  if os.clock() - ctx.pattern_message.time >= 1.5 then
+    ctx.pattern_message = nil
+    return
+  end
+  screen.color(200, 200, 255, 255)
+  screen.move(150, 122)
+  screen.text(ctx.pattern_message.text)
+end
 
 function M.redraw(ctx)
   screen.clear()
@@ -56,6 +91,10 @@ function M.redraw(ctx)
       end
     end
   end
+
+  -- Pattern bank indicators and transient message
+  draw_pattern_slots(ctx)
+  draw_pattern_message(ctx)
 
   screen.refresh()
 end
