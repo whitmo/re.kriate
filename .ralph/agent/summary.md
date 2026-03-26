@@ -1,8 +1,8 @@
 # Loop Summary
 
 **Status:** Completed successfully
-**Iterations:** 16
-**Duration:** 32m 34s
+**Iterations:** 18
+**Duration:** 53m 39s
 
 ## Tasks
 
@@ -14,4 +14,4 @@ _No events recorded._
 
 ## Final Commit
 
-9fe4934: refactor: bump screen metro to 30fps, remove unused TWO_PI
+bc46791: feat: add per-track swing_N params with range 0-100 (green)

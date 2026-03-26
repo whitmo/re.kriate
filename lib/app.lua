@@ -123,6 +123,14 @@ function M.init(config)
     end)
   end
 
+  -- params: per-track swing
+  for t = 1, track_mod.NUM_TRACKS do
+    params:add_number("swing_" .. t, "track " .. t .. " swing", 0, 100, 0)
+    params:set_action("swing_" .. t, function(val)
+      ctx.tracks[t].swing = val
+    end)
+  end
+
   -- Build initial voices from params (unless config provided voices)
   if not use_config_voices and ctx.midi_dev then
     for t = 1, track_mod.NUM_TRACKS do

@@ -12,6 +12,7 @@
 --   12: loop edit (hold)
 --   16: play/stop
 
+local log = require("lib/log")
 local app = require("lib/app")
 local nb_voice = require("lib/norns/nb_voice")
 local track_mod = require("lib/track")
@@ -19,6 +20,8 @@ local track_mod = require("lib/track")
 local ctx
 
 function init()
+  log.session_start()
+
   local nb = require("nb")
   nb.voice_count = track_mod.NUM_TRACKS
   nb:init()
@@ -35,7 +38,15 @@ function init()
     voices[t] = nb_voice.new("voice_" .. t)
   end
 
-  ctx = app.init({ voices = voices })
+  ctx = app.init({ voices = voices, grid_provider = "monome" })
+
+  -- Screen refresh metro at 15fps
+  ctx.screen_metro = metro.init()
+  ctx.screen_metro.time = 1 / 15
+  ctx.screen_metro.event = function()
+    redraw()
+  end
+  ctx.screen_metro:start()
 end
 
 function redraw()
@@ -51,5 +62,10 @@ function enc(n, d)
 end
 
 function cleanup()
+  if not ctx then return end
+  if ctx.screen_metro then
+    ctx.screen_metro:stop()
+  end
   app.cleanup(ctx)
+  log.close()
 end

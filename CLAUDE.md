@@ -96,3 +96,18 @@ Kria is a multi-track step sequencer where each track has independent loop lengt
 - Pattern storage and recall
 - Clock division per track
 - Scale quantization
+
+## Active Technologies
+- Lua 5.4 (via busted test runner, seamstress runtime) + busted (test framework), seamstress v1.4.7, musicutil (norns/seamstress scale utilities) (002-quality-hardening)
+- N/A (in-memory patterns, no persistence layer) (002-quality-hardening)
+- Lua 5.4 (via busted test runner, seamstress v1.4.7 runtime) + seamstress v1.4.7, musicutil, busted (test framework) (004-osc-voice-integration)
+- N/A (in-memory params, no persistence layer) (004-osc-voice-integration)
+- Lua 5.3 (norns runtime) / Lua 5.4 (busted test runner) + norns runtime (screen, params, metro, grid, clock, util), nb (voice framework), lib/app.lua (shared sequencer logic) (005-norns-entrypoint)
+- N/A (in-memory state, no persistence layer) (005-norns-entrypoint)
+- Lua 5.4 (busted test runner), seamstress v1.4.7 runtime + seamstress v1.4.7, busted (test framework) (006-pattern-bank-ui)
+- N/A (in-memory patterns via lib/pattern.lua, no persistence layer) (006-pattern-bank-ui)
+- SuperCollider (sclang) for synth/listener, Lua 5.4 for test scrip + SuperCollider 3.x (user-installed), seamstress v1.4.7 (for test script OSC), lib/voices/osc.lua (existing, not modified) (008-supercollider-voice-example)
+- N/A (no persistence) (008-supercollider-voice-example)
+
+## Recent Changes
+- 002-quality-hardening: Added Lua 5.4 (via busted test runner, seamstress runtime) + busted (test framework), seamstress v1.4.7, musicutil (norns/seamstress scale utilities)

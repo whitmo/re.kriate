@@ -114,6 +114,7 @@ function M.new_track(track_num)
     division = 1,
     muted = false,
     direction = "forward",
+    swing = 0,
   }
   for _, name in ipairs(M.PARAM_NAMES) do
     local default_val = PARAM_DEFAULTS[name] or 4

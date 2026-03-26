@@ -1,0 +1,111 @@
+2026-03-25T14:06:34.898906Z  WARN ralph::loop_runner: Interactive mode requested but stdout is not a TTY, falling back to autonomous
+2026-03-25T14:06:34.904264Z  INFO ralph::loop_runner: I'm Ralph. Let's do this.
+2026-03-25T14:06:34.904492Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:06:34.904499Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:06:34.904503Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:06:34.904506Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:07:34.131348Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:07:34.131526Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:07:34.131538Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:07:34.131544Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:07:34.131708Z  INFO ralph_core::event_loop: Injecting scratchpad (510 chars) into prompt
+2026-03-25T14:12:13.859000Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:12:13.859230Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:12:13.859244Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:12:13.859251Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:12:13.859441Z  INFO ralph_core::event_loop: Injecting scratchpad (1631 chars) into prompt
+2026-03-25T14:16:35.659724Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:16:35.659883Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:16:35.659894Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:16:35.659901Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:16:35.660079Z  INFO ralph_core::event_loop: Injecting scratchpad (2968 chars) into prompt
+2026-03-25T14:19:20.238950Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:19:20.239137Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:19:20.239156Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:19:20.239163Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:19:20.239339Z  INFO ralph_core::event_loop: Injecting scratchpad (3880 chars) into prompt
+2026-03-25T14:24:20.246258Z  WARN ralph_adapters::cli_executor: Execution timeout reached, sending SIGTERM timeout_secs=300
+2026-03-25T14:24:20.710664Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:24:20.710743Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:24:20.710771Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:24:20.710788Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:24:20.711293Z  INFO ralph_core::event_loop: Injecting scratchpad (3880 chars) into prompt
+2026-03-25T14:25:33.636267Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:25:33.636427Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:25:33.636453Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:25:33.636460Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:25:33.636654Z  INFO ralph_core::event_loop: Injecting scratchpad (4406 chars) into prompt
+2026-03-25T14:25:33.637161Z  INFO ralph_core::event_loop: Injecting ready tasks (13 ready, 13 open, 0 closed) into prompt
+2026-03-25T14:30:33.641416Z  WARN ralph_adapters::cli_executor: Execution timeout reached, sending SIGTERM timeout_secs=300
+2026-03-25T14:30:34.422633Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:30:34.422681Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:30:34.422691Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:30:34.422697Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:30:34.423451Z  INFO ralph_core::event_loop: Injecting scratchpad (4406 chars) into prompt
+2026-03-25T14:30:34.424573Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt
+2026-03-25T14:32:11.462827Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:32:11.463100Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:32:11.463123Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:32:11.463131Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:32:11.463360Z  INFO ralph_core::event_loop: Injecting scratchpad (5277 chars) into prompt
+2026-03-25T14:32:11.464106Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt
+2026-03-25T14:34:18.197823Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:34:18.198088Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:34:18.198103Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:34:18.198111Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:34:18.198308Z  INFO ralph_core::event_loop: Injecting scratchpad (6186 chars) into prompt
+2026-03-25T14:34:18.199041Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt
+2026-03-25T14:38:37.641092Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:38:37.641352Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:38:37.641365Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:38:37.641369Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:38:37.641541Z  INFO ralph_core::event_loop: Injecting scratchpad (7423 chars) into prompt
+2026-03-25T14:38:37.642040Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt
+2026-03-25T14:42:32.846373Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:42:32.846569Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:42:32.846579Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:42:32.846585Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:42:32.846760Z  INFO ralph_core::event_loop: Injecting scratchpad (8758 chars) into prompt
+2026-03-25T14:42:32.847315Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt
+2026-03-25T14:46:33.693248Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:46:33.693460Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:46:33.693468Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:46:33.693474Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:46:33.693645Z  INFO ralph_core::event_loop: Injecting scratchpad (10367 chars) into prompt
+2026-03-25T14:46:33.694177Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt
+2026-03-25T14:49:15.305390Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:49:15.305600Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:49:15.305607Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:49:15.305611Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:49:15.305772Z  INFO ralph_core::event_loop: Injecting scratchpad (11556 chars) into prompt
+2026-03-25T14:49:15.306332Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt
+2026-03-25T14:54:15.312396Z  WARN ralph_adapters::cli_executor: Execution timeout reached, sending SIGTERM timeout_secs=300
+2026-03-25T14:54:15.852779Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:54:15.852863Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:54:15.852886Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:54:15.852896Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:54:15.853342Z  INFO ralph_core::event_loop: Injecting scratchpad (11556 chars) into prompt
+2026-03-25T14:54:15.854578Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 13 closed) into prompt
+2026-03-25T14:55:41.067968Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:55:41.068330Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:55:41.068354Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:55:41.068364Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:55:41.068599Z  INFO ralph_core::event_loop: Injecting scratchpad (12231 chars) into prompt
+2026-03-25T14:55:41.069285Z  INFO ralph_core::event_loop: Injecting ready tasks (1 ready, 1 open, 13 closed) into prompt
+2026-03-25T14:57:28.627294Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:57:28.627540Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:57:28.627553Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:57:28.627560Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:57:28.627739Z  INFO ralph_core::event_loop: Injecting scratchpad (13476 chars) into prompt
+2026-03-25T14:57:28.628147Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 14 closed) into prompt
+2026-03-25T14:59:36.036819Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-03-25T14:59:36.037061Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-03-25T14:59:36.037077Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-03-25T14:59:36.037085Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-03-25T14:59:36.037318Z  INFO ralph_core::event_loop: Injecting scratchpad (14647 chars) into prompt
+2026-03-25T14:59:36.038071Z  INFO ralph_core::event_loop: Injecting ready tasks (0 ready, 0 open, 14 closed) into prompt
+2026-03-25T15:00:14.896274Z  INFO ralph_core::event_loop: Completion event detected in JSONL topic=LOOP_COMPLETE
+2026-03-25T15:00:14.897238Z  INFO ralph_core::event_loop: Completion event detected - terminating
+2026-03-25T15:00:14.897269Z  INFO ralph::loop_runner: Completion event LOOP_COMPLETE detected.
+2026-03-25T15:00:14.897302Z  INFO ralph_core::event_loop: Wrapping up: completed. 18 iterations in 53m 39s. reason=completed iterations=18 duration=53m 39s
+2026-03-25T15:00:14.915050Z  INFO ralph_core::landing: Beginning landing sequence loop_id=primary
