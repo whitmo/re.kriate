@@ -15,6 +15,7 @@ local sprite_voice = require("lib/voices/sprite")
 local screen_ui = require("lib/seamstress/screen_ui")
 local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
+local grid_render = require("lib/seamstress/grid_render")
 local track_mod = require("lib/track")
 local log = require("lib/log")
 
@@ -33,12 +34,18 @@ function init()
     midi_dev = midi.connect(1),
     sprite_voices = sprite_voices,
     screen_mod = screen_ui,
+    grid_provider = "simulated",
   })
 
   -- Keyboard input
   screen.key = log.wrap(function(char, modifiers, is_repeat, state)
     keyboard.key(ctx, char, modifiers, is_repeat, state)
   end, "screen.key")
+
+  -- Mouse input → simulated grid
+  screen.click = log.wrap(function(x, y, state, button)
+    grid_render.handle_click(ctx.g, x, y, state, button)
+  end, "grid_click")
 
   -- Screen refresh metro
   ctx.screen_metro = metro.init()
@@ -57,6 +64,8 @@ function redraw()
   screen.color(0, 0, 0, 255)
   screen.move(1, 1)
   screen.rect_fill(256, 128)
+  -- Simulated grid
+  grid_render.draw(ctx.g, screen)
   -- Sprites on top
   sprite_render.draw(ctx)
   screen.refresh()
