@@ -38,6 +38,10 @@ function M.new(track_num, host, port)
       osc.send(self.target, "/rekriate/track/" .. self.track_num .. "/portamento",
         {time or 0})
     end,
+
+    set_target = function(self, new_host, new_port)
+      self.target = {new_host, new_port}
+    end,
   }
 end
 

@@ -448,6 +448,11 @@ describe("sequencer", function()
     it("mute-advance-unmute resumes from correct position (T025)", function()
       local ctx, buffer = make_ctx()
       local track = ctx.tracks[1]
+      -- Set loop to full 16 steps for this test
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        track.params[name].loop_start = 1
+        track.params[name].loop_end = 16
+      end
       -- Enable triggers on all steps
       for i = 1, 16 do
         track.params.trigger.steps[i] = 1
@@ -537,6 +542,11 @@ describe("sequencer", function()
     it("muted playhead position matches expected advance count (T028)", function()
       local ctx = make_ctx()
       local track = ctx.tracks[1]
+      -- Set loop to full 16 steps for this test
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        track.params[name].loop_start = 1
+        track.params[name].loop_end = 16
+      end
       track.muted = true
       track.params.trigger.pos = 3
 

@@ -303,12 +303,12 @@ describe("track", function()
       local p = track.new_param(0)
       -- original boundaries
       assert.are.equal(1, p.loop_start)
-      assert.are.equal(16, p.loop_end)
+      assert.are.equal(track.DEFAULT_LOOP_LEN, p.loop_end)
       -- attempt invalid: start > end
       track.set_loop(p, 8, 3)
       -- should be unchanged
       assert.are.equal(1, p.loop_start)
-      assert.are.equal(16, p.loop_end)
+      assert.are.equal(track.DEFAULT_LOOP_LEN, p.loop_end)
     end)
   end)
 
