@@ -7,6 +7,7 @@
 local sequencer = require("lib/sequencer")
 local pattern = require("lib/pattern")
 local grid_ui = require("lib/grid_ui")
+local app = require("lib/app")
 
 local M = {}
 
@@ -15,6 +16,11 @@ local KEY_PAGE = {q = "trigger", w = "note", e = "octave", t = "duration", y = "
 
 -- Reverse lookup: extended -> primary
 local EXTENDED_TO_PRIMARY = {ratchet = "trigger", alt_note = "note", glide = "octave"}
+
+local function set_status(ctx, text)
+  ctx.active_pattern = nil
+  ctx.pattern_message = {text = text, time = os.clock()}
+end
 
 function M.key(ctx, char, modifiers, is_repeat, state)
   if state ~= 1 then return end
@@ -25,6 +31,27 @@ function M.key(ctx, char, modifiers, is_repeat, state)
       sequencer.stop(ctx)
     else
       sequencer.start(ctx)
+    end
+  elseif char == "s" and modifiers and modifiers.ctrl then
+    local ok, path_or_err = app.save_pattern_bank(ctx)
+    if ok then
+      set_status(ctx, "saved bank")
+    else
+      set_status(ctx, "save failed: " .. tostring(path_or_err))
+    end
+  elseif char == "l" and modifiers and modifiers.ctrl then
+    local ok, err = app.load_pattern_bank(ctx)
+    if ok then
+      set_status(ctx, "loaded bank")
+    else
+      set_status(ctx, "load failed: " .. tostring(err))
+    end
+  elseif char == "d" and modifiers and modifiers.ctrl and modifiers.shift then
+    local ok, err = app.delete_pattern_bank(ctx)
+    if ok then
+      set_status(ctx, "deleted bank")
+    else
+      set_status(ctx, "delete failed: " .. tostring(err))
     end
   elseif char == "r" then
     sequencer.reset(ctx)
