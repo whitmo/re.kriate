@@ -6,6 +6,7 @@ local scale_mod = require("lib/scale")
 local sequencer = require("lib/sequencer")
 local grid_ui = require("lib/grid_ui")
 local pattern = require("lib/pattern")
+local pattern_persistence = require("lib/pattern_persistence")
 local direction = require("lib/direction")
 local grid_provider = require("lib/grid_provider")
 local events = require("lib/events")
@@ -23,6 +24,8 @@ local SCALE_NAMES = {
 local NOTE_NAMES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
 local VOICE_TYPES = {"midi", "osc", "none"}
+local DEFAULT_PATTERN_BANK = "default"
+local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 
 --- Convert a MIDI note number to a human-readable note name (C0 = MIDI 0)
 local function note_name(midi_num)
@@ -50,6 +53,97 @@ local function build_voice(ctx, t)
   else
     ctx.voices[t] = nil
   end
+end
+
+local function pattern_bank_name(name)
+  if name and name ~= "" then
+    return name
+  end
+  if params and params.get then
+    local param_name = params:get("pattern_bank_name")
+    if param_name and param_name ~= "" then
+      return param_name
+    end
+  end
+  return DEFAULT_PATTERN_BANK
+end
+
+local function set_param_if_needed(id, value)
+  if not params or not params.get or not params.set then
+    return
+  end
+  if params:get(id) ~= value then
+    params:set(id, value)
+  end
+end
+
+local function set_pattern_status(ctx, text)
+  if not ctx then
+    return
+  end
+  ctx[PATTERN_MESSAGE_KEY] = {text = text, time = os.clock()}
+end
+
+local function format_bank_list(names)
+  if #names == 0 then
+    return "banks: none"
+  end
+  return "banks: " .. table.concat(names, ", ")
+end
+
+local function add_pattern_persistence_params(ctx)
+  if not params or not params.add_text or not params.add_option then
+    return
+  end
+
+  params:add_group("pattern_persistence", "pattern persistence", 5)
+  params:add_text("pattern_bank_name", "bank name", DEFAULT_PATTERN_BANK)
+  params:add_option("pattern_bank_save", "save bank", {"-", "save"}, 1)
+  params:add_option("pattern_bank_load", "load bank", {"-", "load"}, 1)
+  params:add_option("pattern_bank_list", "list banks", {"-", "list"}, 1)
+  params:add_option("pattern_bank_delete", "delete bank", {"-", "delete"}, 1)
+
+  local resetting_param = false
+  local function reset_action_param(id)
+    if resetting_param then
+      return
+    end
+    resetting_param = true
+    set_param_if_needed(id, 1)
+    resetting_param = false
+  end
+
+  params:set_action("pattern_bank_save", function(value)
+    if resetting_param or value ~= 2 then
+      return
+    end
+    M.save_pattern_bank(ctx)
+    reset_action_param("pattern_bank_save")
+  end)
+
+  params:set_action("pattern_bank_load", function(value)
+    if resetting_param or value ~= 2 then
+      return
+    end
+    M.load_pattern_bank(ctx)
+    reset_action_param("pattern_bank_load")
+  end)
+
+  params:set_action("pattern_bank_list", function(value)
+    if resetting_param or value ~= 2 then
+      return
+    end
+    M.list_pattern_banks(ctx)
+    reset_action_param("pattern_bank_list")
+  end)
+
+  params:set_action("pattern_bank_delete", function(value)
+    if resetting_param or value ~= 2 then
+      return
+    end
+    M.delete_pattern_bank(ctx)
+    reset_action_param("pattern_bank_delete")
+  end)
 end
 
 function M.init(config)
@@ -131,6 +225,8 @@ function M.init(config)
     end)
   end
 
+  add_pattern_persistence_params(ctx)
+
   -- Build initial voices from params (unless config provided voices)
   if not use_config_voices and ctx.midi_dev then
     for t = 1, track_mod.NUM_TRACKS do
@@ -160,6 +256,37 @@ function M.init(config)
   ctx.grid_metro:start()
 
   return ctx
+end
+
+function M.save_pattern_bank(ctx, name)
+  return pattern_persistence.save(ctx, pattern_bank_name(name))
+end
+
+function M.load_pattern_bank(ctx, name)
+  return pattern_persistence.load(ctx, pattern_bank_name(name))
+end
+
+function M.list_pattern_banks(ctx)
+  local names = pattern_persistence.list()
+  local message = format_bank_list(names)
+  log.info(message)
+  set_pattern_status(ctx, message)
+  return names
+end
+
+function M.delete_pattern_bank(ctx, name)
+  local ok, err = pattern_persistence.delete(pattern_bank_name(name))
+  if ok then
+    local message = "deleted bank"
+    log.info(message)
+    set_pattern_status(ctx, message)
+    return true
+  end
+
+  local message = "delete failed: " .. tostring(err)
+  log.warn(message)
+  set_pattern_status(ctx, message)
+  return nil, err
 end
 
 function M.rebuild_scale(ctx)

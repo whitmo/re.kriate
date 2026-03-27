@@ -1,4 +1,4 @@
--- re_kriate_seamstress: kria sequencer for seamstress
+-- seamstress.lua: kria sequencer entrypoint for seamstress
 --
 -- Grid: full kria grid UI (same as norns)
 -- Keyboard: space=play/stop, r=reset, 1-4=track, q/w/e/t/y=page

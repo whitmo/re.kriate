@@ -220,6 +220,11 @@ hats:
       ### 5. Tasks progress
       - Read tasks.md — count completed [x] vs remaining [ ] tasks
 
+      ### 6. Trunk discipline
+      - Trunk (main) must always run; merges to main only via PR after green checks
+      - If current branch is main, fail the batch and instruct to branch + PR
+      - Do not approve if tests or syntax fail on the PR branch; main must stay green
+
       ## Routing
 
       **If ANY check fails:**
