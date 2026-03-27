@@ -12,7 +12,7 @@ As a performer, I want to set a trigger probability for each step on the virtual
 - Independent test: Set step 5 probability to 30%, run sequencer, observe ~30% hit rate over many bars.
 - Acceptance:
   1. Grid shows probability values (0–100%) per step for active track when on “probability” page.
-  2. Clicking a step cycles/adjusts probability in sensible increments (e.g., 0,25,50,75,100).
+  2. Clicking a step cycles/adjusts probability in sensible increments that include both 0% and 100%.
   3. Probability affects playback: trigger is skipped when random roll > probability.
   4. Probability state saves/loads with pattern slots and pattern banks.
 
@@ -28,9 +28,11 @@ As a performer without hardware, I want to latch modifier keys (loop, pattern, a
 As a performer, I want quick access to per-track meta settings (direction, swing %, division, mute) via a grid page.
 - Independent test: Switch to “alt-track” page; click cells to toggle direction or adjust swing; playback reflects new settings.
 - Acceptance:
-  1. New grid page or overlay lets user adjust direction (forward/reverse/pendulum/random), division, swing %, mute per track.
-  2. Changes are visible (LEDs/text) and stored in ctx; honored in playback.
-  3. State saves/loads with pattern slots and pattern banks.
+  1. New grid page or overlay lets user adjust direction, division, swing %, mute per track.
+  2. Existing persisted direction modes remain representable on the page; unsupported modes must not render as "nothing selected" or get silently discarded.
+  3. Swing UI must represent the full supported range used by playback/persistence, including 100%.
+  4. Changes are visible (LEDs/text), stored in ctx, and kept consistent with existing params/actions.
+  5. State saves/loads with pattern slots and pattern banks.
 
 ### US4 — Probability Page Keyboard Access (P2)
 As a keyboard user on seamstress, I want to edit probability without grid hardware.
@@ -43,8 +45,10 @@ As a keyboard user on seamstress, I want to edit probability without grid hardwa
 ### Functional
 - Add `probability` param per step on each track (0–100%) integrated into sequencer trigger decision.
 - Extend `grid_ui` to render and edit probability: brightness or height reflects percentage; click cycles predefined values.
+- Probability editing must allow users to reach 0% directly from the grid UI.
 - Add virtual-grid modifier latches (already partial) with visual indication when latched.
 - Add an “alt track” grid view for direction/division/swing/mute.
+- Alt-track editing must remain in sync with existing params so menu and grid changes do not diverge.
 - Update `pattern.lua` save/load and pattern persistence to include probability data and alt-track settings.
 - Add seamstress keyboard binding(s) for probability page and adjustments.
 
@@ -55,7 +59,7 @@ As a keyboard user on seamstress, I want to edit probability without grid hardwa
 
 ## Open Questions
 - Probability resolution: 0/25/50/75/100 or finer (0–100 in 5% steps)? Default to coarse cycle; hold modifier to fine-adjust?
-- UI for swing/division/direction on grid: row/column mapping TBD.
+- UI for swing/division/direction on grid: row/column mapping TBD, but it must preserve existing engine ranges and modes.
 - Visual indication for latched modifiers on virtual grid: invert LED brightness? Add status message?
 
 ## Success Criteria
