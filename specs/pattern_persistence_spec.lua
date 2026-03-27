@@ -24,6 +24,9 @@ local function reset_tmp()
   if pp._test_set_data_dir then
     pp._test_set_data_dir(tmp_root)
   end
+  if pp._test_set_fs then
+    pp._test_set_fs(nil)
+  end
 end
 
 local function make_ctx()
@@ -35,7 +38,7 @@ end
 
 local function fill_ctx(ctx)
   -- set distinctive values across tracks/params for roundtrip fidelity
-  local params = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
+  local params = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide", "probability"}
   for t = 1, 4 do
     ctx.tracks[t].division = t + 1
     ctx.tracks[t].muted = (t % 2 == 0)
@@ -113,6 +116,45 @@ describe("pattern_persistence", function()
       assert.are.equal(9, ctx.tracks[1].params.trigger.loop_end)
       assert.are.equal(math.min(1 + 2, ctx.tracks[1].params.trigger.loop_end), ctx.tracks[1].params.trigger.pos)
     end)
+
+    it("round-trips probability params", function()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      ctx.tracks[1].params.probability.steps[3] = 25
+      ctx.tracks[1].params.probability.loop_end = 4
+
+      assert.is_true(pp.save(ctx, "prob-props"))
+
+      ctx.tracks = track_mod.new_tracks()
+      ctx.patterns = pattern.new_slots()
+
+      local ok_load = pp.load(ctx, "prob-props")
+      assert.is_true(ok_load)
+      assert.are.equal(25, ctx.tracks[1].params.probability.steps[3])
+      assert.are.equal(4, ctx.tracks[1].params.probability.loop_end)
+    end)
+
+    it("fills missing probability fields with defaults when loading", function()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      -- strip probability param to simulate older save format
+      for t = 1, 4 do
+        ctx.tracks[t].params.probability = nil
+      end
+
+      assert.is_true(pp.save(ctx, "prob-missing"))
+
+      ctx.tracks = track_mod.new_tracks()
+      ctx.patterns = pattern.new_slots()
+
+      local ok_load = pp.load(ctx, "prob-missing")
+      assert.is_true(ok_load)
+      for t = 1, 4 do
+        assert.are.equal(100, ctx.tracks[t].params.probability.steps[1])
+        assert.are.equal(1, ctx.tracks[t].params.probability.loop_start)
+        assert.are.equal(6, ctx.tracks[t].params.probability.loop_end)
+      end
+    end)
   end)
 
   describe("checksum guard", function()
@@ -186,6 +228,53 @@ describe("pattern_persistence", function()
       local st = io.open(tmp_root .. "/fresh-dir.krp", "r")
       assert.is_not_nil(st)
       st:close()
+    end)
+  end)
+
+  describe("failure hardening", function()
+    it("returns mkpath_failed when directory creation fails", function()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      pp._test_set_fs({
+        ensure_dir = function()
+          return nil, "disk_full"
+        end,
+      })
+
+      local ok, err = pp.save(ctx, "cannot-save")
+
+      assert.is_nil(ok)
+      assert.are.equal("mkpath_failed", err)
+      assert.is_nil(io.open(tmp_root .. "/cannot-save.krp", "r"))
+    end)
+
+    it("cleans up temp files and preserves the existing bank when rename fails", function()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      local ok, path = pp.save(ctx, "rename-guard")
+      assert.is_true(ok)
+
+      local original = read_payload(path)
+      ctx.tracks[1].division = 99
+      pattern.save(ctx, 2)
+
+      pp._test_set_fs({
+        ensure_dir = function()
+          return true
+        end,
+        rename = function()
+          return nil, "busy"
+        end,
+      })
+
+      local ok2, err = pp.save(ctx, "rename-guard")
+
+      assert.is_nil(ok2)
+      assert.are.equal("rename_failed", err)
+      assert.is_nil(io.open(tmp_root .. "/.rename-guard.krp.tmp", "r"))
+
+      local after = read_payload(path)
+      assert.are.same(original, after)
     end)
   end)
 

@@ -16,6 +16,7 @@ For an interactive visual guide to the grid interface, see [`docs/grid-interface
 - Scale quantization (14 scales via musicutil)
 - Voice abstraction: [nb](https://github.com/sixolet/nb) on norns, MIDI on seamstress
 - Monome grid UI with trigger overview, per-parameter editing, and extended page toggle
+- Dedicated probability and alt-track grid pages for performance controls
 - Keyboard fallback controls (seamstress)
 - Musically useful default patterns out of the box
 - Pattern bank disk persistence API with checksum validation
@@ -97,7 +98,9 @@ Row 8 layout:
   8        octave page (double-tap: glide)
   9        duration page
   10       velocity page
+  11       probability page
   12       loop edit (hold)
+  15       alt-track page
   16       play / stop
 ```
 
@@ -105,12 +108,18 @@ Row 8 layout:
 
 **Value pages** (note, octave, duration, velocity, ratchet, alt note, glide): rows 1-7 show the active track. Row 1 = highest value (7), row 7 = lowest (1). Press to set a step's value.
 
+**Probability page:** nav `x=11` opens trigger probability editing for the active track. Rows 1-7 act like a value page, mapping top-to-bottom from high to low probability.
+
+**Alt-track page:** nav `x=15` opens a per-track performance page. Each row is a track; columns `1-4` set direction, `5-11` set division, `12-15` set coarse swing, and `16` toggles mute.
+
 **Extended pages:** double-tap a page button to toggle its extended parameter:
 - trigger → **ratchet** (number of note repeats within a step, 1-7)
 - note → **alt note** (secondary note offset combined with note degree)
 - octave → **glide** (portamento amount, 1 = none, 7 = max)
 
 **Loop editing:** hold grid key 12 on row 8, then press two step columns to set the loop start and end for the current page/track.
+
+**Right-click latch (seamstress simulated grid):** right-click nav `x=12` to latch/unlatch loop hold, or nav `x=14` to latch/unlatch pattern hold without keeping the mouse button down.
 
 ### Norns keys and encoders
 
@@ -129,6 +138,11 @@ Row 8 layout:
 | R | Reset all playheads |
 | 1-4 | Select track |
 | Q / W / E / T / Y | Select page (trig / note / oct / dur / vel) |
+| Ctrl+P | Jump to probability page |
+| Ctrl+B | List saved pattern banks |
+| Ctrl+S | Save current pattern bank by name |
+| Ctrl+L | Load current pattern bank by name |
+| Ctrl+Shift+D | Delete current pattern bank by name |
 | Ctrl+1-9 | Save pattern to slot |
 | Shift+1-9 | Load pattern from slot |
 
@@ -154,6 +168,9 @@ assert.are.same({"my-set"}, banks)
 For a quick manual smoke test, use `lua scripts/pattern_persistence_demo.lua save demo`
 and `lua scripts/pattern_persistence_demo.lua load demo`, or run tests with
 `./scripts/busted.sh --no-auto-insulate specs/pattern_persistence_spec.lua`.
+On seamstress, the params menu exposes the same save/load/list/delete actions under
+the `pattern persistence` group, and keyboard shortcuts surface status messages on
+the screen.
 
 ### Parameters
 

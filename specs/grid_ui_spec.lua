@@ -377,6 +377,84 @@ describe("grid_ui", function()
       end
     end)
 
+    it("renders probability bars by percentage", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "probability"
+      ctx.tracks[1].params.probability.steps[1] = 50
+      grid_ui.draw_value_page(ctx, g, "probability")
+      assert.is_true(led_at(g, 1, 5) > 0)   -- lower rows lit
+      assert.are.equal(0, led_at(g, 1, 2))  -- upper row off
+    end)
+
+    it("lights all probability rows at 100%", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "probability"
+      ctx.tracks[1].params.probability.steps[1] = 100
+      grid_ui.draw_value_page(ctx, g, "probability")
+      for y = 1, 7 do
+        assert.is_true(led_at(g, 1, y) > 0)
+      end
+    end)
+
+  end)
+
+  -- ========================================================================
+  -- Alt-track page
+  -- ========================================================================
+
+  describe("alt_track page", function()
+
+    it("draws direction, division, swing, and mute per track row", function()
+      local ctx = make_ctx({active_page = "alt_track"})
+      local g = spy_grid()
+      ctx.tracks[1].direction = "pendulum"
+      ctx.tracks[1].division = 4
+      ctx.tracks[1].swing = 50
+      ctx.tracks[1].muted = true
+
+      grid_ui.draw_alt_track_page(ctx, g)
+
+      assert.are.equal(12, led_at(g, 3, 1))   -- direction pendulum (col 3)
+      assert.are.equal(12, led_at(g, 8, 1))   -- division 4 -> col 8
+      assert.are.equal(12, led_at(g, 14, 1))  -- swing 50 -> col 14 (11+3)
+      assert.are.equal(15, led_at(g, 16, 1))  -- mute toggle bright
+    end)
+
+    it("accentuates active track row on unselected cells", function()
+      local ctx = make_ctx({active_page = "alt_track", active_track = 2})
+      local g = spy_grid()
+      grid_ui.draw_alt_track_page(ctx, g)
+      assert.is_true(led_at(g, 2, 2) > led_at(g, 2, 1))
+    end)
+
+    it("dims non-mute cells when track is muted", function()
+      local ctx = make_ctx({active_page = "alt_track"})
+      local g = spy_grid()
+      ctx.tracks[3].muted = true
+      grid_ui.draw_alt_track_page(ctx, g)
+      assert.is_true(led_at(g, 1, 3) < led_at(g, 1, 1))
+      assert.are.equal(15, led_at(g, 16, 3))
+    end)
+
+    it("grid presses set meta values per track row", function()
+      local ctx = make_ctx({active_page = "alt_track"})
+      grid_ui.alt_track_key(ctx, 4, 2)  -- direction random
+      assert.are.equal("random", ctx.tracks[2].direction)
+
+      grid_ui.alt_track_key(ctx, 9, 2)  -- division col 9 => 5
+      assert.are.equal(5, ctx.tracks[2].division)
+
+      grid_ui.alt_track_key(ctx, 14, 2) -- swing 50 (cols 12-15 map to 0/25/50/75)
+      assert.are.equal(50, ctx.tracks[2].swing)
+      grid_ui.alt_track_key(ctx, 15, 2) -- swing 75
+      assert.are.equal(75, ctx.tracks[2].swing)
+
+      grid_ui.alt_track_key(ctx, 16, 3) -- mute toggle on track row 3
+      assert.is_true(ctx.tracks[3].muted)
+    end)
+
   end)
 
   -- ========================================================================
@@ -523,6 +601,19 @@ describe("grid_ui", function()
       local ctx = make_ctx()
       grid_ui.nav_key(ctx, 10, 1)
       assert.are.equal(ctx.active_page, "velocity")
+    end)
+
+    it("selects probability page (x=11)", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      grid_ui.nav_key(ctx, 11, 1)
+      assert.are.equal("probability", ctx.active_page)
+    end)
+
+    it("selects alt_track page (x=15)", function()
+      local ctx = make_ctx()
+      grid_ui.nav_key(ctx, 15, 1)
+      assert.are.equal("alt_track", ctx.active_page)
     end)
 
     it("sets loop_held on press of x=12", function()
@@ -672,6 +763,14 @@ describe("grid_ui", function()
         assert.are.equal(ctx.tracks[1].params[page].steps[1], 4,
           page .. " should be set to 4")
       end
+    end)
+
+    it("maps probability rows to percentages", function()
+      local ctx = make_ctx({active_track = 1})
+      grid_ui.value_key(ctx, 2, 7, "probability")
+      assert.are.equal(14, ctx.tracks[1].params.probability.steps[2])
+      grid_ui.value_key(ctx, 2, 1, "probability")
+      assert.are.equal(100, ctx.tracks[1].params.probability.steps[2])
     end)
 
   end)

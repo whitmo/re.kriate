@@ -46,6 +46,8 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     else
       set_status(ctx, "load failed: " .. tostring(err))
     end
+  elseif char == "b" and modifiers and modifiers.ctrl then
+    app.list_pattern_banks(ctx)
   elseif char == "d" and modifiers and modifiers.ctrl and modifiers.shift then
     local ok, err = app.delete_pattern_bank(ctx)
     if ok then

@@ -12,7 +12,12 @@ local stubbed_modules = {
 
 local save_calls
 local load_calls
+local list_calls
 local init_ctx
+local save_ok
+local save_value
+local load_ok
+local load_value
 
 local function restore_modules()
   for _, name in ipairs(stubbed_modules) do
@@ -23,6 +28,11 @@ end
 local function install_stubs()
   save_calls = {}
   load_calls = {}
+  list_calls = {}
+  save_ok = true
+  save_value = "/tmp/test-bank.krp"
+  load_ok = true
+  load_value = nil
   init_ctx = {
     active_pattern = 2,
     grid_dirty = false,
@@ -53,11 +63,16 @@ local function install_stubs()
     cleanup = function() end,
     save_pattern_bank = function(ctx)
       table.insert(save_calls, ctx)
-      return true, "/tmp/test-bank.krp"
+      return save_ok, save_value
     end,
     load_pattern_bank = function(ctx)
       table.insert(load_calls, ctx)
-      return true
+      return load_ok, load_value
+    end,
+    list_pattern_banks = function(ctx)
+      table.insert(list_calls, ctx)
+      ctx.pattern_message = { text = "banks: alpha-bank, beta-bank", time = os.clock() }
+      return { "alpha-bank", "beta-bank" }
     end,
   }
 
@@ -165,6 +180,39 @@ describe("seamstress entrypoint keyboard persistence wiring", function()
     assert.are.equal(1, #load_calls)
     assert.are.equal(init_ctx, load_calls[1])
     assert.are.equal("loaded bank", init_ctx.pattern_message.text)
+    assert.is_nil(init_ctx.active_pattern)
+    assert.is_true(init_ctx.grid_dirty)
+  end)
+
+  it("routes ctrl+b through screen.key to app.list_pattern_banks", function()
+    screen.key("b", { ctrl = true }, false, 1)
+
+    assert.are.equal(1, #list_calls)
+    assert.are.equal(init_ctx, list_calls[1])
+    assert.are.equal("banks: alpha-bank, beta-bank", init_ctx.pattern_message.text)
+    assert.is_true(init_ctx.grid_dirty)
+  end)
+
+  it("surfaces save failures through the seamstress keyboard path", function()
+    save_ok = nil
+    save_value = "disk_full"
+
+    screen.key("s", { ctrl = true }, false, 1)
+
+    assert.are.equal(1, #save_calls)
+    assert.are.equal("save failed: disk_full", init_ctx.pattern_message.text)
+    assert.is_nil(init_ctx.active_pattern)
+    assert.is_true(init_ctx.grid_dirty)
+  end)
+
+  it("surfaces load failures through the seamstress keyboard path", function()
+    load_ok = nil
+    load_value = "checksum_mismatch"
+
+    screen.key("l", { ctrl = true }, false, 1)
+
+    assert.are.equal(1, #load_calls)
+    assert.are.equal("load failed: checksum_mismatch", init_ctx.pattern_message.text)
     assert.is_nil(init_ctx.active_pattern)
     assert.is_true(init_ctx.grid_dirty)
   end)
