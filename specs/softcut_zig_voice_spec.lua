@@ -23,9 +23,11 @@ rawset(_G, "clock", {
 
 local softcut_zig = require("lib/voices/softcut_zig")
 
-local function make_runtime()
+local function make_runtime(opts)
+  opts = opts or {}
   local calls = {}
-  local runtime = { calls = calls }
+  local warnings = {}
+  local runtime = { calls = calls, warnings = warnings }
   local methods = {
     "enable",
     "buffer",
@@ -51,6 +53,25 @@ local function make_runtime()
     end
   end
 
+  runtime.file_exists = function(_path)
+    return opts.file_exists ~= false
+  end
+
+  runtime.warn = function(msg)
+    table.insert(warnings, msg)
+  end
+
+  runtime.load_sample = function(voice_id, path, config)
+    table.insert(calls, {
+      method = "load_sample",
+      args = {voice_id, path, config.start_sec, config.end_sec},
+    })
+    if opts.load_ok == false then
+      return false, "load_failed"
+    end
+    return true
+  end
+
   runtime.buffer_read_mono = function(path, start_sec, duration)
     table.insert(calls, {
       method = "buffer_read_mono",
@@ -68,6 +89,14 @@ local function find_last_call(runtime, method)
     end
   end
   return nil
+end
+
+local function find_calls_since(runtime, start_idx)
+  local names = {}
+  for i = start_idx, #runtime.calls do
+    table.insert(names, runtime.calls[i].method)
+  end
+  return names
 end
 
 local function approx_equal(a, b)
@@ -96,18 +125,19 @@ describe("softcut_zig voice", function()
     })
 
     assert.are.equal(2, voice.voice_id)
-    assert.are.same({"/tmp/zig.wav", 1.25, 1.5}, find_last_call(runtime, "buffer_read_mono").args)
+    assert.are.same({2, "/tmp/zig.wav", 1.25, 2.75}, find_last_call(runtime, "load_sample").args)
     assert.are.same({2, true}, find_last_call(runtime, "enable").args)
     assert.are.same({2, true}, find_last_call(runtime, "loop").args)
     assert.are.same({2, 1.25}, find_last_call(runtime, "loop_start").args)
     assert.are.same({2, 2.75}, find_last_call(runtime, "loop_end").args)
-    assert.are.same({2, 0.3}, find_last_call(runtime, "fade_time").args)
+    assert.are.same({2, 0.05}, find_last_call(runtime, "fade_time").args)
     assert.are.same({2, 0.12}, find_last_call(runtime, "rate_slew_time").args)
   end)
 
   it("maps MIDI note offsets to softcut playback rate", function()
     local runtime = make_runtime()
     local voice = softcut_zig.new(1, runtime, {
+      sample_path = "/tmp/zig.wav",
       root_note = 60,
       start_sec = 0.5,
       end_sec = 1.5,
@@ -125,6 +155,7 @@ describe("softcut_zig voice", function()
   it("play_note schedules a release through clock", function()
     local runtime = make_runtime()
     local voice = softcut_zig.new(1, runtime, {
+      sample_path = "/tmp/zig.wav",
       release = 0.25,
     })
 
@@ -144,17 +175,47 @@ describe("softcut_zig voice", function()
   it("set_portamento overrides the configured rate slew until reset", function()
     local runtime = make_runtime()
     local voice = softcut_zig.new(1, runtime, {
+      sample_path = "/tmp/zig.wav",
       rate_slew = 0.05,
     })
 
     voice:set_portamento(0.4)
     assert.are.same({1, 0.4}, find_last_call(runtime, "rate_slew_time").args)
+    assert.are.equal(0.4, voice.config.rate_slew)
 
     voice:note_on(60, 0.7)
     assert.are.same({1, 0.4}, find_last_call(runtime, "rate_slew_time").args)
 
     voice:set_portamento(0)
-    assert.are.same({1, 0.05}, find_last_call(runtime, "rate_slew_time").args)
+    assert.are.same({1, 0}, find_last_call(runtime, "rate_slew_time").args)
+  end)
+
+  it("retrigger cancels the prior note-off and restarts in a stable order", function()
+    local runtime = make_runtime()
+    local voice = softcut_zig.new(1, runtime, {
+      sample_path = "/tmp/zig.wav",
+      start_sec = 0.25,
+      end_sec = 1.25,
+      attack = 0.01,
+      release = 0.07,
+      rate_slew = 0.05,
+    })
+
+    voice:play_note(60, 1.0, 1)
+    local first_coro = voice.note_off_coro
+    local start_idx = #runtime.calls + 1
+
+    voice:play_note(67, 0.6, 1)
+
+    assert.is_true(cancelled_coros[first_coro])
+    assert.are.same(
+      {"fade_time", "level_slew_time", "play", "fade_time", "rate_slew_time", "position", "level", "rate", "play"},
+      find_calls_since(runtime, start_idx)
+    )
+    assert.are.same({1, 0.07}, runtime.calls[start_idx].args)
+    assert.are.same({1, false}, runtime.calls[start_idx + 2].args)
+    assert.are.same({1, 0.01}, runtime.calls[start_idx + 3].args)
+    assert.are.same({1, true}, runtime.calls[start_idx + 8].args)
   end)
 
   it("apply_config updates the region and note_off ignores stale notes", function()
@@ -172,10 +233,10 @@ describe("softcut_zig voice", function()
       pan = 2,
     })
 
-    local load_args = find_last_call(runtime, "buffer_read_mono").args
-    assert.are.equal("/tmp/b.wav", load_args[1])
-    assert.are.equal(2, load_args[2])
-    assert.is_true(approx_equal(0.001, load_args[3]))
+    local load_args = find_last_call(runtime, "load_sample").args
+    assert.are.equal("/tmp/b.wav", load_args[2])
+    assert.are.equal(2, load_args[3])
+    assert.is_true(approx_equal(2.001, load_args[4]))
     assert.are.same({3, 1}, find_last_call(runtime, "pan").args)
     assert.is_true(approx_equal(2.001, find_last_call(runtime, "loop_end").args[2]))
 
@@ -186,7 +247,9 @@ describe("softcut_zig voice", function()
 
   it("all_notes_off cancels pending note timers and silences playback", function()
     local runtime = make_runtime()
-    local voice = softcut_zig.new(1, runtime, {})
+    local voice = softcut_zig.new(1, runtime, {
+      sample_path = "/tmp/zig.wav",
+    })
 
     voice:play_note(60, 0.8, 1)
     local coro_id = voice.active_notes[60]
@@ -198,5 +261,34 @@ describe("softcut_zig voice", function()
     assert.is_nil(voice.active_note)
     assert.are.same({1, 0}, find_last_call(runtime, "level").args)
     assert.are.same({1, false}, find_last_call(runtime, "play").args)
+  end)
+
+  it("returns a soft failure when the sample is missing", function()
+    local runtime = make_runtime({ file_exists = false })
+    local voice = softcut_zig.new(1, runtime, {
+      sample_path = "/tmp/missing.wav",
+    })
+
+    local ok, err = voice:play_note(60, 0.8, 1)
+
+    assert.is_nil(ok)
+    assert.are.equal("sample_missing", err)
+    assert.is_false(voice.available)
+    assert.is_nil(find_last_call(runtime, "rate"))
+    assert.is_true(#runtime.warnings > 0)
+  end)
+
+  it("returns a distinct error when sample loading fails", function()
+    local runtime = make_runtime({ load_ok = false })
+    local voice = softcut_zig.new(1, runtime, {
+      sample_path = "/tmp/zig.wav",
+    })
+
+    local ok, err = voice:play_note(60, 0.8, 1)
+
+    assert.is_nil(ok)
+    assert.are.equal("load_failed", err)
+    assert.are.equal("load_failed", voice.last_error)
+    assert.is_false(voice.available)
   end)
 end)

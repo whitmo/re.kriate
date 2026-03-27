@@ -30,7 +30,22 @@ local function merge_config(cfg)
   local merged = {}
   for k, v in pairs(DEFAULTS) do merged[k] = v end
   for k, v in pairs(cfg or {}) do merged[k] = v end
+  if merged.end_sec <= merged.start_sec then
+    merged.end_sec = merged.start_sec + 0.001
+  end
   return merged
+end
+
+local function file_exists(path)
+  if not path or path == "" then
+    return false
+  end
+  local fh = io.open(path, "r")
+  if fh then
+    fh:close()
+    return true
+  end
+  return false
 end
 
 function M.new(voice_id, runtime, config)
@@ -40,60 +55,124 @@ function M.new(voice_id, runtime, config)
     config = merge_config(config),
     active_notes = {},
     active_note = nil,
+    note_off_coro = nil,
     portamento_override = nil,
+    available = false,
+    last_error = nil,
   }
 
   local clock = rawget(_G, "clock") or {
-    run = function(fn) return fn() end,
+    run = function() return nil end,
     cancel = function() end,
     sync = function() end,
   }
   self.clock = clock
 
+  local function warn(msg)
+    if self.runtime.warn then
+      self.runtime.warn(msg)
+    end
+  end
+
+  local function current_slew()
+    if self.portamento_override and self.portamento_override > 0 then
+      return self.portamento_override
+    end
+    return self.config.rate_slew or 0
+  end
+
+  local function stop_current(cancel_pending)
+    if cancel_pending and self.note_off_coro then
+      self.clock.cancel(self.note_off_coro)
+      self.note_off_coro = nil
+    end
+    if self.runtime.fade_time then
+      self.runtime.fade_time(self.voice_id, self.config.release)
+    end
+    if self.runtime.level_slew_time then
+      self.runtime.level_slew_time(self.voice_id, self.config.release)
+    end
+    if self.runtime.play then
+      self.runtime.play(self.voice_id, false)
+    end
+    self.active_note = nil
+  end
+
   function self:apply_config(cfg)
     self.config = merge_config(cfg)
     local start_sec = self.config.start_sec or 0
     local duration = (self.config.end_sec or 0) - start_sec
-    if duration <= 0 then duration = 0.001 end
 
-    if self.runtime.buffer_read_mono and self.config.sample_path then
-      self.runtime.buffer_read_mono(self.config.sample_path, start_sec, duration)
+    if not self.config.sample_path then
+      self.available = false
+      self.last_error = "sample_missing"
+      warn("softcut_zig: missing sample path")
+    else
+      local exists = self.runtime.file_exists or file_exists
+      if not exists(self.config.sample_path) then
+        self.available = false
+        self.last_error = "sample_missing"
+        warn("softcut_zig: sample missing: " .. self.config.sample_path)
+      elseif self.runtime.load_sample then
+        local ok, err = self.runtime.load_sample(self.voice_id, self.config.sample_path, self.config)
+        if ok == false then
+          self.available = false
+          self.last_error = err or "load_failed"
+          warn("softcut_zig: sample load failed: " .. tostring(self.last_error))
+        else
+          self.available = true
+          self.last_error = nil
+        end
+      elseif self.runtime.buffer_read_mono then
+        self.runtime.buffer_read_mono(self.config.sample_path, start_sec, duration)
+        self.available = true
+        self.last_error = nil
+      else
+        self.available = true
+        self.last_error = nil
+      end
     end
+
     if self.runtime.enable then self.runtime.enable(self.voice_id, true) end
-    if self.runtime.loop then self.runtime.loop(self.voice_id, self.config.loop) end
+    if self.runtime.loop then self.runtime.loop(self.voice_id, self.config.loop and true or false) end
     if self.runtime.loop_start then self.runtime.loop_start(self.voice_id, start_sec) end
     if self.runtime.loop_end then self.runtime.loop_end(self.voice_id, start_sec + duration) end
-    if self.runtime.fade_time then self.runtime.fade_time(self.voice_id, self.config.release) end
-    local slew = self.portamento_override
-    if not slew or slew == 0 then slew = self.config.rate_slew or 0 end
-    if self.runtime.rate_slew_time then self.runtime.rate_slew_time(self.voice_id, slew) end
+    if self.runtime.position then self.runtime.position(self.voice_id, start_sec) end
+    if self.runtime.fade_time then self.runtime.fade_time(self.voice_id, self.config.attack) end
+    if self.runtime.rate_slew_time then self.runtime.rate_slew_time(self.voice_id, current_slew()) end
     if self.runtime.pan then self.runtime.pan(self.voice_id, clamp(self.config.pan or 0, -1, 1)) end
+    if self.runtime.level then self.runtime.level(self.voice_id, self.config.level or 1) end
+    if self.runtime.play then self.runtime.play(self.voice_id, false) end
   end
 
   function self:set_portamento(val)
-    self.portamento_override = val
-    local slew = val
-    if not slew or slew == 0 then slew = self.config.rate_slew or 0 end
+    self.portamento_override = val or 0
+    self.config.rate_slew = self.portamento_override
     if self.runtime.rate_slew_time then
-      self.runtime.rate_slew_time(self.voice_id, slew)
-    end
-  end
-
-  local function apply_rate_slew(self)
-    local slew = self.portamento_override
-    if not slew or slew == 0 then slew = self.config.rate_slew or 0 end
-    if self.runtime.rate_slew_time then
-      self.runtime.rate_slew_time(self.voice_id, slew)
+      self.runtime.rate_slew_time(self.voice_id, current_slew())
     end
   end
 
   function self:note_on(note, vel)
-    apply_rate_slew(self)
+    if not self.available then
+      return nil, self.last_error or "sample_missing"
+    end
+
+    if self.active_note ~= nil then
+      stop_current(true)
+    end
+
+    if self.runtime.fade_time then
+      self.runtime.fade_time(self.voice_id, self.config.attack)
+    end
+    if self.runtime.rate_slew_time then
+      self.runtime.rate_slew_time(self.voice_id, current_slew())
+    end
     if self.runtime.position then
       self.runtime.position(self.voice_id, self.config.start_sec)
     end
     if self.runtime.level then
-      self.runtime.level(self.voice_id, (vel or 1) * (self.config.level or 1))
+      self.runtime.level(self.voice_id, clamp((vel or 1) * (self.config.level or 1), 0, 1))
     end
     if self.runtime.rate then
       self.runtime.rate(self.voice_id, midi_to_rate(note, self.config.root_note))
@@ -102,33 +181,35 @@ function M.new(voice_id, runtime, config)
       self.runtime.play(self.voice_id, true)
     end
     self.active_note = note
+    return true
   end
 
   function self:note_off(note)
     if self.active_note ~= note then
       return
     end
-    local coro = self.active_notes[note]
-    if coro then
-      self.clock.cancel(coro)
-      self.active_notes[note] = nil
+    if self.note_off_coro then
+      self.clock.cancel(self.note_off_coro)
+      self.note_off_coro = nil
     end
-    self.active_note = nil
-    if self.runtime.level_slew_time then
-      self.runtime.level_slew_time(self.voice_id, self.config.release)
-    end
-    if self.runtime.play then
-      self.runtime.play(self.voice_id, false)
-    end
+    self.active_notes[note] = nil
+    stop_current(false)
   end
 
   function self:play_note(note, vel, dur)
-    self:note_on(note, vel)
-    local coro_id = self.clock.run(function()
+    local ok, err = self:note_on(note, vel)
+    if not ok then
+      return nil, err
+    end
+    local coro_id
+    coro_id = self.clock.run(function()
       self.clock.sync(dur)
-      self:note_off(note)
+      if self.note_off_coro == coro_id then
+        self:note_off(note)
+      end
     end)
     self.active_notes[note] = coro_id
+    self.note_off_coro = coro_id
     return true
   end
 
@@ -137,6 +218,7 @@ function M.new(voice_id, runtime, config)
       self.clock.cancel(coro)
       self.active_notes[note] = nil
     end
+    self.note_off_coro = nil
     self.active_note = nil
     if self.runtime.level then self.runtime.level(self.voice_id, 0) end
     if self.runtime.play then self.runtime.play(self.voice_id, false) end
