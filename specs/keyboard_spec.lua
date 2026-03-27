@@ -145,6 +145,13 @@ describe("keyboard", function()
       assert.are.equal(ctx.active_page, "velocity")
     end)
 
+    it("ctrl+p jumps to probability page and sets status", function()
+      local ctx = make_ctx()
+      keyboard.key(ctx, "p", {ctrl = true}, false, 1)
+      assert.are.equal("probability", ctx.active_page)
+      assert.are.equal("probability page", ctx.pattern_message.text)
+    end)
+
   end)
 
   describe("pattern save (ctrl+number)", function()
@@ -209,6 +216,18 @@ describe("keyboard", function()
 
       assert.are.equal(8, ctx.tracks[1].division)
       assert.are.equal("loaded bank", ctx.pattern_message.text)
+    end)
+
+    it("ctrl+b lists saved banks", function()
+      local ctx = make_ctx()
+      params:set("pattern_bank_name", "alpha-bank")
+      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
+      params:set("pattern_bank_name", "beta-bank")
+      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
+
+      keyboard.key(ctx, "b", {ctrl = true}, false, 1)
+
+      assert.are.equal("banks: alpha-bank, beta-bank", ctx.pattern_message.text)
     end)
 
     it("ctrl+shift+d deletes the configured bank and removes it from the list", function()

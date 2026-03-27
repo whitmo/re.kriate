@@ -20,6 +20,20 @@ if not bit then
 end
 
 local data_dir_override = nil
+local fs_override = nil
+
+local function shell_quote(path)
+  return "'" .. tostring(path):gsub("'", "'\\''") .. "'"
+end
+
+local default_fs = {}
+
+local function fs_op(name)
+  if fs_override and fs_override[name] then
+    return fs_override[name]
+  end
+  return default_fs[name]
+end
 
 local function deep_copy(orig)
   if type(orig) ~= "table" then return orig end
@@ -138,28 +152,68 @@ local function serialize(val, indent)
   end
 end
 
-local function ensure_dir(path)
-  local ok = os.execute('mkdir -p "' .. path .. '"')
-  -- os.execute returns true/nil or status code
+default_fs.ensure_dir = function(path)
+  local ok = os.execute("mkdir -p " .. shell_quote(path))
   if ok == true or ok == 0 then return true end
-  return false
+  return nil, "mkdir_failed"
+end
+
+default_fs.rename = function(src, dst)
+  local ok, err = os.rename(src, dst)
+  if ok then return true end
+  return nil, err or "rename_failed"
+end
+
+default_fs.remove = function(path)
+  local ok, err = os.remove(path)
+  if ok then return true end
+  return nil, err or "remove_failed"
+end
+
+default_fs.list = function(path)
+  local p = io.popen("ls -1A " .. shell_quote(path) .. " 2>/dev/null")
+  if not p then return nil, "list_open_failed" end
+  local files = {}
+  for file in p:lines() do
+    table.insert(files, file)
+  end
+  local ok = p:close()
+  if ok == nil or ok == false then
+    return nil, "list_failed"
+  end
+  return files
 end
 
 local function write_file_atomic(path, contents)
   local dir, name = path:match("^(.*)/([^/]+)$")
   if dir and dir ~= "" then
-    if not ensure_dir(dir) then
+    local ok = fs_op("ensure_dir")(dir)
+    if not ok then
       return nil, "mkpath_failed"
     end
   end
   local tmp = dir .. "/." .. name .. ".tmp"
   local f = io.open(tmp, "w")
   if not f then return nil, "tmp_open_failed" end
-  f:write(contents)
-  f:flush()
+
+  local ok_write = f:write(contents)
+  if not ok_write then
+    f:close()
+    fs_op("remove")(tmp)
+    return nil, "tmp_write_failed"
+  end
+
+  local ok_flush = f:flush()
+  if not ok_flush then
+    f:close()
+    fs_op("remove")(tmp)
+    return nil, "tmp_flush_failed"
+  end
   f:close()
-  local mv_ok = os.execute('mv "' .. tmp .. '" "' .. path .. '"')
-  if mv_ok ~= true and mv_ok ~= 0 then
+
+  local renamed = fs_op("rename")(tmp, path)
+  if not renamed then
+    fs_op("remove")(tmp)
     return nil, "rename_failed"
   end
   return true
@@ -221,16 +275,19 @@ local function decode_payload(path)
   return tbl
 end
 
-local function sanitized_path(name)
+local function sanitized_path(name, create_dir)
   local sanitized, err = pattern_persistence.sanitize_name(name)
   if not sanitized then return nil, err end
   local dir = compute_data_dir()
-  if not ensure_dir(dir) then return nil, "mkpath_failed" end
+  if create_dir then
+    local ok = fs_op("ensure_dir")(dir)
+    if not ok then return nil, "mkpath_failed" end
+  end
   return dir .. "/" .. sanitized .. ".krp", nil, sanitized
 end
 
 function pattern_persistence.save(ctx, name)
-  local path, err, sanitized = sanitized_path(name)
+  local path, err, sanitized = sanitized_path(name, true)
   if not path then return nil, err end
   if not ctx or not ctx.patterns then
     return nil, "ctx_missing"
@@ -262,15 +319,15 @@ function pattern_persistence.save(ctx, name)
   payload.checksum = checksum
   local final_serialized = encode_payload(payload)
 
-  local ok, write_err = pcall(write_file_atomic, path, final_serialized)
-  if not ok then return nil, "write_error:" .. tostring(write_err) end
-  if write_err == false then return nil, "write_error" end
+  local call_ok, write_ok, write_err = pcall(write_file_atomic, path, final_serialized)
+  if not call_ok then return nil, "write_error:" .. tostring(write_ok) end
+  if not write_ok then return nil, write_err or "write_error" end
 
   return true, path, sanitized
 end
 
 function pattern_persistence.load(ctx, name)
-  local path, err = sanitized_path(name)
+  local path, err = sanitized_path(name, false)
   if not path then return nil, err end
   if not file_exists(path) then return nil, "not_found" end
 
@@ -302,33 +359,37 @@ end
 
 function pattern_persistence.list()
   local dir = compute_data_dir()
-  ensure_dir(dir)
-  local cmd = 'ls "' .. dir .. '"'
-  local p = io.popen(cmd)
-  if not p then return {} end
+  local files = fs_op("list")(dir)
+  if not files then return {} end
   local names = {}
-  for file in p:lines() do
+  for _, file in ipairs(files) do
     local name = file:match("^(.*)%.krp$")
     if name and name ~= "" then
       table.insert(names, name)
     end
   end
-  p:close()
   table.sort(names)
   return names
 end
 
 function pattern_persistence.delete(name)
-  local path, err = sanitized_path(name)
+  local path, err = sanitized_path(name, false)
   if not path then return nil, err end
   if not file_exists(path) then return nil, "not_found" end
-  os.remove(path)
+  local ok = fs_op("remove")(path)
+  if not ok then
+    return nil, "delete_failed"
+  end
   return true
 end
 
 -- Testing hook to keep specs hermetic
 function pattern_persistence._test_set_data_dir(path)
   data_dir_override = path
+end
+
+function pattern_persistence._test_set_fs(fs_impl)
+  fs_override = fs_impl
 end
 
 return pattern_persistence
