@@ -53,6 +53,9 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     else
       set_status(ctx, "delete failed: " .. tostring(err))
     end
+  elseif char == "p" and modifiers and modifiers.ctrl then
+    ctx.active_page = "probability"
+    set_status(ctx, "probability page")
   elseif char == "r" then
     sequencer.reset(ctx)
   elseif char >= "1" and char <= "9" and modifiers and modifiers.ctrl and ctx.patterns then

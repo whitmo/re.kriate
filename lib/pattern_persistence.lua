@@ -183,6 +183,30 @@ local function encode_payload(payload)
   return "return " .. serialize(payload, "")
 end
 
+local function ensure_probability(track)
+  if not track or not track.params then return end
+  if track.params.probability then return end
+  local steps = {}
+  for i = 1, 16 do steps[i] = 100 end
+  track.params.probability = {
+    steps = steps,
+    loop_start = 1,
+    loop_end = 6,
+    pos = 1,
+  }
+end
+
+local function ensure_probability_slots(slots)
+  if not slots then return end
+  for _, slot in pairs(slots) do
+    if slot.tracks then
+      for _, track in pairs(slot.tracks) do
+        ensure_probability(track)
+      end
+    end
+  end
+end
+
 local function decode_payload(path)
   if tab and tab.load then
     local ok, data = pcall(tab.load, path)
@@ -262,6 +286,7 @@ function pattern_persistence.load(ctx, name)
   end
 
   if not data.slots then return nil, "invalid_payload" end
+  ensure_probability_slots(data.slots)
 
   local slots = data.slots
   ctx.patterns = deep_copy(slots)
