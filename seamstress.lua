@@ -19,10 +19,18 @@ local grid_render = require("lib/seamstress/grid_render")
 local track_mod = require("lib/track")
 local log = require("lib/log")
 
+local GRID_WIDTH = 16 * 16  -- cols * pitch
+local GRID_HEIGHT = 8 * 16  -- rows * pitch
+
 local ctx
 
 function init()
   log.session_start()
+
+  -- Size window to the simulated grid so it fills the view
+  if screen.set_size then
+    screen.set_size(GRID_WIDTH, GRID_HEIGHT)
+  end
 
   -- Sprite voices (additive visual output, one per track)
   local sprite_voices = {}
