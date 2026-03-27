@@ -18,6 +18,7 @@ For an interactive visual guide to the grid interface, see [`docs/grid-interface
 - Monome grid UI with trigger overview, per-parameter editing, and extended page toggle
 - Keyboard fallback controls (seamstress)
 - Musically useful default patterns out of the box
+- Pattern bank disk persistence API with checksum validation
 - Sprite visualization layer (seamstress)
 
 ### Norns
@@ -76,7 +77,7 @@ cd re.kriate
 Run with the `-s` flag:
 
 ```
-/opt/homebrew/opt/seamstress@1/bin/seamstress -s re_kriate_seamstress.lua
+/opt/homebrew/opt/seamstress@1/bin/seamstress -s seamstress.lua
 ```
 
 Make sure a MIDI device is connected before launching. The script sends MIDI on channels 1-4 (one per track) by default, configurable in the params menu.
@@ -131,6 +132,29 @@ Row 8 layout:
 | Ctrl+1-9 | Save pattern to slot |
 | Shift+1-9 | Load pattern from slot |
 
+### Pattern bank persistence
+
+Pattern slots now have a disk persistence module in `lib/pattern_persistence.lua`.
+It saves the full 16-slot bank with a checksum guard so corrupted files are rejected
+before `ctx` is mutated.
+
+```lua
+local pp = require("lib/pattern_persistence")
+
+local ok, path_or_err = pp.save(ctx, "my-set")
+assert(ok, path_or_err)
+
+local loaded, err = pp.load(ctx, "my-set")
+assert(loaded, err)
+
+local banks = pp.list()
+assert.are.same({"my-set"}, banks)
+```
+
+For a quick manual smoke test, use `lua scripts/pattern_persistence_demo.lua save demo`
+and `lua scripts/pattern_persistence_demo.lua load demo`, or run tests with
+`./scripts/busted.sh --no-auto-insulate specs/pattern_persistence_spec.lua`.
+
 ### Parameters
 
 - **root note** -- scale root (MIDI note, default 60/C4)
@@ -167,7 +191,7 @@ Each track has a direction mode that controls how all its parameters step throug
 
 ```
 re_kriate.lua              norns entrypoint (thin global hooks)
-re_kriate_seamstress.lua   seamstress entrypoint (MIDI voices, keyboard, sprites)
+seamstress.lua             seamstress entrypoint (MIDI voices, keyboard, sprites)
 
 lib/app.lua                init, params, grid, screen, key/enc
 lib/sequencer.lua          clock-driven step advancement, voice output
@@ -175,6 +199,7 @@ lib/track.lua              data model (steps, loops, defaults)
 lib/grid_ui.lua            grid display and input
 lib/scale.lua              scale quantization via musicutil
 lib/pattern.lua            pattern save/load slots
+lib/pattern_persistence.lua pattern bank save/load/list/delete on disk
 lib/direction.lua          playhead direction modes (forward, reverse, pendulum, drunk, random)
 lib/grid_provider.lua      pluggable grid provider interface
 
