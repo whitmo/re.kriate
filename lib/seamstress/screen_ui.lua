@@ -15,6 +15,7 @@ local SLOT_BRIGHT = {200, 200, 255, 255}
 
 -- Draw 9 pattern slot indicators
 local function draw_pattern_slots(ctx)
+  local start_x = math.floor((256 - 122) / 2) -- center 9 slots of width 10 with 14px pitch
   for i = 1, 9 do
     local color = SLOT_DIM
     if ctx.patterns and pattern.is_populated(ctx.patterns, i) then
@@ -24,7 +25,7 @@ local function draw_pattern_slots(ctx)
       color = SLOT_BRIGHT
     end
     screen.color(color[1], color[2], color[3], color[4])
-    screen.move(10 + (i - 1) * 14, 122)
+    screen.move(start_x + (i - 1) * 14, 122)
     screen.rect_fill(10, 5)
   end
 end
@@ -37,7 +38,7 @@ local function draw_pattern_message(ctx)
     return
   end
   screen.color(200, 200, 255, 255)
-  screen.move(150, 122)
+  screen.move(80, 112)
   screen.text(ctx.pattern_message.text)
 end
 

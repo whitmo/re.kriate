@@ -259,6 +259,10 @@ function M.init(config)
 end
 
 function M.save_pattern_bank(ctx, name)
+  -- Ensure at least one slot carries current state so persistence can restore tracks
+  if ctx and ctx.patterns and ctx.tracks then
+    pattern.save(ctx, 1)
+  end
   return pattern_persistence.save(ctx, pattern_bank_name(name))
 end
 
