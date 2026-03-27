@@ -11,6 +11,12 @@ local CELL_SIZE = 14
 local CELL_PITCH = 16
 local GRID_COLS = 16
 local GRID_ROWS = 8
+local NAV_LOOP_X = 12
+local NAV_PATTERN_X = 14
+local NAV_Y = 8
+
+-- Track latched nav buttons per grid instance
+local held_by_grid = setmetatable({}, {__mode = "k"})
 
 --- Map grid brightness (0-15) to warm amber RGB color.
 --- @param brightness number  Brightness level 0-15
@@ -66,9 +72,28 @@ end
 --- @param state number  1 for press, 0 for release
 --- @param button number  Mouse button (1=left, 2=right, 3=middle)
 function M.handle_click(grid, px, py, state, button)
-  if button ~= 1 then return end
+  if button ~= 1 and button ~= 2 then return end
   local gx, gy = M.pixel_to_grid(px, py)
   if not gx then return end
+
+  if button == 2 and gy == NAV_Y and (gx == NAV_LOOP_X or gx == NAV_PATTERN_X) then
+    -- Right-click latches/unlatches loop or pattern holds
+    held_by_grid[grid] = held_by_grid[grid] or {}
+    local key = gx .. ":" .. gy
+    local currently_held = held_by_grid[grid][key] == true
+    local z = currently_held and 0 or 1
+    held_by_grid[grid][key] = not currently_held
+    if grid.key then
+      grid.key(gx, gy, z)
+    end
+    return
+  end
+
+  -- Ignore other right-clicks
+  if button == 2 then
+    return
+  end
+
   if grid.key then
     grid.key(gx, gy, state)
   end
