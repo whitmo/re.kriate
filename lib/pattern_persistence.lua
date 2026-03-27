@@ -294,16 +294,17 @@ function pattern_persistence.save(ctx, name)
   end
 
   -- Always snapshot current tracks into slot 1 so save captures live state
+  local slots = deep_copy(ctx.patterns)
   if ctx.tracks then
-    ctx.patterns[1] = ctx.patterns[1] or {}
-    ctx.patterns[1].tracks = deep_copy(ctx.tracks)
-    ctx.patterns[1].populated = true
+    slots[1] = slots[1] or {}
+    slots[1].tracks = deep_copy(ctx.tracks)
+    slots[1].populated = true
   end
 
   local payload = {
     version = 1,
     saved_slot = 1,
-    slots = deep_copy(ctx.patterns),
+    slots = slots,
   }
 
   -- pick first populated slot as default loaded slot
