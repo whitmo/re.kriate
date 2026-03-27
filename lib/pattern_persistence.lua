@@ -212,6 +212,13 @@ function pattern_persistence.save(ctx, name)
     return nil, "ctx_missing"
   end
 
+  -- Always snapshot current tracks into slot 1 so save captures live state
+  if ctx.tracks then
+    ctx.patterns[1] = ctx.patterns[1] or {}
+    ctx.patterns[1].tracks = deep_copy(ctx.tracks)
+    ctx.patterns[1].populated = true
+  end
+
   local payload = {
     version = 1,
     saved_slot = 1,
