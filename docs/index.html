@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate docs</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent-dim: rgba(88,166,255,0.1);
+    --green: #3fb950;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --pink: #f778ba;
+    --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .wrap {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 60px 24px 80px;
+  }
+
+  header {
+    margin-bottom: 48px;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  h1 span {
+    color: var(--accent);
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 1.05rem;
+    max-width: 600px;
+  }
+
+  .section {
+    margin-bottom: 40px;
+  }
+
+  .section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    padding-left: 2px;
+  }
+
+  .cards {
+    display: grid;
+    gap: 10px;
+  }
+
+  a.card {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  a.card:hover {
+    border-color: var(--accent);
+    background: var(--surface2);
+  }
+
+  .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title .tag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .tag-arch { background: rgba(188,140,255,0.15); color: var(--purple); }
+  .tag-guide { background: rgba(63,185,80,0.15); color: var(--green); }
+  .tag-tutorial { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .tag-report { background: rgba(247,120,186,0.15); color: var(--pink); }
+
+  .card-desc {
+    color: var(--text-dim);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  footer a:hover {
+    text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>re.<span>kriate</span> docs</h1>
+    <p class="subtitle">
+      Explainers, guides, and references for the norns sequencer inspired by Monome kria.
+    </p>
+  </header>
+
+  <section class="section">
+    <div class="section-label">Architecture &amp; Systems</div>
+    <div class="cards">
+      <a class="card" href="event-system-explainer.html">
+        <div class="card-title">
+          Event System
+          <span class="tag tag-arch">architecture</span>
+        </div>
+        <div class="card-desc">
+          How the pub/sub event bus works &mdash; event taxonomy, wildcard matching, and flow through the sequencer.
+        </div>
+      </a>
+      <a class="card" href="voices.html">
+        <div class="card-title">
+          Voice System Deep Dive
+          <span class="tag tag-arch">architecture</span>
+        </div>
+        <div class="card-desc">
+          The voice abstraction layer: how tracks route to output backends (MIDI, OSC, Crow, SuperCollider).
+        </div>
+      </a>
+      <a class="card" href="synthetic-grid-explainer.html">
+        <div class="card-title">
+          Synthetic Grid
+          <span class="tag tag-arch">architecture</span>
+        </div>
+        <div class="card-desc">
+          The software grid layer &mdash; LED brightness mapping, grid layout, and how tests interact with grid state without hardware.
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-label">Guides &amp; Tutorials</div>
+    <div class="cards">
+      <a class="card" href="grid-interface.html">
+        <div class="card-title">
+          Grid Interface Guide
+          <span class="tag tag-guide">guide</span>
+        </div>
+        <div class="card-desc">
+          Complete reference for the 16&times;8 grid layout: navigation row, page displays, and parameter editing.
+        </div>
+      </a>
+      <a class="card" href="tutorials/polymetric-sequencing.html">
+        <div class="card-title">
+          Polymetric Sequencing
+          <span class="tag tag-tutorial">tutorial</span>
+        </div>
+        <div class="card-desc">
+          Interactive walkthrough of per-parameter loop lengths, LCM math, and how four tracks create infinite variation.
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-label">Project Reports</div>
+    <div class="cards">
+      <a class="card" href="testing-coverage.html">
+        <div class="card-title">
+          Test Coverage &amp; Testing Guide
+          <span class="tag tag-report">report</span>
+        </div>
+        <div class="card-desc">
+          Per-file coverage breakdown, module architecture diagram, and test suite inventory.
+        </div>
+      </a>
+      <a class="card" href="code-review.html">
+        <div class="card-title">
+          Adversarial Code Review
+          <span class="tag tag-report">report</span>
+        </div>
+        <div class="card-desc">
+          Critical review of the codebase: findings, risk areas, and recommendations.
+        </div>
+      </a>
+      <a class="card" href="work-complete-visual.html">
+        <div class="card-title">
+          Work Complete Visual
+          <span class="tag tag-report">report</span>
+        </div>
+        <div class="card-desc">
+          Dashboard snapshot of a review cycle &mdash; merge status, origin groups, and completed items.
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <footer>
+    <a href="https://github.com/whitmo/re.kriate">re.kriate on GitHub</a>
+    &nbsp;&middot;&nbsp; a norns sequencer inspired by
+    <a href="https://monome.org/docs/ansible/kria/">Monome kria</a>
+  </footer>
+
+</div>
+</body>
+</html>
