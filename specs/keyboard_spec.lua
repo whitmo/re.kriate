@@ -366,6 +366,34 @@ describe("keyboard", function()
 
   end)
 
+  describe("direction cycling", function()
+
+    it("d cycles direction from forward to reverse", function()
+      local ctx = make_ctx()
+      assert.are.equal("forward", ctx.tracks[1].direction)
+      keyboard.key(ctx, "d", {}, false, 1)
+      assert.are.equal("reverse", ctx.tracks[1].direction)
+    end)
+
+    it("d cycles through all modes in order", function()
+      local ctx = make_ctx()
+      local expected = {"reverse", "pendulum", "drunk", "random", "forward"}
+      for _, mode in ipairs(expected) do
+        keyboard.key(ctx, "d", {}, false, 1)
+        assert.are.equal(mode, ctx.tracks[ctx.active_track].direction)
+      end
+    end)
+
+    it("d affects only the active track", function()
+      local ctx = make_ctx()
+      ctx.active_track = 2
+      keyboard.key(ctx, "d", {}, false, 1)
+      assert.are.equal("forward", ctx.tracks[1].direction)
+      assert.are.equal("reverse", ctx.tracks[2].direction)
+    end)
+
+  end)
+
   describe("input filtering", function()
 
     it("ignores key up events (state ~= 1)", function()

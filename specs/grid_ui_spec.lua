@@ -1428,4 +1428,52 @@ describe("grid_ui", function()
 
   end)
 
+  -- ========================================================================
+  -- Direction cycling via grid nav
+  -- ========================================================================
+
+  describe("direction cycling (nav x=11)", function()
+
+    it("pressing x=11 cycles direction from forward to reverse", function()
+      local ctx = make_ctx()
+      assert.are.equal("forward", ctx.tracks[1].direction)
+      grid_ui.key(ctx, 11, 8, 1)
+      assert.are.equal("reverse", ctx.tracks[1].direction)
+    end)
+
+    it("cycles through all modes in order", function()
+      local ctx = make_ctx()
+      local expected = {"reverse", "pendulum", "drunk", "random", "forward"}
+      for _, mode in ipairs(expected) do
+        grid_ui.key(ctx, 11, 8, 1)
+        assert.are.equal(mode, ctx.tracks[ctx.active_track].direction)
+      end
+    end)
+
+    it("affects only the active track", function()
+      local ctx = make_ctx()
+      ctx.active_track = 2
+      grid_ui.key(ctx, 11, 8, 1)
+      assert.are.equal("forward", ctx.tracks[1].direction)
+      assert.are.equal("reverse", ctx.tracks[2].direction)
+    end)
+
+    it("nav LED is dim for forward, bright for other modes", function()
+      local ctx, g = make_ctx()
+      grid_ui.redraw(ctx)
+      assert.are.equal(3, g:get_led(11, 8))  -- forward = dim
+
+      ctx.tracks[1].direction = "reverse"
+      grid_ui.redraw(ctx)
+      assert.are.equal(10, g:get_led(11, 8))  -- non-forward = bright
+    end)
+
+    it("ignores key release (z=0)", function()
+      local ctx = make_ctx()
+      grid_ui.key(ctx, 11, 8, 0)
+      assert.are.equal("forward", ctx.tracks[1].direction)
+    end)
+
+  end)
+
 end)
