@@ -230,6 +230,7 @@ describe("keyboard", function()
       assert.are.equal("banks: alpha-bank, beta-bank", ctx.pattern_message.text)
     end)
 
+
     it("ctrl+shift+d deletes the configured bank and removes it from the list", function()
       local ctx = make_ctx()
       params:set("pattern_bank_name", "delete-bank")

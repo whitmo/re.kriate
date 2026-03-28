@@ -290,6 +290,7 @@ describe("pattern_persistence", function()
     end)
   end)
 
+
   describe("list and delete", function()
     it("lists saved banks sorted and ignores temp files", function()
       local ctx = make_ctx()

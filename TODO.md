@@ -18,6 +18,7 @@
 ## Tests (headless)
 - [ ] `./scripts/busted.sh --no-auto-insulate specs` (passes; seamstress_load_spec remains pending by design unless SEAMSTRESS_LOAD_TEST=1)
 
+
 ## Alt-track Grid (manual)
 - [ ] Nav x=15 enters alt_track page; rows 1-4 map to tracks
 - [ ] Cols 1-4 set direction (forward/reverse/pendulum/random) per row
