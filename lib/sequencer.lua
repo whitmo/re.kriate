@@ -7,6 +7,12 @@ local direction_mod = require("lib/direction")
 local log = require("lib/log")
 
 local M = {}
+local function roll(ctx)
+  if ctx and ctx.rng then
+    return ctx.rng() * 100
+  end
+  return math.random() * 100
+end
 
 -- Glide time map: step value -> portamento time in seconds
 -- 1 = off, 2-7 = increasing portamento duration
@@ -130,6 +136,12 @@ function M.step_track(ctx, track_num)
 
   -- fire note on trigger
   if vals.trigger == 1 then
+    local prob = vals.probability or 100
+    local r = roll(ctx)
+    if r > prob then
+      ctx.grid_dirty = true
+      return
+    end
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
 
     -- if muted, skip audio but still fire ghost sprite

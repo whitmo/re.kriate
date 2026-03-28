@@ -10,7 +10,7 @@ local pattern = require("lib/pattern")
 local M = {}
 
 -- Page names (primary + extended)
-M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
+M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "ratchet", "alt_note", "glide", "alt_track"}
 
 -- Extended page mappings: primary -> extended
 M.EXTENDED_PAGES = {trigger = "ratchet", note = "alt_note", octave = "glide"}
@@ -24,17 +24,23 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 -- x=8: octave page (double-tap: glide)
 -- x=9: duration page
 -- x=10: velocity page
+-- x=11: probability page
 -- x=5: mute toggle
 -- x=12: loop modifier (hold)
 -- x=14: pattern mode (hold)
+-- x=15: alt-track page (direction/division/swing/mute)
 -- x=16: play/stop
 
 local NAV_TRACK = {1, 2, 3, 4} -- @@ unused
 local NAV_MUTE = 5
-local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration", [10] = "velocity"}
+local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration", [10] = "velocity", [11] = "probability", [15] = "alt_track"}
 local NAV_LOOP = 12
 local NAV_PATTERN = 14
 local NAV_PLAY = 16
+
+local ALT_DIRECTIONS = {"forward", "reverse", "pendulum", "drunk", "random"}
+local ALT_DIVISIONS = {1,2,3,4,5,6,7}
+local ALT_SWING = {0, 25, 50, 75, 100}
 
 function M.redraw(ctx)
   local g = ctx.g
@@ -49,6 +55,8 @@ function M.redraw(ctx)
 
     if page == "trigger" then
       M.draw_trigger_page(ctx, g)
+    elseif page == "alt_track" then
+      M.draw_alt_track_page(ctx, g)
     else
       -- All other pages (including extended: ratchet, alt_note, glide) use value display
       M.draw_value_page(ctx, g, page)
@@ -87,28 +95,83 @@ end
 function M.draw_value_page(ctx, g, page)
   local track = ctx.tracks[ctx.active_track]
   local param = track.params[page]
+  local is_prob = (page == "probability")
   for x = 1, track_mod.NUM_STEPS do
     local val = param.steps[x]
     local in_loop = x >= param.loop_start and x <= param.loop_end
     for y = 1, 7 do
       local brightness = 0
-      -- value display: row 1 = value 7, row 7 = value 1
-      local row_val = 8 - y
-      if row_val == val then
-        brightness = in_loop and 10 or 4
-      elseif row_val < val and in_loop then
-        brightness = 3
-      end
-      -- playhead column
-      if x == param.pos and ctx.playing then
+      if is_prob then
+        local pct = val or 0
+        local row_thresh = (8 - y) * (100 / 7)
+        if pct >= row_thresh then
+          brightness = in_loop and 10 or 4
+        end
+        if x == param.pos and ctx.playing then
+          brightness = math.min(15, brightness + 5)
+        end
+      else
+        -- value display: row 1 = value 7, row 7 = value 1
+        local row_val = 8 - y
         if row_val == val then
-          brightness = 15
-        elseif row_val < val then
-          brightness = 6
+          brightness = in_loop and 10 or 4
+        elseif row_val < val and in_loop then
+          brightness = 3
+        end
+        -- playhead column
+        if x == param.pos and ctx.playing then
+          if row_val == val then
+            brightness = 15
+          elseif row_val < val then
+            brightness = 6
+          end
         end
       end
       g:led(x, y, brightness)
     end
+  end
+end
+
+-- Alt-track settings page (rows = tracks)
+-- x1-5: direction (forward, reverse, pendulum, drunk, random)
+-- x6-12: division (1..7)
+-- x11-15: swing (0,25,50,75,100)
+-- x16: mute toggle
+function M.draw_alt_track_page(ctx, g)
+  local active_track = ctx.active_track or 1
+  for t = 1, track_mod.NUM_TRACKS do
+    local track = ctx.tracks[t]
+    local is_active_row = (t == active_track)
+    local is_muted = track.muted
+    -- directions
+    for i, dir in ipairs(ALT_DIRECTIONS) do
+      local selected = (track.direction == dir)
+      local brightness = selected and 10 or 2
+      if is_active_row then brightness = math.min(12, brightness + 2) end
+      if is_muted and not selected then brightness = math.max(1, brightness - 1) end
+      g:led(i, t, brightness)
+    end
+    -- division
+    for idx, div in ipairs(ALT_DIVISIONS) do
+      local x = 5 + idx
+      local selected = (track.division == div)
+      local brightness = selected and 10 or 2
+      if is_active_row then brightness = math.min(12, brightness + 2) end
+      if is_muted and not selected then brightness = math.max(1, brightness - 1) end
+      g:led(x, t, brightness)
+    end
+    -- swing (coarse buckets)
+    for idx, swing in ipairs(ALT_SWING) do
+      local x = 10 + idx -- 11..15
+      local selected = (track.swing == swing)
+      local base = selected and 10 or 2
+      if is_active_row then base = math.min(12, base + 2) end
+      if is_muted and not selected then base = math.max(1, base - 1) end
+      g:led(x, t, base)
+    end
+    -- mute
+    local mute_brightness = track.muted and 15 or (is_active_row and 4 or 2)
+    g:led(16, t, mute_brightness)
   end
 end
 
@@ -216,6 +279,10 @@ function M.nav_key(ctx, x, z)
   if x == NAV_PATTERN then
     ctx.pattern_held = (z == 1)
   end
+  -- alt-track page toggle (x=15)
+  if x == 15 and z == 1 then
+    ctx.active_page = "alt_track"
+  end
   -- play/stop
   if x == NAV_PLAY and z == 1 then
     local seq = require("lib/sequencer")
@@ -233,6 +300,14 @@ function M.grid_key(ctx, x, y, z)
   -- pattern slot selection mode
   if ctx.pattern_held then
     M.pattern_key(ctx, x, y)
+    return
+  end
+
+  -- alt-track page (bypasses loop/pattern edits)
+  if ctx.active_page == "alt_track" then
+    if z == 1 then
+      M.alt_track_key(ctx, x, y)
+    end
     return
   end
 
@@ -262,10 +337,17 @@ end
 function M.value_key(ctx, x, y, page)
   local track = ctx.tracks[ctx.active_track]
   local param = track.params[page]
-  -- row 1 = value 7, row 7 = value 1
-  local val = 8 - y
-  -- toggle: if same value, could clear (but for kria, values are always set)
-  track_mod.set_step(param, x, val)
+  if page == "probability" then
+    local pct = math.floor(((8 - y) / 7) * 100 + 0.5)
+    if y == 7 then pct = 0 end
+    if pct < 0 then pct = 0 end
+    if pct > 100 then pct = 100 end
+    track_mod.set_step(param, x, pct)
+  else
+    -- row 1 = value 7, row 7 = value 1
+    local val = 8 - y
+    track_mod.set_step(param, x, val)
+  end
 end
 
 -- Loop editing: first press = start, second press = end
@@ -298,6 +380,42 @@ function M.pattern_key(ctx, x, y)
   pattern.load(ctx, slot)
   if ctx.events then
     ctx.events:emit("pattern:load", {slot=slot})
+  end
+end
+
+-- Alt-track interaction
+function M.alt_track_key(ctx, x, y)
+  if y < 1 or y > track_mod.NUM_TRACKS then return end
+  local track = ctx.tracks[y]
+  if not track then return end
+
+  if x >= 1 and x <= #ALT_DIRECTIONS then
+    track.direction = ALT_DIRECTIONS[x]
+    ctx.active_track = y
+    return
+  end
+
+  if x >= 6 and x <= 12 then
+    local idx = x - 5
+    if ALT_DIVISIONS[idx] then
+      track.division = ALT_DIVISIONS[idx]
+      ctx.active_track = y
+      return
+    end
+  end
+
+  if x >= 11 and x <= 15 then
+    local idx = x - 10
+    if ALT_SWING[idx] ~= nil then
+      track.swing = ALT_SWING[idx]
+      ctx.active_track = y
+      return
+    end
+  end
+
+  if x == 16 then
+    track.muted = not track.muted
+    ctx.active_track = y
   end
 end
 

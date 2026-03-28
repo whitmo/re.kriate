@@ -5,8 +5,8 @@ local M = {}
 
 M.NUM_TRACKS = 4
 M.NUM_STEPS = 16
-M.PARAM_NAMES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
-M.CORE_PARAMS = {"trigger", "note", "octave", "duration", "velocity"}
+M.PARAM_NAMES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide", "probability"}
+M.CORE_PARAMS = {"trigger", "note", "octave", "duration", "velocity", "probability"}
 M.EXTENDED_PARAMS = {"ratchet", "alt_note", "glide"}
 M.DEFAULT_LOOP_LEN = 6
 
@@ -105,6 +105,7 @@ local PARAM_DEFAULTS = {
   ratchet  = 1,  -- 1 = no ratchet
   alt_note = 1,  -- 1 = no offset
   glide    = 1,  -- 1 = no glide
+  probability = 100, -- percent
 }
 
 function M.new_track(track_num)

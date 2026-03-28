@@ -11,6 +11,8 @@ Ensure fundamental features work correctly end-to-end and have thorough test cov
 
 ## Next Up
 
+- [ ] Probability & modifiers on virtual grid: add per-step trigger probability UI, alt-track modifier holds (keyboard + virtual grid), and tests using simulated grid.
+- [x] Pattern persistence: save/load patterns to disk (norns + seamstress) with round-trip tests and checksum guard.
 - [x] Add simulated grid: render an interactive 16x8 grid in the seamstress window using screen drawing primitives (rect_fill for buttons, brightness-mapped colors). Mirror the real grid state — LED brightness maps to button color intensity. Mouse clicks on grid cells generate the same key events as a physical grid (x, y, z=1 on press, z=0 on release). Enables full kria interaction without hardware.
 - [x] Add OSC voice integration: wire lib/voices/osc.lua into app.lua as an alternative voice backend alongside MIDI, with per-track OSC target params (host/port), so external synths (SuperCollider, Max/MSP) can receive note events
 - [x] Add norns platform entrypoint: create re_kriate.lua (norns main script) that mirrors seamstress.lua but uses norns screen API, norns key/enc callbacks, and nb voice output instead of MIDI. Grid and sequencer modules are shared.
