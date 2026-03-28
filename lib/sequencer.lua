@@ -117,10 +117,15 @@ function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
   local dir = track.direction  -- nil defaults to "forward" inside direction.advance
 
-  -- advance all params independently using direction
+  -- advance params independently, respecting per-param clock division
   local vals = {}
   for _, name in ipairs(track_mod.PARAM_NAMES) do
-    vals[name] = direction_mod.advance(track.params[name], dir)
+    local p = track.params[name]
+    if track_mod.should_advance(p) then
+      vals[name] = direction_mod.advance(p, dir)
+    else
+      vals[name] = track_mod.peek(p)
+    end
   end
 
   -- emit step event (before mute check so listeners see all steps)
@@ -201,11 +206,12 @@ function M.play_sprite(ctx, track_num, vals, duration, opts)
   end
 end
 
--- Reset all playheads to loop start
+-- Reset all playheads to loop start and tick counters
 function M.reset(ctx)
   for _, track in ipairs(ctx.tracks) do
     for _, name in ipairs(track_mod.PARAM_NAMES) do
       track.params[name].pos = track.params[name].loop_start
+      track.params[name].tick = 0
     end
   end
 end

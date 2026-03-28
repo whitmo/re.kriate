@@ -49,6 +49,8 @@ function M.new_param(default_val)
     loop_start = 1,
     loop_end = M.DEFAULT_LOOP_LEN,
     pos = 1,
+    clock_div = 1,  -- per-param clock divider: 1 = every tick, 2 = every other, etc.
+    tick = 0,       -- internal tick counter for clock division
   }
 end
 
@@ -138,6 +140,17 @@ function M.new_tracks()
     tracks[i] = M.new_track(i)
   end
   return tracks
+end
+
+-- Check if a param should advance on this tick (based on clock_div).
+-- Increments the internal tick counter; returns true when the param should step.
+function M.should_advance(param)
+  param.tick = param.tick + 1
+  if param.tick >= param.clock_div then
+    param.tick = 0
+    return true
+  end
+  return false
 end
 
 -- Advance a param's position within its loop, return the current step value
