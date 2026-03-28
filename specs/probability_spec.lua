@@ -1,17 +1,111 @@
 -- specs/probability_spec.lua
--- Test per-parameter probability gating in sequencer
+-- Tests for per-parameter probability gating and probability x ratchet interaction
 
 package.path = package.path .. ";./?.lua"
 
+-- Mock clock
+local beat_counter = 0
 rawset(_G, "clock", {
+  get_beats = function() return beat_counter end,
+  run = function(fn) fn(); return 1 end,  -- execute synchronously for testing
+  cancel = function(id) end,
   sync = function() end,
-  run = function(fn) return fn() end,
-  cancel = function() end,
 })
 
+-- Mock params system
+local param_store = {}
+local param_actions = {}
+rawset(_G, "params", {
+  add_separator = function(self, id, name) end,
+  add_group = function(self, id, name, n) end,
+  add_number = function(self, id, name, min, max, default, units, formatter)
+    param_store[id] = default
+  end,
+  add_option = function(self, id, name, options, default)
+    param_store[id] = default
+  end,
+  set_action = function(self, id, fn)
+    param_actions[id] = fn
+  end,
+  get = function(self, id) return param_store[id] end,
+  set = function(self, id, val)
+    param_store[id] = val
+    if param_actions[id] then param_actions[id](val) end
+  end,
+})
+
+-- Mock grid
+rawset(_G, "grid", {
+  connect = function()
+    return {
+      key = nil,
+      led = function(self, x, y, val) end,
+      refresh = function(self) end,
+      all = function(self, val) end,
+    }
+  end,
+})
+
+-- Mock metro
+rawset(_G, "metro", {
+  init = function()
+    return { time = 0, event = nil, start = function(self) end, stop = function(self) end }
+  end,
+})
+
+-- Mock screen
+rawset(_G, "screen", {
+  clear = function() end,
+  color = function(...) end,
+  move = function(x, y) end,
+  text = function(s) end,
+  rect_fill = function(w, h) end,
+  refresh = function() end,
+  level = function(l) end,
+  update = function() end,
+})
+
+-- Mock util
+rawset(_G, "util", {
+  clamp = function(val, min, max)
+    if val < min then return min end
+    if val > max then return max end
+    return val
+  end,
+})
+
+-- Mock musicutil
+package.loaded["musicutil"] = {
+  generate_scale = function(root, scale_type, octaves)
+    local notes = {}
+    for i = 1, octaves * 7 do
+      notes[i] = root + (i - 1) * 2
+    end
+    return notes
+  end,
+}
+
+local app = require("lib/app")
 local sequencer = require("lib/sequencer")
+local recorder = require("lib/voices/recorder")
 local track_mod = require("lib/track")
 
+-- Full app context (for ratchet / voice recording tests)
+local function make_app()
+  for k in pairs(param_store) do param_store[k] = nil end
+  for k in pairs(param_actions) do param_actions[k] = nil end
+  beat_counter = 0
+
+  local buffer = {}
+  local voices = {}
+  for t = 1, track_mod.NUM_TRACKS do
+    voices[t] = recorder.new(t, buffer)
+  end
+  local ctx = app.init({ voices = voices })
+  return ctx, buffer
+end
+
+-- Lightweight context (for per-param gating tests that inject ctx.rng)
 local function make_ctx()
   return {
     tracks = track_mod.new_tracks(),
@@ -26,6 +120,23 @@ local function make_ctx()
       },
     },
   }
+end
+
+local function note_events(buffer)
+  local result = {}
+  for _, e in ipairs(buffer) do
+    if e.note and e.type ~= "portamento" then
+      table.insert(result, e)
+    end
+  end
+  return result
+end
+
+-- Helper: reset all param positions to 1 for track
+local function reset_positions(track)
+  for _, name in ipairs(track_mod.PARAM_NAMES) do
+    track.params[name].pos = 1
+  end
 end
 
 describe("per-parameter probability gating", function()
@@ -185,5 +296,180 @@ describe("per-parameter probability gating", function()
     sequencer.step_track(ctx, 1)
     -- emitted vals should contain the held (peeked) note value
     assert.are.equal(5, emitted_vals.note)
+  end)
+end)
+
+describe("trigger probability", function()
+
+  describe("basic probability behavior", function()
+
+    it("probability=7 (100%) always fires", function()
+      local ctx, buffer = make_app()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.probability.steps[1] = 7  -- 100%
+
+      for i = 1, 100 do
+        reset_positions(track)
+        sequencer.step_track(ctx, 1)
+      end
+
+      local notes = note_events(buffer)
+      assert.are.equal(100, #notes, "probability=7 (100%) should always fire")
+    end)
+
+    it("probability=1 (0%) never fires", function()
+      local ctx, buffer = make_app()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.probability.steps[1] = 1  -- 0%
+
+      for i = 1, 100 do
+        reset_positions(track)
+        sequencer.step_track(ctx, 1)
+      end
+
+      local notes = note_events(buffer)
+      assert.are.equal(0, #notes, "probability=1 (0%) should never fire")
+    end)
+
+    it("probability=4 (50%) fires roughly half the time", function()
+      math.randomseed(42)
+      local ctx, buffer = make_app()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.probability.steps[1] = 4  -- 50%
+
+      local iterations = 1000
+      for i = 1, iterations do
+        reset_positions(track)
+        sequencer.step_track(ctx, 1)
+      end
+
+      local notes = note_events(buffer)
+      local fire_rate = #notes / iterations
+      assert.is_true(fire_rate > 0.35, "50% prob should fire >35% of the time, got " .. fire_rate)
+      assert.is_true(fire_rate < 0.65, "50% prob should fire <65% of the time, got " .. fire_rate)
+    end)
+
+    it("trigger=0 never fires regardless of probability", function()
+      local ctx, buffer = make_app()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 0
+      track.params.probability.steps[1] = 7  -- 100%
+
+      for i = 1, 50 do
+        reset_positions(track)
+        sequencer.step_track(ctx, 1)
+      end
+
+      local notes = note_events(buffer)
+      assert.are.equal(0, #notes, "trigger=0 should never fire even with probability=100%")
+    end)
+
+    it("default probability is 7 (100%), preserving existing behavior", function()
+      local ctx, buffer = make_app()
+      local track = ctx.tracks[1]
+      -- don't set probability; rely on default
+      assert.are.equal(7, track.params.probability.steps[1], "default probability should be 7")
+    end)
+  end)
+
+  describe("probability x ratchet interaction", function()
+
+    it("probability=7 with ratchet=4 plays all 4 subdivisions", function()
+      local ctx, buffer = make_app()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.ratchet.steps[1] = 4
+      track.params.probability.steps[1] = 7  -- 100%
+      reset_positions(track)
+
+      sequencer.step_track(ctx, 1)
+
+      local notes = note_events(buffer)
+      assert.are.equal(4, #notes, "prob=100% + ratchet=4 should produce 4 notes")
+    end)
+
+    it("probability=1 with ratchet=4 plays zero subdivisions", function()
+      local ctx, buffer = make_app()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.ratchet.steps[1] = 4
+      track.params.probability.steps[1] = 1  -- 0%
+      reset_positions(track)
+
+      sequencer.step_track(ctx, 1)
+
+      local notes = note_events(buffer)
+      assert.are.equal(0, #notes, "prob=0% + ratchet=4 should produce 0 notes")
+    end)
+
+    it("no partial ratchets: either all subdivisions or none", function()
+      math.randomseed(123)
+      local ctx, _ = make_app()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.ratchet.steps[1] = 3
+      track.params.probability.steps[1] = 4  -- 50%
+
+      local fired_counts = {}
+      for i = 1, 500 do
+        local buffer = {}
+        local voices = {}
+        for t = 1, track_mod.NUM_TRACKS do
+          voices[t] = recorder.new(t, buffer)
+        end
+        ctx.voices = voices
+        reset_positions(track)
+        sequencer.step_track(ctx, 1)
+
+        local notes = note_events(buffer)
+        fired_counts[#notes] = (fired_counts[#notes] or 0) + 1
+      end
+
+      -- Only valid counts: 0 (probability failed) or 3 (probability passed, full ratchet)
+      for count, occurrences in pairs(fired_counts) do
+        assert.is_true(count == 0 or count == 3,
+          "got " .. count .. " notes " .. occurrences .. " times; only 0 or 3 are valid (no partial ratchets)")
+      end
+
+      -- Sanity: both outcomes should occur with 50% probability over 500 iterations
+      assert.is_not_nil(fired_counts[0], "probability should suppress some steps")
+      assert.is_not_nil(fired_counts[3], "probability should allow some steps through")
+    end)
+
+    it("muted track skips probability check entirely", function()
+      local ctx, buffer = make_app()
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.probability.steps[1] = 1  -- 0% - would suppress if checked
+      track.muted = true
+      reset_positions(track)
+
+      sequencer.step_track(ctx, 1)
+
+      -- Muted tracks produce no audio notes but still advance
+      local notes = note_events(buffer)
+      assert.are.equal(0, #notes, "muted track should produce no notes")
+      -- Position should have advanced (mute takes precedence, not probability)
+      assert.are_not.equal(1, track.params.trigger.pos, "playhead should advance")
+    end)
+  end)
+
+  describe("probability with other params", function()
+
+    it("probability has independent loop boundaries", function()
+      local ctx, _ = make_app()
+      local track = ctx.tracks[1]
+      -- Set probability loop shorter than trigger loop
+      track_mod.set_loop(track.params.probability, 1, 2)
+      track_mod.set_loop(track.params.trigger, 1, 4)
+
+      assert.are.equal(1, track.params.probability.loop_start)
+      assert.are.equal(2, track.params.probability.loop_end)
+      assert.are.equal(1, track.params.trigger.loop_start)
+      assert.are.equal(4, track.params.trigger.loop_end)
+    end)
   end)
 end)

@@ -39,6 +39,17 @@ M.VELOCITY_MAP = {
   [7] = 1.0,
 }
 
+-- Probability map: step value -> percentage (0-100)
+M.PROBABILITY_MAP = {
+  [1] = 0,
+  [2] = 17,
+  [3] = 33,
+  [4] = 50,
+  [5] = 67,
+  [6] = 83,
+  [7] = 100,
+}
+
 function M.new_param(default_val)
   local steps = {}
   for i = 1, M.NUM_STEPS do
@@ -58,6 +69,7 @@ end
 -- ratchet: 1-7 (number of repeats within step; 1 = normal, 2+ = ratchet)
 -- alt_note: 1-7 (secondary note offset, combined with note for variation)
 -- glide: 1-7 (portamento amount; 1 = none, 7 = max)
+-- probability: 1-7 (trigger probability; 7 = 100% always fire, 1 = 0% never fire)
 
 -- Musically useful defaults per track
 local DEFAULT_PATTERNS = {
@@ -107,7 +119,7 @@ local PARAM_DEFAULTS = {
   ratchet  = 1,  -- 1 = no ratchet
   alt_note = 1,  -- 1 = no offset
   glide    = 1,  -- 1 = no glide
-  probability = 100, -- percent
+  probability = 7,  -- 7 = 100% (always fire)
 }
 
 function M.new_track(track_num)
