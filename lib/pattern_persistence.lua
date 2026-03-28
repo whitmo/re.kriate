@@ -5,62 +5,7 @@ local pattern_persistence = {}
 
 local tab = rawget(_G, "tab") -- norns utility (may be nil on seamstress)
 
-local UINT32 = 4294967296
-local UINT32_MAX = UINT32 - 1
-
-local function to_uint32(n)
-  return n % UINT32
-end
-
--- Keep checksum logic parseable under Lua 5.1 by avoiding 5.3 bitwise syntax.
-local native_bit = rawget(_G, "bit32") or rawget(_G, "bit")
-local bit = {}
-
-if native_bit then
-  bit.band = function(a, b) return to_uint32(native_bit.band(a, b)) end
-  bit.bxor = function(a, b) return to_uint32(native_bit.bxor(a, b)) end
-  bit.rshift = function(a, b) return to_uint32(native_bit.rshift(a, b)) end
-  bit.bnot = function(a) return to_uint32(native_bit.bnot(a)) end
-else
-  local function binary_op(a, b, predicate)
-    a = to_uint32(a)
-    b = to_uint32(b)
-    local result = 0
-    local place = 1
-    while a > 0 or b > 0 do
-      local abit = a % 2
-      local bbit = b % 2
-      if predicate(abit, bbit) then
-        result = result + place
-      end
-      a = math.floor(a / 2)
-      b = math.floor(b / 2)
-      place = place * 2
-    end
-    return result
-  end
-
-  bit.band = function(a, b)
-    return binary_op(a, b, function(abit, bbit)
-      return abit == 1 and bbit == 1
-    end)
-  end
-
-  bit.bxor = function(a, b)
-    return binary_op(a, b, function(abit, bbit)
-      return abit ~= bbit
-    end)
-  end
-
-  bit.rshift = function(a, b)
-    if b <= 0 then return to_uint32(a) end
-    return math.floor(to_uint32(a) / (2 ^ b))
-  end
-
-  bit.bnot = function(a)
-    return UINT32_MAX - to_uint32(a)
-  end
-end
+local ADLER_MOD = 65521
 
 local data_dir_override = nil
 
@@ -112,32 +57,15 @@ local function compute_data_dir()
   return os.getenv("HOME") .. "/.local/share/re_kriate/patterns"
 end
 
--- pure-Lua CRC32 (polynomial 0xEDB88320)
-local crc32_table
-local function build_crc32_table()
-  crc32_table = {}
-  for i = 0, 255 do
-    local crc = i
-    for _ = 1, 8 do
-      if bit.band(crc, 1) == 1 then
-        crc = bit.bxor(0xEDB88320, bit.rshift(crc, 1))
-      else
-        crc = bit.rshift(crc, 1)
-      end
-    end
-    crc32_table[i] = crc
-  end
-end
-
-local function crc32(str)
-  if not crc32_table then build_crc32_table() end
-  local crc = 0xFFFFFFFF
+-- Adler-32 is fast enough for CI and sufficient for tamper detection here.
+local function checksum(str)
+  local a = 1
+  local b = 0
   for i = 1, #str do
-    local byte = string.byte(str, i)
-    local idx = bit.bxor(byte, bit.band(crc, 0xFF))
-    crc = bit.bxor(crc32_table[idx], bit.rshift(crc, 8))
+    a = (a + string.byte(str, i)) % ADLER_MOD
+    b = (b + a) % ADLER_MOD
   end
-  return bit.bnot(crc)
+  return tostring(b * 65536 + a)
 end
 
 local function sorted_keys(t)
@@ -277,8 +205,7 @@ function pattern_persistence.save(ctx, name)
   end
 
   local serialized = encode_payload(payload)
-  local checksum = tostring(crc32(serialized))
-  payload.checksum = checksum
+  payload.checksum = checksum(serialized)
   local final_serialized = encode_payload(payload)
 
   local ok, write_err = pcall(write_file_atomic, path, final_serialized)
@@ -299,7 +226,7 @@ function pattern_persistence.load(ctx, name)
   local stored_checksum = data.checksum
   data.checksum = nil
   local serialized = encode_payload(data)
-  local computed = tostring(crc32(serialized))
+  local computed = checksum(serialized)
   if stored_checksum ~= computed then
     return nil, "checksum_mismatch"
   end
