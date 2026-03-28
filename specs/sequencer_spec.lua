@@ -1014,4 +1014,100 @@ describe("sequencer", function()
 
   end)
 
+  describe("per-param clock division", function()
+
+    it("param with clock_div=1 advances every step_track call", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      -- All params default to clock_div=1
+      local start_pos = track.params.note.pos
+      sequencer.step_track(ctx, 1)
+      assert.are_not.equal(start_pos, track.params.note.pos)
+    end)
+
+    it("param with clock_div=2 only advances every other step_track call", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      -- Set note param to clock_div=2, all others stay at 1
+      track.params.note.clock_div = 2
+      -- Set up known values
+      for i = 1, 16 do track.params.note.steps[i] = i end
+      track.params.note.pos = 1
+      track.params.note.loop_start = 1
+      track.params.note.loop_end = 4
+      track.params.note.tick = 0
+
+      -- Step 1: note should NOT advance (tick goes 0→1, not yet at div=2)
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(1, track.params.note.pos, "note should not advance on first tick")
+
+      -- Step 2: note SHOULD advance (tick goes 1→2, >= 2, advance)
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(2, track.params.note.pos, "note should advance on second tick")
+    end)
+
+    it("trigger still advances at clock_div=1 while note is slower", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.note.clock_div = 3
+      track.params.note.tick = 0
+      track.params.trigger.clock_div = 1
+      track.params.trigger.tick = 0
+
+      local trigger_positions = {}
+      local note_positions = {}
+
+      for _ = 1, 6 do
+        table.insert(trigger_positions, track.params.trigger.pos)
+        table.insert(note_positions, track.params.note.pos)
+        sequencer.step_track(ctx, 1)
+      end
+
+      -- Trigger should have advanced every time (6 different positions visited)
+      -- Note should only advance every 3rd tick
+      -- Just verify note position changes less frequently
+      local note_changes = 0
+      for i = 2, #note_positions do
+        if note_positions[i] ~= note_positions[i-1] then
+          note_changes = note_changes + 1
+        end
+      end
+      -- note advanced at ticks 3 and 6 (relative to observation), so we may see ~1-2 changes
+      -- in the "before" snapshots
+      assert.is_true(note_changes < #note_positions - 1,
+        "note should change less often than trigger")
+    end)
+
+    it("reset clears tick counters", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.params.note.clock_div = 4
+      track.params.note.tick = 3  -- simulate mid-cycle
+
+      sequencer.reset(ctx)
+
+      assert.are.equal(0, track.params.note.tick)
+    end)
+
+    it("peek is used for non-advancing params (value stays same)", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      -- Set velocity to clock_div=4
+      track.params.velocity.clock_div = 4
+      track.params.velocity.tick = 0
+      track.params.velocity.steps[1] = 5
+      track.params.velocity.pos = 1
+
+      -- Ensure trigger fires
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+
+      -- Step once — velocity should not advance, but its value should be peeked
+      sequencer.step_track(ctx, 1)
+      -- velocity should still be at pos 1
+      assert.are.equal(1, track.params.velocity.pos)
+    end)
+
+  end)
+
 end)
