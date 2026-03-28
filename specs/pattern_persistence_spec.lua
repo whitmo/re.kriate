@@ -10,11 +10,23 @@ local pp = require("lib/pattern_persistence")
 
 local tmp_root = "specs/tmp/pattern_persistence"
 
+local function load_table_chunk(source, chunkname)
+  if _VERSION == "Lua 5.1" then
+    local chunk, err = loadstring(source, chunkname)
+    if not chunk then return nil, err end
+    if setfenv then
+      setfenv(chunk, {})
+    end
+    return chunk
+  end
+  return load(source, chunkname, "t", {})
+end
+
 local function read_payload(path)
   local f = assert(io.open(path, "r"))
   local data = f:read("*all")
   f:close()
-  local chunk = assert(load(data, "pattern_persistence_spec", "t", {}))
+  local chunk = assert(load_table_chunk(data, "pattern_persistence_spec"))
   return assert(chunk())
 end
 
