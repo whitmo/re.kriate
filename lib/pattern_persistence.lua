@@ -198,6 +198,18 @@ local function read_file(path)
   return data
 end
 
+local function load_table_chunk(source, chunkname)
+  if _VERSION == "Lua 5.1" then
+    local chunk, err = loadstring(source, chunkname)
+    if not chunk then return nil, err end
+    if setfenv then
+      setfenv(chunk, {})
+    end
+    return chunk
+  end
+  return load(source, chunkname, "t", {})
+end
+
 local function file_exists(path)
   local f = io.open(path, "r")
   if f then f:close() return true end
@@ -239,7 +251,7 @@ local function decode_payload(path)
   end
   local data = read_file(path)
   if not data then return nil, "read_error" end
-  local chunk, err = load(data, "pattern_persistence", "t", {})
+  local chunk, err = load_table_chunk(data, "pattern_persistence")
   if not chunk then return nil, "parse_error:" .. tostring(err) end
   local ok, tbl = pcall(chunk)
   if not ok then return nil, "load_error:" .. tostring(tbl) end
