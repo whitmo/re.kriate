@@ -5,18 +5,61 @@ local pattern_persistence = {}
 
 local tab = rawget(_G, "tab") -- norns utility (may be nil on seamstress)
 
--- bitwise helpers: prefer bit32/bit libs, fall back to Lua 5.3+ operators
-local bit = rawget(_G, "bit32") or rawget(_G, "bit")
-if not bit and _VERSION >= "Lua 5.3" then
-  bit = {
-    band = function(a, b) return a & b end,
-    bxor = function(a, b) return a ~ b end,
-    rshift = function(a, b) return a >> b end,
-    bnot = function(a) return ~a end,
-  }
+local UINT32 = 4294967296
+local UINT32_MAX = UINT32 - 1
+
+local function to_uint32(n)
+  return n % UINT32
 end
-if not bit then
-  error("bit operations unavailable for checksum calculation")
+
+-- Keep checksum logic parseable under Lua 5.1 by avoiding 5.3 bitwise syntax.
+local native_bit = rawget(_G, "bit32") or rawget(_G, "bit")
+local bit = {}
+
+if native_bit then
+  bit.band = function(a, b) return to_uint32(native_bit.band(a, b)) end
+  bit.bxor = function(a, b) return to_uint32(native_bit.bxor(a, b)) end
+  bit.rshift = function(a, b) return to_uint32(native_bit.rshift(a, b)) end
+  bit.bnot = function(a) return to_uint32(native_bit.bnot(a)) end
+else
+  local function binary_op(a, b, predicate)
+    a = to_uint32(a)
+    b = to_uint32(b)
+    local result = 0
+    local place = 1
+    while a > 0 or b > 0 do
+      local abit = a % 2
+      local bbit = b % 2
+      if predicate(abit, bbit) then
+        result = result + place
+      end
+      a = math.floor(a / 2)
+      b = math.floor(b / 2)
+      place = place * 2
+    end
+    return result
+  end
+
+  bit.band = function(a, b)
+    return binary_op(a, b, function(abit, bbit)
+      return abit == 1 and bbit == 1
+    end)
+  end
+
+  bit.bxor = function(a, b)
+    return binary_op(a, b, function(abit, bbit)
+      return abit ~= bbit
+    end)
+  end
+
+  bit.rshift = function(a, b)
+    if b <= 0 then return to_uint32(a) end
+    return math.floor(to_uint32(a) / (2 ^ b))
+  end
+
+  bit.bnot = function(a)
+    return UINT32_MAX - to_uint32(a)
+  end
 end
 
 local data_dir_override = nil
