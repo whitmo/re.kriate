@@ -1,5 +1,6 @@
 # Ralph Orchestrator Configuration — re.kriate
 # TDD-driven speckit pipeline. Claude drives ralph autonomously.
+# Trunk-based development: main must always run; all changes land via PRs into main.
 #
 # Flow: work.start → specify → plan → tasks → analyze → implement → verify → (loop or LOOP_COMPLETE)
 # TDD is non-negotiable (constitution principle III).
