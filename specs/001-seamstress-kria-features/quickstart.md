@@ -13,16 +13,17 @@
 ## Run Tests
 
 ```bash
-busted specs/
+./scripts/busted.sh --no-auto-insulate specs/
 ```
 
-All 87+ tests should pass. Every new feature must have a failing test committed before implementation.
+Current headless baseline: 785 passing, 1 pending (`seamstress_load_spec.lua` is opt-in).
+Every new feature must have a failing test committed before implementation.
 
 ## Run the App
 
 ```bash
 # From the repo root:
-/opt/homebrew/opt/seamstress@1/bin/seamstress -s re_kriate_seamstress
+/opt/homebrew/opt/seamstress@1/bin/seamstress -s seamstress.lua
 ```
 
 The grid should light up with the default pattern. A desktop window appears with status info.
@@ -39,17 +40,29 @@ The grid should light up with the default pattern. A desktop window appears with
 | 8 | Octave (double-press: Glide) |
 | 9 | Duration |
 | 10 | Velocity |
+| 11 | Probability |
 | 12 | Loop modifier (hold) |
+| 15 | Alt-track (direction/division/swing/mute) |
 | 16 | Play/Stop |
+
+- `x=11` opens the probability page for the active track.
+- `x=15` opens the alt-track page: rows map to tracks; direction/division/swing/mute live on that page.
+- On the simulated seamstress grid, right-click `x=12` or `x=14` on row 8 to latch loop or pattern hold.
 
 ### Keyboard
 | Key | Function |
 |-----|----------|
 | Space | Play/Stop |
 | r | Reset playheads |
-| m | Mute toggle |
 | 1-4 | Track select |
 | q/w/e/t/y | Trigger/Note/Octave/Duration/Velocity |
+| Ctrl+P | Probability page |
+| Ctrl+B | List saved pattern banks |
+| Ctrl+S | Save current pattern bank |
+| Ctrl+L | Load current pattern bank |
+| Ctrl+Shift+D | Delete current pattern bank |
+| Ctrl+1-9 | Save pattern slot |
+| Shift+1-9 | Load pattern slot |
 
 ## Development Workflow
 
@@ -63,7 +76,7 @@ The grid should light up with the default pattern. A desktop window appears with
 
 ```
 re_kriate.lua                  # norns entrypoint
-re_kriate_seamstress.lua       # seamstress entrypoint
+seamstress.lua                 # seamstress entrypoint
 lib/
   app.lua                      # App init, params, cleanup
   track.lua                    # Track data model
@@ -72,6 +85,7 @@ lib/
   scale.lua                    # Scale quantization
   pattern.lua                  # Pattern storage (NEW)
   direction.lua                # Direction mode logic (NEW)
+  pattern_persistence.lua      # Disk-backed pattern bank persistence
   voices/
     midi.lua                   # MIDI voice backend
     recorder.lua               # Test voice (captures events)

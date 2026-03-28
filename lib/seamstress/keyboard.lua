@@ -46,6 +46,8 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     else
       set_status(ctx, "load failed: " .. tostring(err))
     end
+  elseif char == "b" and modifiers and modifiers.ctrl then
+    app.list_pattern_banks(ctx)
   elseif char == "d" and modifiers and modifiers.ctrl and modifiers.shift then
     local ok, err = app.delete_pattern_bank(ctx)
     if ok then
@@ -53,6 +55,12 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     else
       set_status(ctx, "delete failed: " .. tostring(err))
     end
+  elseif char == "p" and modifiers and modifiers.ctrl then
+    ctx.active_page = "probability"
+    set_status(ctx, "probability page")
+  elseif char == "a" and modifiers and modifiers.ctrl then
+    ctx.active_page = "alt_track"
+    set_status(ctx, "alt-track page")
   elseif char == "r" then
     sequencer.reset(ctx)
   elseif char >= "1" and char <= "9" and modifiers and modifiers.ctrl and ctx.patterns then

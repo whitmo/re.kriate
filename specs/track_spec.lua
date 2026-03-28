@@ -150,7 +150,7 @@ describe("track", function()
   end)
 
   describe("extended params", function()
-    it("PARAM_NAMES includes ratchet, alt_note, glide", function()
+    it("PARAM_NAMES includes probability and extended params", function()
       local names = {}
       for _, name in ipairs(track.PARAM_NAMES) do
         names[name] = true
@@ -160,16 +160,17 @@ describe("track", function()
       assert.is_true(names["octave"])
       assert.is_true(names["duration"])
       assert.is_true(names["velocity"])
+      assert.is_true(names["probability"])
       assert.is_true(names["ratchet"])
       assert.is_true(names["alt_note"])
       assert.is_true(names["glide"])
-      assert.equals(8, #track.PARAM_NAMES)
+      assert.equals(9, #track.PARAM_NAMES)
     end)
 
-    it("CORE_PARAMS has 5 core params", function()
-      assert.equals(5, #track.CORE_PARAMS)
+    it("CORE_PARAMS has 6 core params", function()
+      assert.equals(6, #track.CORE_PARAMS)
       assert.are.same(
-        {"trigger", "note", "octave", "duration", "velocity"},
+        {"trigger", "note", "octave", "duration", "velocity", "probability"},
         track.CORE_PARAMS
       )
     end)
@@ -278,7 +279,7 @@ describe("track", function()
     it("T006: polymetric independence — 8 params with different loop lengths", function()
       local t = track.new_track(1)
       -- set each param to a different loop length
-      local lengths = {2, 3, 4, 5, 6, 7, 8, 16}
+      local lengths = {2, 3, 4, 5, 6, 7, 8, 16, 9}
       local param_names = track.PARAM_NAMES
       for i, name in ipairs(param_names) do
         local p = t.params[name]

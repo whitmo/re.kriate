@@ -81,6 +81,7 @@ local function set_pattern_status(ctx, text)
   if not ctx then
     return
   end
+  ctx.active_pattern = nil
   ctx[PATTERN_MESSAGE_KEY] = {text = text, time = os.clock()}
 end
 
@@ -263,11 +264,33 @@ function M.save_pattern_bank(ctx, name)
   if ctx and ctx.patterns and ctx.tracks then
     pattern.save(ctx, 1)
   end
-  return pattern_persistence.save(ctx, pattern_bank_name(name))
+  local ok, path_or_err = pattern_persistence.save(ctx, pattern_bank_name(name))
+  if ok then
+    local message = "saved bank"
+    log.info(message)
+    set_pattern_status(ctx, message)
+    return ok, path_or_err
+  end
+
+  local message = "save failed: " .. tostring(path_or_err)
+  log.warn(message)
+  set_pattern_status(ctx, message)
+  return nil, path_or_err
 end
 
 function M.load_pattern_bank(ctx, name)
-  return pattern_persistence.load(ctx, pattern_bank_name(name))
+  local ok, err = pattern_persistence.load(ctx, pattern_bank_name(name))
+  if ok then
+    local message = "loaded bank"
+    log.info(message)
+    set_pattern_status(ctx, message)
+    return true
+  end
+
+  local message = "load failed: " .. tostring(err)
+  log.warn(message)
+  set_pattern_status(ctx, message)
+  return nil, err
 end
 
 function M.list_pattern_banks(ctx)

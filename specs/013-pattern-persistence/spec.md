@@ -17,6 +17,8 @@ As a performer, I want to save all 16 pattern slots (including track params and 
 2. Given the data dir is missing, save creates it before writing.
 3. Given a file with the same name exists, save overwrites atomically (write-temp + rename) so partial files are avoided.
 4. After save, the file contains a checksum over the serialized payload.
+5. Saving a bank must not rewrite or repurpose any in-memory pattern slot just to capture the current live tracks.
+6. If save fails at any filesystem step, the in-memory bank remains unchanged.
 
 ### User Story 2 — Load Pattern Bank from Disk (P1)
 As a performer, I want to load a saved pattern bank so the exact pattern slots restore, preserving steps, loop bounds, division, direction, muted flags, and param positions.
@@ -28,6 +30,7 @@ As a performer, I want to load a saved pattern bank so the exact pattern slots r
 2. If checksum validation fails, load aborts, returns error, and leaves current ctx untouched.
 3. If the file is missing, load returns a not-found error without changing ctx.
 4. If a slot in the file is empty, it remains unpopulated after load (no bogus defaults).
+5. Load restores the exact saved slot contents; slot 1 is not treated as a hidden scratch slot for current-state restore.
 
 ### User Story 3 — Detect Corruption via Checksum (P1)
 As a performer, I want corrupted pattern files to be rejected so I don’t unknowingly load broken data mid-set.
@@ -68,6 +71,8 @@ As a tester, I want automated busted specs that prove save→load round-trips al
 - **FR-005**: Sanitization: names lowercased, only `[a-z0-9_-]`; reject empty/invalid names; append `.krp` extension.
 - **FR-006**: Data dir: norns → `~/dust/data/re_kriate/patterns/`; seamstress → `path.seamstress .. "/data/re_kriate/patterns/"` with fallback to XDG data dir if `path` missing.
 - **FR-007**: On load, set `ctx.patterns[slot].populated` correctly and deep-copy into `ctx.tracks` on success; untouched on failure.
+- **FR-007a**: Bank save/load must preserve user-authored slot contents exactly; implementation must not overwrite `ctx.patterns[1]` or any other slot as an implementation detail.
+- **FR-007b**: If the current live track state needs separate restoration metadata, store it outside the 16 visible pattern slots.
 - **FR-008**: Provide lightweight checksum (pure-Lua CRC32 or xxhash) to avoid platform deps; stored in metadata.
 - **FR-009**: `list()` returns sanitized names sorted, ignoring temp files; `delete(name)` removes the file safely.
 - **FR-010**: Logging/UI: return error messages suitable for screen_ui to show; no direct screen calls inside persistence module.
@@ -76,6 +81,7 @@ As a tester, I want automated busted specs that prove save→load round-trips al
 - **NF-001**: No platform-specific globals; choose path via detection; ctx stays the single state carrier.
 - **NF-002**: Tests must clean up temporary files/directories they create.
 - **NF-003**: Implementation must not change existing pattern in-memory behavior (save/load slots 1–16) or break existing tests.
+- **NF-004**: Save failure paths must be side-effect free with respect to in-memory pattern-bank contents.
 
 ## Success Criteria
 - SC-001: Busted specs added for round-trip fidelity, checksum failure, name sanitization, and missing-dir creation; all pass.

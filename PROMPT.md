@@ -45,7 +45,7 @@ Workers run in isolated git worktrees and create PRs. Use `/mc swarm` to dispatc
 ## Current State
 
 - **Branch**: `pdd/seamstress-entrypoint`
-- **Tests**: 211 passing (busted specs/)
+- **Tests**: 785 passing, 1 pending manual seamstress-load spec (`./scripts/busted.sh --no-auto-insulate specs/`)
 - **Platform**: seamstress v1.4.7 at `/opt/homebrew/opt/seamstress@1/bin/seamstress`
 - **Test runner**: `busted` (requires lua5.4 symlink at `/opt/homebrew/opt/lua/bin/lua5.4`)
 

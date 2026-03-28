@@ -27,7 +27,13 @@ The project adds seamstress as a first-class platform for re.kriate by:
 4. Wrapping **nb into the voice interface** so the norns entrypoint continues working unchanged
 5. A **5-layer test strategy** from unit tests to manual end-to-end verification
 
-**Success:** `seamstress re_kriate_seamstress.lua` opens, grid lights up, sequencer plays MIDI notes, keyboard controls work, clean stop.
+Current seamstress interaction notes:
+- Grid nav `x=11` opens the probability page.
+- Grid nav `x=15` opens the alt-track page for direction/division/swing/mute edits.
+- `Ctrl+P` jumps to probability from the keyboard.
+- Right-click on simulated-grid nav `x=12` / `x=14` latches loop/pattern holds.
+
+**Success:** `seamstress -s seamstress.lua` opens, grid lights up, sequencer plays MIDI notes, keyboard controls work, clean stop.
 
 ## Key Decisions
 
