@@ -108,6 +108,9 @@ Kria is a multi-track step sequencer where each track has independent loop lengt
 - N/A (in-memory patterns via lib/pattern.lua, no persistence layer) (006-pattern-bank-ui)
 - SuperCollider (sclang) for synth/listener, Lua 5.4 for test scrip + SuperCollider 3.x (user-installed), seamstress v1.4.7 (for test script OSC), lib/voices/osc.lua (existing, not modified) (008-supercollider-voice-example)
 - N/A (no persistence) (008-supercollider-voice-example)
+- Lua 5.3/5.4 + `lib/pattern_persistence.lua`, busted, optional norns `tab.save/tab.load` helpers (013-pattern-persistence)
+- Pattern bank files stored as `.krp` under platform data dirs with checksum validation (013-pattern-persistence)
 
 ## Recent Changes
 - 002-quality-hardening: Added Lua 5.4 (via busted test runner, seamstress runtime) + busted (test framework), seamstress v1.4.7, musicutil (norns/seamstress scale utilities)
+- 013-pattern-persistence: Added disk-backed pattern-bank persistence, checksum validation, list/delete helpers, demo harness, and busted coverage

@@ -1,4 +1,4 @@
--- re_kriate_seamstress: kria sequencer for seamstress
+-- seamstress.lua: kria sequencer entrypoint for seamstress
 --
 -- Grid: full kria grid UI (same as norns)
 -- Keyboard: space=play/stop, r=reset, 1-4=track, q/w/e/t/y=page
@@ -19,10 +19,18 @@ local grid_render = require("lib/seamstress/grid_render")
 local track_mod = require("lib/track")
 local log = require("lib/log")
 
+local GRID_WIDTH = 16 * 16  -- cols * pitch
+local GRID_HEIGHT = 8 * 16  -- rows * pitch
+
 local ctx
 
 function init()
   log.session_start()
+
+  -- Size window to the simulated grid so it fills the view
+  if screen.set_size then
+    screen.set_size(GRID_WIDTH, GRID_HEIGHT)
+  end
 
   -- Sprite voices (additive visual output, one per track)
   local sprite_voices = {}
