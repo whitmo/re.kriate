@@ -1428,4 +1428,9 @@ describe("grid_ui", function()
 
   end)
 
+  -- ========================================================================
+  -- Direction cycling via grid nav
+  -- direction cycling via nav x=11 was removed (x=11 is now probability page)
+  -- direction controls are accessible via the alt_track page (x=15)
+
 end)

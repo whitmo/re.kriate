@@ -226,6 +226,55 @@ describe("direction", function()
 
   end)
 
+  describe("pendulum boundary behavior", function()
+
+    it("two-step loop bounces correctly: 1,2,1,2,1,2", function()
+      local p = make_param({10, 20}, 1, 2, 1)
+      p.advancing_forward = true
+      local positions = {}
+      for _ = 1, 6 do
+        table.insert(positions, p.pos)
+        direction.advance(p, "pendulum")
+      end
+      assert.are.same({1, 2, 1, 2, 1, 2}, positions)
+    end)
+
+    it("pendulum starting at loop_end reverses immediately", function()
+      local p = make_param({10, 20, 30, 40}, 1, 4, 4)
+      p.advancing_forward = true
+      local positions = {}
+      for _ = 1, 6 do
+        table.insert(positions, p.pos)
+        direction.advance(p, "pendulum")
+      end
+      -- At end, forward direction => hit boundary, reverse
+      assert.are.same({4, 3, 2, 1, 2, 3}, positions)
+    end)
+
+    it("pendulum with sub-range loop respects loop_start and loop_end", function()
+      local p = make_param({1,2,3,4,5,6,7,8}, 3, 6, 3)
+      p.advancing_forward = true
+      local positions = {}
+      for _ = 1, 10 do
+        table.insert(positions, p.pos)
+        direction.advance(p, "pendulum")
+      end
+      assert.are.same({3, 4, 5, 6, 5, 4, 3, 4, 5, 6}, positions)
+    end)
+
+    it("pendulum advancing_forward=false starts going backward", function()
+      local p = make_param({10, 20, 30, 40}, 1, 4, 3)
+      p.advancing_forward = false
+      local positions = {}
+      for _ = 1, 6 do
+        table.insert(positions, p.pos)
+        direction.advance(p, "pendulum")
+      end
+      assert.are.same({3, 2, 1, 2, 3, 4}, positions)
+    end)
+
+  end)
+
   describe("nil/missing direction defaults to forward", function()
     it("treats nil direction as forward", function()
       local p = make_param({10, 20, 30, 40}, 1, 4, 1)
