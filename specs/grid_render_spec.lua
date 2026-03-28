@@ -138,6 +138,15 @@ describe("grid_render", function()
     }
   end
 
+  local function make_perf_screen()
+    local noop = function() end
+    return {
+      color = noop,
+      move = noop,
+      rect_fill = noop,
+    }
+  end
+
   describe("draw", function()
 
     -- T024: draw calls screen.color and screen.rect_fill for each of 128 cells
@@ -206,7 +215,8 @@ describe("grid_render", function()
     it("100 draws complete in under 500ms (< 5ms avg)", function()
       local mock_grid = make_mock_grid()
       mock_grid:all(8) -- set some non-zero brightness
-      local mock_screen = make_mock_screen()
+      -- Use a lean sink so the timing reflects draw work, not mock allocation churn.
+      local mock_screen = make_perf_screen()
       local start = os.clock()
       for _ = 1, 100 do
         grid_render.draw(mock_grid, mock_screen)
