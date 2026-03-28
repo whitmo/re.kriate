@@ -2,12 +2,14 @@
 -- Keyboard input handling for seamstress
 -- space = play/stop, r = reset, 1-4 = track select
 -- q/w/e/t/y = page select (trigger/note/octave/duration/velocity)
+-- d = cycle direction mode for active track
 -- ctrl+1-9 = save pattern, shift+1-9 = load pattern
 
 local sequencer = require("lib/sequencer")
 local pattern = require("lib/pattern")
 local grid_ui = require("lib/grid_ui")
 local app = require("lib/app")
+local direction_mod = require("lib/direction")
 
 local M = {}
 
@@ -77,6 +79,15 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     end
   elseif char >= "1" and char <= "4" then
     ctx.active_track = tonumber(char)
+  elseif char == "d" then
+    local track = ctx.tracks[ctx.active_track]
+    local modes = direction_mod.MODES
+    local cur = track.direction or "forward"
+    local idx = 1
+    for i, m in ipairs(modes) do
+      if m == cur then idx = i; break end
+    end
+    track.direction = modes[(idx % #modes) + 1]
   elseif KEY_PAGE[char] then
     local target = KEY_PAGE[char]
     if ctx.active_page == target and grid_ui.EXTENDED_PAGES[target] then
