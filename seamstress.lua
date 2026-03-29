@@ -17,7 +17,6 @@ local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
 local grid_render = require("lib/seamstress/grid_render")
 local track_mod = require("lib/track")
-local log = require("lib/log")
 
 local ctx
 
@@ -35,6 +34,7 @@ function init()
     sprite_voices = sprite_voices,
     screen_mod = screen_ui,
     grid_provider = "simulated",
+    -- Keep the on-screen grid active while mirroring LED/key traffic to monome hardware.
     grid_opts = {
       mirror_monome = true,
     },
