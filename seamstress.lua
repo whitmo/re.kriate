@@ -17,7 +17,6 @@ local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
 local grid_render = require("lib/seamstress/grid_render")
 local track_mod = require("lib/track")
-local log = require("lib/log")
 
 local GRID_WIDTH = 16 * 16  -- cols * pitch
 local GRID_HEIGHT = 8 * 16  -- rows * pitch
@@ -43,6 +42,10 @@ function init()
     sprite_voices = sprite_voices,
     screen_mod = screen_ui,
     grid_provider = "simulated",
+    -- Keep the on-screen grid active while mirroring LED/key traffic to monome hardware.
+    grid_opts = {
+      mirror_monome = true,
+    },
   })
 
   -- Keyboard input
@@ -84,5 +87,6 @@ function cleanup()
   if ctx and ctx.screen_metro then
     ctx.screen_metro:stop()
   end
+  log.info("cleanup complete")
   log.close()
 end

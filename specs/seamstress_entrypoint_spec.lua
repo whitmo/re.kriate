@@ -1,87 +1,128 @@
 -- specs/seamstress_entrypoint_spec.lua
--- Focused seamstress entrypoint wiring coverage for keyboard persistence hooks
+-- Seamstress entrypoint wiring coverage
 
 package.path = package.path .. ";./?.lua"
 
-local original_modules = {}
-local stubbed_modules = {
-  "lib/app",
-  "lib/log",
-  "lib/seamstress/keyboard",
-}
+local UNSET = {}
 
-local save_calls
-local load_calls
-local list_calls
-local init_ctx
-local save_ok
-local save_value
-local load_ok
-local load_value
+local function capture_modules(names)
+  local saved = {}
+  for _, name in ipairs(names) do
+    saved[name] = package.loaded[name] == nil and UNSET or package.loaded[name]
+  end
+  return saved
+end
 
-local function restore_modules()
-  for _, name in ipairs(stubbed_modules) do
-    package.loaded[name] = original_modules[name]
+local function restore_modules(saved)
+  for name, original in pairs(saved) do
+    package.loaded[name] = original == UNSET and nil or original
   end
 end
 
-local function install_stubs()
-  save_calls = {}
-  load_calls = {}
-  list_calls = {}
-  save_ok = true
-  save_value = "/tmp/test-bank.krp"
-  load_ok = true
-  load_value = nil
-  init_ctx = {
-    active_pattern = 2,
-    grid_dirty = false,
-    g = { cleanup = function() end },
-  }
-
-  for _, name in ipairs(stubbed_modules) do
-    original_modules[name] = package.loaded[name]
-    package.loaded[name] = nil
+local function capture_globals(names)
+  local saved = {}
+  for _, name in ipairs(names) do
+    saved[name] = rawget(_G, name) == nil and UNSET or rawget(_G, name)
   end
+  return saved
+end
 
-  package.loaded["lib/log"] = {
-    session_start = function() end,
-    close = function() end,
-    info = function() end,
-    warn = function() end,
-    error = function() end,
-    write = function() end,
-    wrap = function(fn)
-      return fn
-    end,
-  }
-
-  package.loaded["lib/app"] = {
-    init = function()
-      return init_ctx
-    end,
-    cleanup = function() end,
-    save_pattern_bank = function(ctx)
-      table.insert(save_calls, ctx)
-      return save_ok, save_value
-    end,
-    load_pattern_bank = function(ctx)
-      table.insert(load_calls, ctx)
-      return load_ok, load_value
-    end,
-    list_pattern_banks = function(ctx)
-      table.insert(list_calls, ctx)
-      ctx.pattern_message = { text = "banks: alpha-bank, beta-bank", time = os.clock() }
-      return { "alpha-bank", "beta-bank" }
-    end,
-  }
-
-  package.loaded["lib/seamstress/keyboard"] = nil
+local function restore_globals(saved)
+  for name, original in pairs(saved) do
+    rawset(_G, name, original == UNSET and nil or original)
+  end
 end
 
 describe("seamstress entrypoint keyboard persistence wiring", function()
+  local saved_modules
+  local saved_globals
+
+  local save_calls
+  local load_calls
+  local list_calls
+  local init_ctx
+  local save_ok
+  local save_value
+  local load_ok
+  local load_value
+
   before_each(function()
-    install_stubs()
+    saved_modules = capture_modules({
+      "lib/app",
+      "lib/log",
+      "lib/seamstress/keyboard",
+      "musicutil",
+    })
+    saved_globals = capture_globals({
+      "clock",
+      "params",
+      "grid",
+      "metro",
+      "screen",
+      "midi",
+      "init",
+      "redraw",
+      "cleanup",
+    })
+
+    save_calls = {}
+    load_calls = {}
+    list_calls = {}
+    save_ok = true
+    save_value = "/tmp/test-bank.krp"
+    load_ok = true
+    load_value = nil
+    init_ctx = {
+      active_pattern = 2,
+      grid_dirty = false,
+      g = { cleanup = function() end },
+    }
+
+    package.loaded["lib/log"] = {
+      session_start = function() end,
+      close = function() end,
+      info = function() end,
+      warn = function() end,
+      error = function() end,
+      write = function() end,
+      wrap = function(fn)
+        return fn
+      end,
+    }
+
+    package.loaded["lib/app"] = {
+      init = function()
+        return init_ctx
+      end,
+      cleanup = function() end,
+      save_pattern_bank = function(ctx)
+        table.insert(save_calls, ctx)
+        return save_ok, save_value
+      end,
+      load_pattern_bank = function(ctx)
+        table.insert(load_calls, ctx)
+        return load_ok, load_value
+      end,
+      list_pattern_banks = function(ctx)
+        table.insert(list_calls, ctx)
+        ctx.pattern_message = { text = "banks: alpha-bank, beta-bank", time = os.clock() }
+        return { "alpha-bank", "beta-bank" }
+      end,
+      delete_pattern_bank = function()
+        return true
+      end,
+    }
+
+    package.loaded["lib/seamstress/keyboard"] = nil
+    package.loaded["musicutil"] = {
+      generate_scale = function(root, _, octaves)
+        local notes = {}
+        for i = 1, octaves * 7 do
+          notes[i] = root + i - 1
+        end
+        return notes
+      end,
+    }
 
     rawset(_G, "clock", {
       get_beats = function() return 0 end,
@@ -142,26 +183,13 @@ describe("seamstress entrypoint keyboard persistence wiring", function()
       end,
     })
 
-    package.loaded["musicutil"] = {
-      generate_scale = function(root, _, octaves)
-        local notes = {}
-        for i = 1, octaves * 7 do
-          notes[i] = root + i - 1
-        end
-        return notes
-      end,
-    }
-
     dofile("seamstress.lua")
     init()
   end)
 
   after_each(function()
-    restore_modules()
-    package.loaded["musicutil"] = nil
-    init = nil
-    redraw = nil
-    cleanup = nil
+    restore_modules(saved_modules)
+    restore_globals(saved_globals)
   end)
 
   it("routes ctrl+s through screen.key to app.save_pattern_bank", function()
@@ -215,5 +243,166 @@ describe("seamstress entrypoint keyboard persistence wiring", function()
     assert.are.equal("load failed: checksum_mismatch", init_ctx.pattern_message.text)
     assert.is_nil(init_ctx.active_pattern)
     assert.is_true(init_ctx.grid_dirty)
+  end)
+end)
+
+describe("seamstress entrypoint hardware mirroring wiring", function()
+  local saved_modules
+  local saved_globals
+
+  local captured_app_config
+  local captured_ctx
+  local app_cleanup_ctx
+  local info_messages
+  local log_closed
+
+  before_each(function()
+    saved_modules = capture_modules({
+      "lib/app",
+      "lib/log",
+      "lib/track",
+      "lib/voices/sprite",
+      "lib/seamstress/screen_ui",
+      "lib/seamstress/sprite_render",
+      "lib/seamstress/keyboard",
+      "lib/seamstress/grid_render",
+    })
+    saved_globals = capture_globals({
+      "init",
+      "redraw",
+      "cleanup",
+      "midi",
+      "screen",
+      "metro",
+    })
+
+    captured_app_config = nil
+    captured_ctx = nil
+    app_cleanup_ctx = nil
+    info_messages = {}
+    log_closed = false
+
+    rawset(_G, "midi", {
+      connect = function(port)
+        return { port = port }
+      end,
+    })
+
+    rawset(_G, "screen", {
+      clear = function() end,
+      color = function() end,
+      move = function() end,
+      rect_fill = function() end,
+      refresh = function() end,
+    })
+
+    rawset(_G, "metro", {
+      init = function()
+        return {
+          time = 0,
+          event = nil,
+          _started = false,
+          _stopped = false,
+          start = function(self)
+            self._started = true
+          end,
+          stop = function(self)
+            self._stopped = true
+          end,
+        }
+      end,
+    })
+
+    package.loaded["lib/app"] = {
+      init = function(config)
+        captured_app_config = config
+        captured_ctx = {
+          g = {
+            cleanup = function() end,
+          },
+          voices = config.voices or {},
+          sprite_voices = config.sprite_voices or {},
+        }
+        return captured_ctx
+      end,
+      cleanup = function(ctx)
+        app_cleanup_ctx = ctx
+      end,
+    }
+
+    package.loaded["lib/log"] = {
+      session_start = function() end,
+      info = function(msg)
+        info_messages[#info_messages + 1] = msg
+      end,
+      warn = function() end,
+      error = function() end,
+      close = function()
+        log_closed = true
+      end,
+      wrap = function(fn)
+        return fn
+      end,
+    }
+
+    package.loaded["lib/track"] = {
+      NUM_TRACKS = 4,
+    }
+
+    package.loaded["lib/voices/sprite"] = {
+      new = function(track_num)
+        return {
+          track_num = track_num,
+          all_notes_off = function() end,
+        }
+      end,
+    }
+
+    package.loaded["lib/seamstress/screen_ui"] = {}
+    package.loaded["lib/seamstress/sprite_render"] = {
+      draw = function() end,
+    }
+    package.loaded["lib/seamstress/keyboard"] = {
+      key = function() end,
+    }
+    package.loaded["lib/seamstress/grid_render"] = {
+      draw = function() end,
+      handle_click = function() end,
+    }
+
+    dofile("seamstress.lua")
+  end)
+
+  after_each(function()
+    restore_modules(saved_modules)
+    restore_globals(saved_globals)
+  end)
+
+  it("passes simulated provider with monome mirroring into app.init", function()
+    init()
+
+    assert.are.equal("simulated", captured_app_config.grid_provider)
+    assert.is_table(captured_app_config.grid_opts)
+    assert.is_true(captured_app_config.grid_opts.mirror_monome)
+  end)
+
+  it("logs cleanup completion and stops the screen metro", function()
+    init()
+    assert.is_true(captured_ctx.screen_metro._started)
+
+    cleanup()
+
+    local found_cleanup_log = false
+    for _, msg in ipairs(info_messages) do
+      if msg == "cleanup complete" then
+        found_cleanup_log = true
+        break
+      end
+    end
+
+    assert.is_true(found_cleanup_log, "expected cleanup to emit a completion log line")
+    assert.are.equal(captured_ctx, app_cleanup_ctx)
+    assert.is_true(captured_ctx.screen_metro._stopped)
+    assert.is_true(log_closed)
   end)
 end)
