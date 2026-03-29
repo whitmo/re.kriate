@@ -5,8 +5,8 @@ local M = {}
 
 M.NUM_TRACKS = 4
 M.NUM_STEPS = 16
-M.PARAM_NAMES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide"}
-M.CORE_PARAMS = {"trigger", "note", "octave", "duration", "velocity"}
+M.PARAM_NAMES = {"trigger", "note", "octave", "duration", "velocity", "ratchet", "alt_note", "glide", "probability"}
+M.CORE_PARAMS = {"trigger", "note", "octave", "duration", "velocity", "probability"}
 M.EXTENDED_PARAMS = {"ratchet", "alt_note", "glide"}
 M.DEFAULT_LOOP_LEN = 6
 
@@ -49,6 +49,8 @@ function M.new_param(default_val)
     loop_start = 1,
     loop_end = M.DEFAULT_LOOP_LEN,
     pos = 1,
+    clock_div = 1,  -- per-param clock divider: 1 = every tick, 2 = every other, etc.
+    tick = 0,       -- internal tick counter for clock division
   }
 end
 
@@ -105,6 +107,7 @@ local PARAM_DEFAULTS = {
   ratchet  = 1,  -- 1 = no ratchet
   alt_note = 1,  -- 1 = no offset
   glide    = 1,  -- 1 = no glide
+  probability = 100, -- percent
 }
 
 function M.new_track(track_num)
@@ -138,6 +141,17 @@ function M.new_tracks()
     tracks[i] = M.new_track(i)
   end
   return tracks
+end
+
+-- Check if a param should advance on this tick (based on clock_div).
+-- Increments the internal tick counter; returns true when the param should step.
+function M.should_advance(param)
+  param.tick = param.tick + 1
+  if param.tick >= param.clock_div then
+    param.tick = 0
+    return true
+  end
+  return false
 end
 
 -- Advance a param's position within its loop, return the current step value

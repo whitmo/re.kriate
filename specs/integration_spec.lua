@@ -21,6 +21,9 @@ rawset(_G, "params", {
   add_number = function(self, id, name, min, max, default, units, formatter)
     param_store[id] = default
   end,
+  add_text = function(self, id, name, default)
+    param_store[id] = default
+  end,
   add_option = function(self, id, name, options, default)
     param_store[id] = default
   end,
@@ -98,6 +101,9 @@ local keyboard = require("lib/seamstress/keyboard")
 local screen_ui = require("lib/seamstress/screen_ui")
 local recorder = require("lib/voices/recorder")
 local track_mod = require("lib/track")
+local pattern_persistence = require("lib/pattern_persistence")
+
+local persistence_tmp = "specs/tmp/app_pattern_persistence"
 
 -- Helper: create recorder voices and call app.init
 local function make_app()
@@ -105,6 +111,8 @@ local function make_app()
   for k in pairs(param_store) do param_store[k] = nil end
   for k in pairs(param_actions) do param_actions[k] = nil end
   beat_counter = 0
+  os.execute("mkdir -p " .. persistence_tmp)
+  pattern_persistence._test_set_data_dir(persistence_tmp)
 
   local buffer = {}
   local voices = {}
@@ -127,6 +135,12 @@ local function note_events(buffer)
 end
 
 describe("integration", function()
+
+  before_each(function()
+    os.execute("rm -rf " .. persistence_tmp)
+    os.execute("mkdir -p " .. persistence_tmp)
+    pattern_persistence._test_set_data_dir(persistence_tmp)
+  end)
 
   describe("app.init with recorder voices", function()
 
@@ -191,6 +205,55 @@ describe("integration", function()
         assert.are.equal(mode, ctx.tracks[1].direction,
           "index " .. i .. " should map to " .. mode)
       end
+    end)
+
+  end)
+
+  describe("pattern persistence params", function()
+
+    it("saves and loads the current bank through params actions", function()
+      local ctx = make_app()
+      ctx.tracks[1].division = 6
+      ctx.tracks[2].params.note.steps[3] = 5
+      params:set("pattern_bank_name", "menu-bank")
+      params:set("pattern_bank_save", 2)
+      assert.are.equal("saved bank", ctx.pattern_message.text)
+
+      ctx.tracks = track_mod.new_tracks()
+      assert.are.equal(1, ctx.tracks[1].division)
+
+      params:set("pattern_bank_load", 2)
+
+      assert.are.equal(6, ctx.tracks[1].division)
+      assert.are.equal(5, ctx.tracks[2].params.note.steps[3])
+      assert.are.equal("loaded bank", ctx.pattern_message.text)
+      assert.are.equal(1, params:get("pattern_bank_save"))
+      assert.are.equal(1, params:get("pattern_bank_load"))
+    end)
+
+    it("lists saved banks through params actions", function()
+      local ctx = make_app()
+      params:set("pattern_bank_name", "alpha-bank")
+      params:set("pattern_bank_save", 2)
+      params:set("pattern_bank_name", "beta-bank")
+      params:set("pattern_bank_save", 2)
+
+      params:set("pattern_bank_list", 2)
+
+      assert.are.equal("banks: alpha-bank, beta-bank", ctx.pattern_message.text)
+      assert.are.equal(1, params:get("pattern_bank_list"))
+    end)
+
+    it("deletes the current bank through params actions", function()
+      local ctx = make_app()
+      params:set("pattern_bank_name", "trash-bank")
+      params:set("pattern_bank_save", 2)
+
+      params:set("pattern_bank_delete", 2)
+      params:set("pattern_bank_list", 2)
+
+      assert.are.equal("banks: none", ctx.pattern_message.text)
+      assert.are.equal(1, params:get("pattern_bank_delete"))
     end)
 
   end)
@@ -425,7 +488,7 @@ describe("integration", function()
       app.enc(ctx, 2, -10)
       assert.are.equal("trigger", ctx.active_page)
       app.enc(ctx, 2, 100)
-      assert.are.equal("glide", ctx.active_page)
+      assert.are.equal("alt_track", ctx.active_page)
     end)
 
   end)

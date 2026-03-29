@@ -150,7 +150,7 @@ describe("track", function()
   end)
 
   describe("extended params", function()
-    it("PARAM_NAMES includes ratchet, alt_note, glide", function()
+    it("PARAM_NAMES includes probability and extended params", function()
       local names = {}
       for _, name in ipairs(track.PARAM_NAMES) do
         names[name] = true
@@ -160,16 +160,17 @@ describe("track", function()
       assert.is_true(names["octave"])
       assert.is_true(names["duration"])
       assert.is_true(names["velocity"])
+      assert.is_true(names["probability"])
       assert.is_true(names["ratchet"])
       assert.is_true(names["alt_note"])
       assert.is_true(names["glide"])
-      assert.equals(8, #track.PARAM_NAMES)
+      assert.equals(9, #track.PARAM_NAMES)
     end)
 
-    it("CORE_PARAMS has 5 core params", function()
-      assert.equals(5, #track.CORE_PARAMS)
+    it("CORE_PARAMS has 6 core params", function()
+      assert.equals(6, #track.CORE_PARAMS)
       assert.are.same(
-        {"trigger", "note", "octave", "duration", "velocity"},
+        {"trigger", "note", "octave", "duration", "velocity", "probability"},
         track.CORE_PARAMS
       )
     end)
@@ -278,7 +279,7 @@ describe("track", function()
     it("T006: polymetric independence — 8 params with different loop lengths", function()
       local t = track.new_track(1)
       -- set each param to a different loop length
-      local lengths = {2, 3, 4, 5, 6, 7, 8, 16}
+      local lengths = {2, 3, 4, 5, 6, 7, 8, 16, 9}
       local param_names = track.PARAM_NAMES
       for i, name in ipairs(param_names) do
         local p = t.params[name]
@@ -309,6 +310,72 @@ describe("track", function()
       -- should be unchanged
       assert.are.equal(1, p.loop_start)
       assert.are.equal(track.DEFAULT_LOOP_LEN, p.loop_end)
+    end)
+  end)
+
+  describe("per-param clock division", function()
+    it("new_param has clock_div=1 and tick=0 by default", function()
+      local p = track.new_param(4)
+      assert.are.equal(1, p.clock_div)
+      assert.are.equal(0, p.tick)
+    end)
+
+    it("should_advance returns true every tick when clock_div=1", function()
+      local p = track.new_param(0)
+      for _ = 1, 5 do
+        assert.is_true(track.should_advance(p))
+      end
+    end)
+
+    it("should_advance returns true every Nth tick when clock_div=N", function()
+      local p = track.new_param(0)
+      p.clock_div = 3
+      -- tick 1: false, tick 2: false, tick 3: true
+      assert.is_false(track.should_advance(p))
+      assert.is_false(track.should_advance(p))
+      assert.is_true(track.should_advance(p))
+      -- again
+      assert.is_false(track.should_advance(p))
+      assert.is_false(track.should_advance(p))
+      assert.is_true(track.should_advance(p))
+    end)
+
+    it("should_advance with clock_div=2 alternates false/true", function()
+      local p = track.new_param(0)
+      p.clock_div = 2
+      local results = {}
+      for _ = 1, 6 do
+        table.insert(results, track.should_advance(p))
+      end
+      assert.are.same({false, true, false, true, false, true}, results)
+    end)
+
+    it("polymetric clock division: two params with different dividers", function()
+      local p1 = track.new_param(0)
+      p1.clock_div = 2
+      for i = 1, 16 do p1.steps[i] = i end
+      track.set_loop(p1, 1, 4)
+
+      local p2 = track.new_param(0)
+      p2.clock_div = 3
+      for i = 1, 16 do p2.steps[i] = i * 10 end
+      track.set_loop(p2, 1, 4)
+
+      local v1, v2 = {}, {}
+      for _ = 1, 12 do
+        if track.should_advance(p1) then
+          table.insert(v1, track.advance(p1))
+        end
+        if track.should_advance(p2) then
+          table.insert(v2, track.advance(p2))
+        end
+      end
+      -- p1 (div=2): advances on ticks 2,4,6,8,10,12 => 6 advances through loop 1-4
+      assert.are.equal(6, #v1)
+      assert.are.same({1, 2, 3, 4, 1, 2}, v1)
+      -- p2 (div=3): advances on ticks 3,6,9,12 => 4 advances through loop 1-4
+      assert.are.equal(4, #v2)
+      assert.are.same({10, 20, 30, 40}, v2)
     end)
   end)
 

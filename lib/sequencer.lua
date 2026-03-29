@@ -7,6 +7,12 @@ local direction_mod = require("lib/direction")
 local log = require("lib/log")
 
 local M = {}
+local function roll(ctx)
+  if ctx and ctx.rng then
+    return ctx.rng() * 100
+  end
+  return math.random() * 100
+end
 
 -- Glide time map: step value -> portamento time in seconds
 -- 1 = off, 2-7 = increasing portamento duration
@@ -117,10 +123,15 @@ function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
   local dir = track.direction  -- nil defaults to "forward" inside direction.advance
 
-  -- advance all params independently using direction
+  -- advance params independently, respecting per-param clock division
   local vals = {}
   for _, name in ipairs(track_mod.PARAM_NAMES) do
-    vals[name] = direction_mod.advance(track.params[name], dir)
+    local p = track.params[name]
+    if track_mod.should_advance(p) then
+      vals[name] = direction_mod.advance(p, dir)
+    else
+      vals[name] = track_mod.peek(p)
+    end
   end
 
   -- emit step event (before mute check so listeners see all steps)
@@ -130,6 +141,12 @@ function M.step_track(ctx, track_num)
 
   -- fire note on trigger
   if vals.trigger == 1 then
+    local prob = vals.probability or 100
+    local r = roll(ctx)
+    if r > prob then
+      ctx.grid_dirty = true
+      return
+    end
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
 
     -- if muted, skip audio but still fire ghost sprite
@@ -201,11 +218,12 @@ function M.play_sprite(ctx, track_num, vals, duration, opts)
   end
 end
 
--- Reset all playheads to loop start
+-- Reset all playheads to loop start and tick counters
 function M.reset(ctx)
   for _, track in ipairs(ctx.tracks) do
     for _, name in ipairs(track_mod.PARAM_NAMES) do
       track.params[name].pos = track.params[name].loop_start
+      track.params[name].tick = 0
     end
   end
 end

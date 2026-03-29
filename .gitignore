@@ -9,3 +9,4 @@ Thumbs.db
 .vscode/
 .idea/
 .ralph/agent/review-cycle/
+specs/tmp/

@@ -12,9 +12,23 @@ rawset(_G, "clock", {
   sync = function() end,
 })
 
+local param_store = { pattern_bank_name = "default" }
+rawset(_G, "params", {
+  get = function(self, id)
+    return param_store[id]
+  end,
+  set = function(self, id, val)
+    param_store[id] = val
+  end,
+})
+
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
+local app = require("lib/app")
 local keyboard = require("lib/seamstress/keyboard")
+local pattern_persistence = require("lib/pattern_persistence")
+
+local persistence_tmp = "specs/tmp/keyboard_pattern_persistence"
 
 -- Helper: create a minimal ctx
 local function make_ctx()
@@ -31,6 +45,13 @@ local function make_ctx()
 end
 
 describe("keyboard", function()
+
+  before_each(function()
+    os.execute("rm -rf " .. persistence_tmp)
+    os.execute("mkdir -p " .. persistence_tmp)
+    pattern_persistence._test_set_data_dir(persistence_tmp)
+    param_store.pattern_bank_name = "default"
+  end)
 
   describe("play/stop", function()
 
@@ -124,6 +145,13 @@ describe("keyboard", function()
       assert.are.equal(ctx.active_page, "velocity")
     end)
 
+    it("ctrl+p jumps to probability page and sets status", function()
+      local ctx = make_ctx()
+      keyboard.key(ctx, "p", {ctrl = true}, false, 1)
+      assert.are.equal("probability", ctx.active_page)
+      assert.are.equal("probability page", ctx.pattern_message.text)
+    end)
+
   end)
 
   describe("pattern save (ctrl+number)", function()
@@ -158,6 +186,69 @@ describe("keyboard", function()
 
       assert.is_true(pattern.is_populated(ctx.patterns, 9))
       assert.are.equal(7, ctx.patterns[9].tracks[1].division)
+    end)
+
+  end)
+
+  describe("pattern persistence shortcuts", function()
+
+    it("ctrl+s saves the current bank using the configured name", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].division = 7
+      params:set("pattern_bank_name", "shortcut-bank")
+
+      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
+
+      local fh = io.open(persistence_tmp .. "/shortcut-bank.krp", "r")
+      assert.is_not_nil(fh)
+      fh:close()
+      assert.are.equal("saved bank", ctx.pattern_message.text)
+    end)
+
+    it("ctrl+l reloads the configured bank into ctx", function()
+      local ctx = make_ctx()
+      params:set("pattern_bank_name", "reload-bank")
+      ctx.tracks[1].division = 8
+      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
+
+      ctx.tracks[1].division = 1
+      keyboard.key(ctx, "l", {ctrl = true}, false, 1)
+
+      assert.are.equal(8, ctx.tracks[1].division)
+      assert.are.equal("loaded bank", ctx.pattern_message.text)
+    end)
+
+    it("ctrl+b lists saved banks", function()
+      local ctx = make_ctx()
+      params:set("pattern_bank_name", "alpha-bank")
+      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
+      params:set("pattern_bank_name", "beta-bank")
+      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
+
+      keyboard.key(ctx, "b", {ctrl = true}, false, 1)
+
+      assert.are.equal("banks: alpha-bank, beta-bank", ctx.pattern_message.text)
+    end)
+
+
+    it("ctrl+shift+d deletes the configured bank and removes it from the list", function()
+      local ctx = make_ctx()
+      params:set("pattern_bank_name", "delete-bank")
+      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
+
+      keyboard.key(ctx, "d", {ctrl = true, shift = true}, false, 1)
+
+      assert.are.equal("deleted bank", ctx.pattern_message.text)
+      assert.are.same({}, app.list_pattern_banks())
+    end)
+
+    it("ctrl+shift+d reports delete failures", function()
+      local ctx = make_ctx()
+      params:set("pattern_bank_name", "missing-bank")
+
+      keyboard.key(ctx, "d", {ctrl = true, shift = true}, false, 1)
+
+      assert.are.equal("delete failed: not_found", ctx.pattern_message.text)
     end)
 
   end)
@@ -271,6 +362,34 @@ describe("keyboard", function()
       ctx.active_page = "velocity"
       keyboard.key(ctx, "y", {}, false, 1)
       assert.are.equal("velocity", ctx.active_page)
+    end)
+
+  end)
+
+  describe("direction cycling", function()
+
+    it("d cycles direction from forward to reverse", function()
+      local ctx = make_ctx()
+      assert.are.equal("forward", ctx.tracks[1].direction)
+      keyboard.key(ctx, "d", {}, false, 1)
+      assert.are.equal("reverse", ctx.tracks[1].direction)
+    end)
+
+    it("d cycles through all modes in order", function()
+      local ctx = make_ctx()
+      local expected = {"reverse", "pendulum", "drunk", "random", "forward"}
+      for _, mode in ipairs(expected) do
+        keyboard.key(ctx, "d", {}, false, 1)
+        assert.are.equal(mode, ctx.tracks[ctx.active_track].direction)
+      end
+    end)
+
+    it("d affects only the active track", function()
+      local ctx = make_ctx()
+      ctx.active_track = 2
+      keyboard.key(ctx, "d", {}, false, 1)
+      assert.are.equal("forward", ctx.tracks[1].direction)
+      assert.are.equal("reverse", ctx.tracks[2].direction)
     end)
 
   end)
