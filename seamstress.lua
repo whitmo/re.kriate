@@ -35,6 +35,9 @@ function init()
     sprite_voices = sprite_voices,
     screen_mod = screen_ui,
     grid_provider = "simulated",
+    grid_opts = {
+      mirror_monome = true,
+    },
   })
 
   -- Keyboard input
@@ -76,5 +79,6 @@ function cleanup()
   if ctx and ctx.screen_metro then
     ctx.screen_metro:stop()
   end
+  log.info("cleanup complete")
   log.close()
 end

@@ -209,6 +209,66 @@ describe("grid_provider", function()
   end)
 
   -- ========================================================================
+  -- Simulated provider with hardware mirroring
+  -- ========================================================================
+
+  describe("simulated provider with monome mirroring", function()
+    local default_grid = rawget(_G, "grid")
+
+    after_each(function()
+      rawset(_G, "grid", default_grid)
+    end)
+
+    it("forwards LED writes, refreshes, and hardware key events when mirror_monome is enabled", function()
+      local mirrored_calls = {
+        led = {},
+        all = {},
+        refreshes = 0,
+      }
+      local mirror_grid = nil
+
+      rawset(_G, "grid", {
+        connect = function(device_num)
+          mirror_grid = {
+            key = nil,
+            all = function(self, val)
+              mirrored_calls.all[#mirrored_calls.all + 1] = val
+            end,
+            led = function(self, x, y, brightness)
+              mirrored_calls.led[#mirrored_calls.led + 1] = {
+                x = x,
+                y = y,
+                brightness = brightness,
+              }
+            end,
+            refresh = function(self)
+              mirrored_calls.refreshes = mirrored_calls.refreshes + 1
+            end,
+          }
+          return mirror_grid
+        end,
+      })
+
+      local g = grid_provider.connect("simulated", { mirror_monome = true })
+      g:led(2, 3, 11)
+      g:refresh()
+
+      assert.are.equal(11, g:get_led(2, 3))
+      assert.are.same({ x = 2, y = 3, brightness = 11 }, mirrored_calls.led[1])
+      assert.are.equal(1, mirrored_calls.refreshes)
+
+      local received = nil
+      g.key = function(x, y, z)
+        received = { x = x, y = y, z = z }
+      end
+
+      assert.is_not_nil(mirror_grid.key, "expected simulated provider to subscribe to mirrored hardware key events")
+      mirror_grid.key(4, 5, 1)
+      assert.are.same({ x = 4, y = 5, z = 1 }, received)
+    end)
+  end)
+
+  -- ========================================================================
   -- Interface compliance validation
   -- ========================================================================
 
