@@ -142,9 +142,9 @@ end
 describe("per-parameter probability gating", function()
   it("fires when roll <= probability (all params advance)", function()
     local ctx = make_ctx()
-    ctx.rng = function() return 0.1 end -- 10 <= 50
-    -- set probability on step 1 (read by prob param advance from pos 1→2, but we set step 2 too)
-    for i = 1, 16 do ctx.tracks[1].params.probability.steps[i] = 4 end -- maps to 50%
+    ctx.rng = function() return 0.1 end -- 10 <= 100 (per-param gating passes)
+    -- probability=7 (100%) ensures both per-param and trigger-level checks pass
+    for i = 1, 16 do ctx.tracks[1].params.probability.steps[i] = 7 end -- maps to 100%
     -- ensure trigger fires at destination (advance goes pos 1→2)
     ctx.tracks[1].params.trigger.steps[2] = 1
     local fired = false
