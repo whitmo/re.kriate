@@ -148,13 +148,14 @@ function M.step_track(ctx, track_num)
   vals.probability = prob_val
 
   -- advance remaining params with trigger clocking + per-param probability gating
+  local prob_pct = track_mod.PROBABILITY_MAP[prob_val] or 100
   for _, name in ipairs(track_mod.PARAM_NAMES) do
     if name ~= "trigger" and name ~= "probability" then
       local p = track.params[name]
       if trig_gates then
         vals[name] = track_mod.peek(p)
       elseif track_mod.should_advance(p) then
-        if roll(ctx) <= prob_val then
+        if roll(ctx) <= prob_pct then
           vals[name] = direction_mod.advance(p, dir)
         else
           vals[name] = track_mod.peek(p)
@@ -174,11 +175,21 @@ function M.step_track(ctx, track_num)
   if vals.trigger == 1 then
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
 
-    -- if muted, skip audio but still fire ghost sprite
+    -- if muted, skip audio but still fire ghost sprite (mute takes precedence over probability)
     if track.muted then
       M.play_sprite(ctx, track_num, vals, duration, {muted = true})
       ctx.grid_dirty = true
       return
+    end
+
+    -- probability check: evaluated once per step, before ratchet
+    -- if probability fails, the entire step (including ratchet) is suppressed
+    local prob_pct = track_mod.PROBABILITY_MAP[vals.probability] or 100
+    if prob_pct < 100 then
+      if prob_pct <= 0 or math.random(100) > prob_pct then
+        ctx.grid_dirty = true
+        return
+      end
     end
 
     -- alt_note: additive pitch combination
