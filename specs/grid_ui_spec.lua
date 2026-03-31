@@ -82,6 +82,7 @@ local function make_ctx(opts)
     active_page = opts.active_page or "trigger",
     playing = opts.playing or false,
     loop_held = opts.loop_held or false,
+    time_held = opts.time_held or false,
     loop_first_press = nil,
     grid_dirty = true,
     g = g,
@@ -1432,5 +1433,167 @@ describe("grid_ui", function()
   -- Direction cycling via grid nav
   -- direction cycling via nav x=11 was removed (x=11 is now probability page)
   -- direction controls are accessible via the alt_track page (x=15)
+
+  -- ========================================================================
+  -- Time modifier: per-parameter clock division
+  -- ========================================================================
+
+  describe("time modifier", function()
+
+    describe("nav_key", function()
+      it("sets time_held on press of x=13", function()
+        local ctx = make_ctx()
+        grid_ui.nav_key(ctx, 13, 1)
+        assert.is_true(ctx.time_held)
+      end)
+
+      it("clears time_held on release of x=13", function()
+        local ctx = make_ctx()
+        ctx.time_held = true
+        grid_ui.nav_key(ctx, 13, 0)
+        assert.is_false(ctx.time_held)
+      end)
+
+      it("shows time LED lit when held", function()
+        local ctx, g = make_ctx()
+        ctx.time_held = true
+        grid_ui.redraw(ctx)
+        assert.are.equal(12, g:get_led(13, 8))
+      end)
+
+      it("shows time LED dim when not held", function()
+        local ctx, g = make_ctx()
+        ctx.time_held = false
+        grid_ui.redraw(ctx)
+        assert.are.equal(3, g:get_led(13, 8))
+      end)
+    end)
+
+    describe("time_key on trigger page", function()
+      it("sets trigger clock_div for the pressed track row", function()
+        local ctx = make_ctx({ active_page = "trigger", time_held = true })
+        -- Press column 3, row 2 → sets track 2 trigger clock_div to 3
+        grid_ui.grid_key(ctx, 3, 2, 1)
+        assert.are.equal(3, ctx.tracks[2].params.trigger.clock_div)
+      end)
+
+      it("resets tick counter when setting clock_div", function()
+        local ctx = make_ctx({ active_page = "trigger", time_held = true })
+        ctx.tracks[1].params.trigger.tick = 5
+        grid_ui.grid_key(ctx, 2, 1, 1)
+        assert.are.equal(0, ctx.tracks[1].params.trigger.tick)
+      end)
+
+      it("ignores presses beyond column 7", function()
+        local ctx = make_ctx({ active_page = "trigger", time_held = true })
+        local before = ctx.tracks[1].params.trigger.clock_div
+        grid_ui.grid_key(ctx, 10, 1, 1)
+        assert.are.equal(before, ctx.tracks[1].params.trigger.clock_div)
+      end)
+
+      it("ignores rows beyond NUM_TRACKS", function()
+        local ctx = make_ctx({ active_page = "trigger", time_held = true })
+        -- Row 5 is beyond 4 tracks — should not error
+        grid_ui.grid_key(ctx, 3, 5, 1)
+      end)
+    end)
+
+    describe("time_key on value pages", function()
+      it("sets note clock_div on note page", function()
+        local ctx = make_ctx({ active_page = "note", time_held = true })
+        grid_ui.grid_key(ctx, 4, 1, 1)
+        assert.are.equal(4, ctx.tracks[1].params.note.clock_div)
+      end)
+
+      it("sets velocity clock_div on velocity page", function()
+        local ctx = make_ctx({ active_page = "velocity", time_held = true })
+        grid_ui.grid_key(ctx, 2, 3, 1)
+        assert.are.equal(2, ctx.tracks[1].params.velocity.clock_div)
+      end)
+
+      it("sets duration clock_div on duration page", function()
+        local ctx = make_ctx({ active_page = "duration", time_held = true })
+        grid_ui.grid_key(ctx, 5, 1, 1)
+        assert.are.equal(5, ctx.tracks[1].params.duration.clock_div)
+      end)
+
+      it("respects active_track", function()
+        local ctx = make_ctx({ active_page = "note", active_track = 3, time_held = true })
+        grid_ui.grid_key(ctx, 6, 1, 1)
+        assert.are.equal(6, ctx.tracks[3].params.note.clock_div)
+        -- other tracks unchanged
+        assert.are.equal(1, ctx.tracks[1].params.note.clock_div)
+      end)
+
+      it("handles extended pages (ratchet -> trigger)", function()
+        local ctx = make_ctx({ active_page = "ratchet", time_held = true })
+        grid_ui.grid_key(ctx, 3, 1, 1)
+        -- ratchet is extended page for trigger, so it sets trigger's clock_div
+        assert.are.equal(3, ctx.tracks[1].params.trigger.clock_div)
+      end)
+
+      it("handles extended pages (alt_note -> note)", function()
+        local ctx = make_ctx({ active_page = "alt_note", time_held = true })
+        grid_ui.grid_key(ctx, 5, 1, 1)
+        assert.are.equal(5, ctx.tracks[1].params.note.clock_div)
+      end)
+
+      it("handles extended pages (glide -> octave)", function()
+        local ctx = make_ctx({ active_page = "glide", time_held = true })
+        grid_ui.grid_key(ctx, 2, 1, 1)
+        assert.are.equal(2, ctx.tracks[1].params.octave.clock_div)
+      end)
+    end)
+
+    describe("time_key on alt_track page", function()
+      it("sets clock_div for param by row", function()
+        local ctx = make_ctx({ active_page = "alt_track", time_held = true })
+        -- Row 1 = trigger (first PARAM_NAMES entry)
+        grid_ui.grid_key(ctx, 4, 1, 1)
+        assert.are.equal(4, ctx.tracks[1].params.trigger.clock_div)
+        -- Row 2 = note
+        grid_ui.grid_key(ctx, 3, 2, 1)
+        assert.are.equal(3, ctx.tracks[1].params.note.clock_div)
+      end)
+    end)
+
+    describe("draw_time_page", function()
+      it("shows trigger clock_divs per track on trigger page", function()
+        local ctx, g = make_ctx({ active_page = "trigger", time_held = true })
+        ctx.tracks[1].params.trigger.clock_div = 3
+        ctx.tracks[2].params.trigger.clock_div = 5
+        grid_ui.redraw(ctx)
+        -- Track 1 (active): column 3 should be bright (15)
+        assert.are.equal(15, g:get_led(3, 1))
+        -- Track 2: column 5 should be lit (10)
+        assert.are.equal(10, g:get_led(5, 2))
+        -- Unselected columns should be dim
+        assert.are.equal(3, g:get_led(1, 1))  -- active track, non-selected
+        assert.are.equal(2, g:get_led(1, 2))  -- inactive track, non-selected
+      end)
+
+      it("shows active param clock_div prominently on value page", function()
+        local ctx, g = make_ctx({ active_page = "note", time_held = true })
+        ctx.tracks[1].params.note.clock_div = 4
+        grid_ui.redraw(ctx)
+        -- Row 1 column 4 should be bright (15)
+        assert.are.equal(15, g:get_led(4, 1))
+        -- Non-selected columns on row 1 should be 3
+        assert.are.equal(3, g:get_led(1, 1))
+      end)
+
+      it("shows other params dimly on rows 2+ on value page", function()
+        local ctx, g = make_ctx({ active_page = "note", time_held = true })
+        ctx.tracks[1].params.trigger.clock_div = 2
+        grid_ui.redraw(ctx)
+        -- trigger is first param != note, so it shows on row 2
+        -- Its clock_div is 2, so column 2 row 2 should be 6
+        assert.are.equal(6, g:get_led(2, 2))
+        -- Other columns on row 2 should be 1
+        assert.are.equal(1, g:get_led(1, 2))
+      end)
+    end)
+
+  end)
 
 end)
