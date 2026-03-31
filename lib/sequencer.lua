@@ -123,14 +123,31 @@ function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
   local dir = track.direction  -- nil defaults to "forward" inside direction.advance
 
-  -- advance params independently, respecting per-param clock division
-  local vals = {}
+  -- advance probability param first (no self-referencing gate)
+  local prob_param = track.params.probability
+  local prob_val
+  if track_mod.should_advance(prob_param) then
+    prob_val = direction_mod.advance(prob_param, dir)
+  else
+    prob_val = track_mod.peek(prob_param)
+  end
+
+  -- advance all other params with per-param probability gating
+  -- each parameter independently rolls against probability;
+  -- on failure the param holds its current value (position unchanged)
+  local vals = {probability = prob_val}
   for _, name in ipairs(track_mod.PARAM_NAMES) do
-    local p = track.params[name]
-    if track_mod.should_advance(p) then
-      vals[name] = direction_mod.advance(p, dir)
-    else
-      vals[name] = track_mod.peek(p)
+    if name ~= "probability" then
+      local p = track.params[name]
+      if track_mod.should_advance(p) then
+        if roll(ctx) <= prob_val then
+          vals[name] = direction_mod.advance(p, dir)
+        else
+          vals[name] = track_mod.peek(p)
+        end
+      else
+        vals[name] = track_mod.peek(p)
+      end
     end
   end
 
@@ -139,14 +156,8 @@ function M.step_track(ctx, track_num)
     ctx.events:emit("sequencer:step", {track=track_num, step=track.params.trigger.pos, vals=vals})
   end
 
-  -- fire note on trigger
+  -- fire note on trigger (probability already applied per-param above)
   if vals.trigger == 1 then
-    local prob = vals.probability or 100
-    local r = roll(ctx)
-    if r > prob then
-      ctx.grid_dirty = true
-      return
-    end
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
 
     -- if muted, skip audio but still fire ghost sprite
