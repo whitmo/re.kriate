@@ -412,14 +412,14 @@ describe("grid_ui", function()
       local g = spy_grid()
       ctx.tracks[1].direction = "pendulum"
       ctx.tracks[1].division = 4
-      ctx.tracks[1].swing = 75
+      ctx.tracks[1].swing = 50
       ctx.tracks[1].muted = true
 
       grid_ui.draw_alt_track_page(ctx, g)
 
       assert.are.equal(12, led_at(g, 3, 1))   -- direction pendulum (col 3)
       assert.are.equal(12, led_at(g, 9, 1))   -- division 4 -> col 9 (6..12 mapping)
-      assert.are.equal(12, led_at(g, 14, 1))  -- swing 75 -> col 14 (11..15 mapping)
+      assert.are.equal(12, led_at(g, 14, 1))  -- swing 50 -> col 14 (13..15 mapping)
       assert.are.equal(15, led_at(g, 16, 1))  -- mute toggle bright
     end)
 
@@ -447,10 +447,10 @@ describe("grid_ui", function()
       grid_ui.alt_track_key(ctx, 10, 2)  -- division col 10 => 5
       assert.are.equal(5, ctx.tracks[2].division)
 
-      grid_ui.alt_track_key(ctx, 13, 2) -- swing 50 (cols 11-15 map to 0/25/50/75/100)
+      grid_ui.alt_track_key(ctx, 13, 2) -- swing 0 (cols 13-15 map to 0/50/100)
+      assert.are.equal(0, ctx.tracks[2].swing)
+      grid_ui.alt_track_key(ctx, 14, 2) -- swing 50
       assert.are.equal(50, ctx.tracks[2].swing)
-      grid_ui.alt_track_key(ctx, 14, 2) -- swing 75
-      assert.are.equal(75, ctx.tracks[2].swing)
       grid_ui.alt_track_key(ctx, 15, 2) -- swing 100
       assert.are.equal(100, ctx.tracks[2].swing)
       grid_ui.alt_track_key(ctx, 15, 2)

@@ -72,12 +72,16 @@ end
 --- @param state number  1 for press, 0 for release
 --- @param button number  Mouse button (1=left, 2=right, 3=middle)
 function M.handle_click(grid, px, py, state, button)
+  -- Default button to 1 (left) if seamstress doesn't provide it
+  button = button or 1
   if button ~= 1 and button ~= 2 then return end
   local gx, gy = M.pixel_to_grid(px, py)
   if not gx then return end
 
-  if button == 2 and gy == NAV_Y and (gx == NAV_LOOP_X or gx == NAV_PATTERN_X) then
-    -- Right-click latches/unlatches loop or pattern holds
+  -- Modifier buttons (loop, pattern) use toggle/latch on both left and right click
+  -- because mouse can't hold one cell and click another simultaneously
+  if gy == NAV_Y and (gx == NAV_LOOP_X or gx == NAV_PATTERN_X) then
+    if state ~= 1 then return end -- only toggle on press, ignore release
     held_by_grid[grid] = held_by_grid[grid] or {}
     local key = gx .. ":" .. gy
     local currently_held = held_by_grid[grid][key] == true

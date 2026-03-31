@@ -43,7 +43,7 @@ local NAV_PLAY = 16
 
 local ALT_DIRECTIONS = {"forward", "reverse", "pendulum", "drunk", "random"}
 local ALT_DIVISIONS = {1,2,3,4,5,6,7}
-local ALT_SWING = {0, 25, 50, 75, 100}
+local ALT_SWING = {0, 50, 100}
 
 function M.redraw(ctx)
   local g = ctx.g
@@ -141,7 +141,7 @@ end
 -- Alt-track settings page (rows = tracks)
 -- x1-5: direction (forward, reverse, pendulum, drunk, random)
 -- x6-12: division (1..7)
--- x11-15: swing (0,25,50,75,100)
+-- x13-15: swing (0,50,100)
 -- x16: mute toggle
 function M.draw_alt_track_page(ctx, g)
   local active_track = ctx.active_track or 1
@@ -168,7 +168,7 @@ function M.draw_alt_track_page(ctx, g)
     end
     -- swing (coarse buckets)
     for idx, swing in ipairs(ALT_SWING) do
-      local x = 10 + idx -- 11..15
+      local x = 12 + idx -- 13..15
       local selected = (track.swing == swing)
       local base = selected and 10 or 2
       if is_active_row then base = math.min(12, base + 2) end
@@ -493,8 +493,8 @@ function M.alt_track_key(ctx, x, y)
     end
   end
 
-  if x >= 11 and x <= 15 then
-    local idx = x - 10
+  if x >= 13 and x <= 15 then
+    local idx = x - 12
     if ALT_SWING[idx] ~= nil then
       track.swing = ALT_SWING[idx]
       ctx.active_track = y

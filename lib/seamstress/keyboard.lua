@@ -88,6 +88,11 @@ function M.key(ctx, char, modifiers, is_repeat, state)
       if m == cur then idx = i; break end
     end
     track.direction = modes[(idx % #modes) + 1]
+  elseif char == "l" and not (modifiers and modifiers.ctrl) then
+    ctx.loop_held = not ctx.loop_held
+    if not ctx.loop_held then
+      ctx.loop_first_press = nil
+    end
   elseif KEY_PAGE[char] then
     local target = KEY_PAGE[char]
     if ctx.active_page == target and grid_ui.EXTENDED_PAGES[target] then
