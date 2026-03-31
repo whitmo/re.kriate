@@ -118,6 +118,7 @@ function M.new_track(track_num)
     muted = false,
     direction = "forward",
     swing = 0,
+    trig_clock = false,  -- trigger clocking: non-trigger params advance only when trigger fires
   }
   for _, name in ipairs(M.PARAM_NAMES) do
     local default_val = PARAM_DEFAULTS[name] or 4

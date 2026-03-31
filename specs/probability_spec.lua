@@ -87,17 +87,18 @@ describe("per-parameter probability gating", function()
     local ctx = make_ctx()
     ctx.rng = function() return 0.01 end -- 1 > 0
     ctx.tracks[1].params.probability.steps[1] = 0
-    -- record starting positions
+    -- record starting positions (trigger advances independently, excluded like probability)
     local start_positions = {}
     for _, name in ipairs(track_mod.PARAM_NAMES) do
-      if name ~= "probability" then
+      if name ~= "probability" and name ~= "trigger" then
         start_positions[name] = ctx.tracks[1].params[name].pos
       end
     end
     sequencer.step_track(ctx, 1)
-    -- all param positions should be unchanged (held)
+    -- all param positions should be unchanged (held); trigger is excluded because
+    -- it advances independently before probability gating (required for trigger clocking)
     for _, name in ipairs(track_mod.PARAM_NAMES) do
-      if name ~= "probability" then
+      if name ~= "probability" and name ~= "trigger" then
         assert.are.equal(start_positions[name], ctx.tracks[1].params[name].pos,
           name .. " position should not advance at 0% probability")
       end

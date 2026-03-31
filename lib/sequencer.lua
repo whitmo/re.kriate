@@ -123,23 +123,37 @@ function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
   local dir = track.direction  -- nil defaults to "forward" inside direction.advance
 
-  -- advance probability param first (no self-referencing gate)
+  -- advance trigger first (always ticks independently)
+  local vals = {}
+  local trig_param = track.params.trigger
+  if track_mod.should_advance(trig_param) then
+    vals.trigger = direction_mod.advance(trig_param, dir)
+  else
+    vals.trigger = track_mod.peek(trig_param)
+  end
+
+  -- when trig_clock is enabled and trigger didn't fire, freeze all non-trigger params
+  local trig_gates = track.trig_clock and vals.trigger ~= 1
+
+  -- advance probability param (no self-referencing gate, subject to trigger clocking)
   local prob_param = track.params.probability
   local prob_val
-  if track_mod.should_advance(prob_param) then
+  if trig_gates then
+    prob_val = track_mod.peek(prob_param)
+  elseif track_mod.should_advance(prob_param) then
     prob_val = direction_mod.advance(prob_param, dir)
   else
     prob_val = track_mod.peek(prob_param)
   end
+  vals.probability = prob_val
 
-  -- advance all other params with per-param probability gating
-  -- each parameter independently rolls against probability;
-  -- on failure the param holds its current value (position unchanged)
-  local vals = {probability = prob_val}
+  -- advance remaining params with trigger clocking + per-param probability gating
   for _, name in ipairs(track_mod.PARAM_NAMES) do
-    if name ~= "probability" then
+    if name ~= "trigger" and name ~= "probability" then
       local p = track.params[name]
-      if track_mod.should_advance(p) then
+      if trig_gates then
+        vals[name] = track_mod.peek(p)
+      elseif track_mod.should_advance(p) then
         if roll(ctx) <= prob_val then
           vals[name] = direction_mod.advance(p, dir)
         else
