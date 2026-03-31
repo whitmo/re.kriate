@@ -176,10 +176,10 @@ describe("track", function()
       )
     end)
 
-    it("EXTENDED_PARAMS has 4 extended params", function()
-      assert.equals(4, #track.EXTENDED_PARAMS)
+    it("EXTENDED_PARAMS has 3 extended params", function()
+      assert.equals(3, #track.EXTENDED_PARAMS)
       assert.are.same(
-        {"ratchet", "alt_note", "glide", "probability"},
+        {"ratchet", "alt_note", "glide"},
         track.EXTENDED_PARAMS
       )
     end)

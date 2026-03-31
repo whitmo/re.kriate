@@ -148,13 +148,14 @@ function M.step_track(ctx, track_num)
   vals.probability = prob_val
 
   -- advance remaining params with trigger clocking + per-param probability gating
+  local prob_pct = track_mod.PROBABILITY_MAP[prob_val] or 100
   for _, name in ipairs(track_mod.PARAM_NAMES) do
     if name ~= "trigger" and name ~= "probability" then
       local p = track.params[name]
       if trig_gates then
         vals[name] = track_mod.peek(p)
       elseif track_mod.should_advance(p) then
-        if roll(ctx) <= prob_val then
+        if roll(ctx) <= prob_pct then
           vals[name] = direction_mod.advance(p, dir)
         else
           vals[name] = track_mod.peek(p)

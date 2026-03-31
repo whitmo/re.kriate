@@ -143,46 +143,38 @@ describe("per-parameter probability gating", function()
   it("fires when roll <= probability (all params advance)", function()
     local ctx = make_ctx()
     ctx.rng = function() return 0.1 end -- 10 <= 50
-    ctx.tracks[1].params.probability.steps[1] = 50
+    -- set probability on step 1 (read by prob param advance from pos 1→2, but we set step 2 too)
+    for i = 1, 16 do ctx.tracks[1].params.probability.steps[i] = 4 end -- maps to 50%
+    -- ensure trigger fires at destination (advance goes pos 1→2)
+    ctx.tracks[1].params.trigger.steps[2] = 1
     local fired = false
     ctx.voices[1].play_note = function() fired = true end
     sequencer.step_track(ctx, 1)
     assert.is_true(fired)
   end)
 
-  it("skips trigger when roll > probability (trigger holds at 0)", function()
+  it("trigger advances independently of per-param probability", function()
     local ctx = make_ctx()
-    ctx.rng = function() return 0.9 end -- 90 > 20
-    -- trigger step 1 = 1 (would fire), but probability will prevent it from advancing
-    -- Position starts at 1. Default trigger pattern for track 1: {1,0,1,0,...}
-    -- With probability failing, trigger holds its peek value at pos 1 = 1
-    -- BUT trigger doesn't advance. Actually, let's set up a clearer scenario:
-    -- Set all trigger steps to 0 except step 2
-    for i = 1, 16 do ctx.tracks[1].params.trigger.steps[i] = 0 end
-    ctx.tracks[1].params.trigger.steps[2] = 1
-    -- advance trigger once to get to step 2
-    ctx.tracks[1].params.trigger.pos = 1
-    -- With 100% prob first to advance to step 2
-    ctx.tracks[1].params.probability.steps[1] = 100
+    ctx.rng = function() return 0.9 end -- 90 > 50: per-param probability fails
+    -- probability = 4 (maps to 50%): per-param rolls will fail
+    for i = 1, 16 do ctx.tracks[1].params.probability.steps[i] = 4 end
+    -- trigger fires on all steps
+    for i = 1, 16 do ctx.tracks[1].params.trigger.steps[i] = 1 end
+    local start_trig_pos = ctx.tracks[1].params.trigger.pos
+    local start_note_pos = ctx.tracks[1].params.note.pos
     sequencer.step_track(ctx, 1)
-    -- now at step 2 (trigger=1), set low probability
-    ctx.tracks[1].params.probability.steps[2] = 20
-    local fired = false
-    ctx.voices[1].play_note = function() fired = true end
-    sequencer.step_track(ctx, 1)
-    -- trigger held at step 2 value (1) since probability failed,
-    -- but note params also held, so trigger=1 still fires but with held note values
-    -- Wait - roll 90 > 20, so trigger does NOT advance. It peeks at current pos.
-    -- Current pos after first advance = 2, step 2 = 1, so trigger=1
-    -- trigger fires because its VALUE is 1 (held), even though it didn't advance
-    -- Actually this IS correct - the trigger fires with its current (held) value
-    assert.is_true(fired)
+    -- trigger should have advanced (independently of per-param probability)
+    assert.are_not.equal(start_trig_pos, ctx.tracks[1].params.trigger.pos,
+      "trigger should advance independently of probability")
+    -- note should be held (per-param probability failed)
+    assert.are.equal(start_note_pos, ctx.tracks[1].params.note.pos,
+      "note should be held when probability fails")
   end)
 
   it("at 100% probability all params always advance", function()
     local ctx = make_ctx()
     ctx.rng = function() return 0.99 end -- 99 <= 100
-    ctx.tracks[1].params.probability.steps[1] = 100
+    ctx.tracks[1].params.probability.steps[1] = 7  -- maps to 100%
     -- set specific note values to detect advancement
     ctx.tracks[1].params.note.steps[1] = 3
     ctx.tracks[1].params.note.steps[2] = 5
@@ -197,7 +189,7 @@ describe("per-parameter probability gating", function()
   it("at 0% probability no params advance (all hold)", function()
     local ctx = make_ctx()
     ctx.rng = function() return 0.01 end -- 1 > 0
-    ctx.tracks[1].params.probability.steps[1] = 0
+    ctx.tracks[1].params.probability.steps[1] = 1  -- maps to 0%
     -- record starting positions (trigger advances independently, excluded like probability)
     local start_positions = {}
     for _, name in ipairs(track_mod.PARAM_NAMES) do
@@ -220,7 +212,7 @@ describe("per-parameter probability gating", function()
     local ctx = make_ctx()
     ctx.rng = function() return 0.5 end
     -- even at 0% probability, the probability param itself must advance
-    ctx.tracks[1].params.probability.steps[1] = 0
+    ctx.tracks[1].params.probability.steps[1] = 1  -- maps to 0%
     ctx.tracks[1].params.probability.pos = 1
     sequencer.step_track(ctx, 1)
     assert.are.equal(2, ctx.tracks[1].params.probability.pos,
@@ -236,7 +228,7 @@ describe("per-parameter probability gating", function()
       if call_count % 2 == 1 then return 0.1 end -- 10 <= 50 (pass)
       return 0.9 -- 90 > 50 (fail)
     end
-    ctx.tracks[1].params.probability.steps[1] = 50
+    ctx.tracks[1].params.probability.steps[1] = 4  -- maps to 50%
     -- record starting positions
     local start_positions = {}
     for _, name in ipairs(track_mod.PARAM_NAMES) do
@@ -263,7 +255,7 @@ describe("per-parameter probability gating", function()
   it("held param retains its current step value", function()
     local ctx = make_ctx()
     ctx.rng = function() return 0.9 end -- 90 > 50 (always fail)
-    ctx.tracks[1].params.probability.steps[1] = 50
+    ctx.tracks[1].params.probability.steps[1] = 4  -- maps to 50%
     -- set note at pos 1 to a known value
     ctx.tracks[1].params.note.pos = 1
     ctx.tracks[1].params.note.steps[1] = 7
@@ -282,7 +274,7 @@ describe("per-parameter probability gating", function()
   it("step event reports actual values including held params", function()
     local ctx = make_ctx()
     ctx.rng = function() return 0.9 end -- always fail
-    ctx.tracks[1].params.probability.steps[1] = 50
+    ctx.tracks[1].params.probability.steps[1] = 4  -- maps to 50%
     ctx.tracks[1].params.note.pos = 1
     ctx.tracks[1].params.note.steps[1] = 5
     local emitted_vals
