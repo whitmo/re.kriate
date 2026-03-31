@@ -28,6 +28,7 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 -- x=11: probability page
 -- x=5: mute toggle
 -- x=12: loop modifier (hold)
+-- x=13: time modifier (hold) — per-param clock division
 -- x=14: pattern mode (hold)
 -- x=15: alt-track page (direction/division/swing/mute)
 -- x=16: play/stop
@@ -36,6 +37,7 @@ local NAV_TRACK = {1, 2, 3, 4} -- @@ unused
 local NAV_MUTE = 5
 local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration", [10] = "velocity", [11] = "probability", [15] = "alt_track"}
 local NAV_LOOP = 12
+local NAV_TIME = 13
 local NAV_PATTERN = 14
 local NAV_PLAY = 16
 
@@ -51,6 +53,9 @@ function M.redraw(ctx)
   if ctx.pattern_held then
     -- pattern mode: show pattern slots on rows 1-2, cols 1-8
     M.draw_pattern_slots(ctx, g)
+  elseif ctx.time_held then
+    -- time modifier: show per-param clock division selector
+    M.draw_time_page(ctx, g)
   else
     local page = ctx.active_page
 
@@ -176,6 +181,77 @@ function M.draw_alt_track_page(ctx, g)
   end
 end
 
+-- Time page: per-parameter clock division selector
+-- On trigger page: rows 1-4 = tracks, columns 1-7 = division values for trigger param
+-- On value pages: rows 1-4 = core params visible as labels, columns 1-7 = division value
+-- Active page's param is highlighted on row 1; other params shown dimly below
+function M.draw_time_page(ctx, g)
+  local page = ctx.active_page
+  -- Resolve extended page to primary for param lookup
+  local param_name = M.EXTENDED_REVERSE[page] or page
+
+  if page == "trigger" then
+    -- Trigger page: show each track's trigger clock_div
+    for t = 1, track_mod.NUM_TRACKS do
+      local p = ctx.tracks[t].params.trigger
+      local is_active = (t == ctx.active_track)
+      for x = 1, 7 do
+        local brightness = 2
+        if x == p.clock_div then
+          brightness = is_active and 15 or 10
+        elseif is_active then
+          brightness = 3
+        end
+        g:led(x, t, brightness)
+      end
+    end
+  elseif page == "alt_track" then
+    -- Alt-track page: show all params for active track, one param per row
+    local track = ctx.tracks[ctx.active_track]
+    for row, name in ipairs(track_mod.PARAM_NAMES) do
+      if row > 7 then break end
+      local p = track.params[name]
+      for x = 1, 7 do
+        local brightness = 2
+        if x == p.clock_div then
+          brightness = 10
+        end
+        g:led(x, row, brightness)
+      end
+    end
+  else
+    -- Value page: show active param's clock_div prominently on row 1,
+    -- plus other params dimly below for context
+    local track = ctx.tracks[ctx.active_track]
+    local active_param = track.params[param_name]
+    if active_param then
+      -- Row 1: active param
+      for x = 1, 7 do
+        local brightness = 3
+        if x == active_param.clock_div then
+          brightness = 15
+        end
+        g:led(x, 1, brightness)
+      end
+      -- Rows 2-7: other core params for context (skip active)
+      local row = 2
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        if name ~= param_name and row <= 7 then
+          local p = track.params[name]
+          for x = 1, 7 do
+            local brightness = 1
+            if x == p.clock_div then
+              brightness = 6
+            end
+            g:led(x, row, brightness)
+          end
+          row = row + 1
+        end
+      end
+    end
+  end
+end
+
 -- Pattern slots display: rows 1-2, cols 1-8 (16 slots total)
 function M.draw_pattern_slots(ctx, g)
   if not ctx.patterns then return end
@@ -213,6 +289,8 @@ function M.draw_nav(ctx, g)
   end
   -- loop modifier
   g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
+  -- time modifier
+  g:led(NAV_TIME, y, ctx.time_held and 12 or 3)
   -- pattern mode
   g:led(NAV_PATTERN, y, ctx.pattern_held and 12 or 3)
   -- play/stop
@@ -276,6 +354,10 @@ function M.nav_key(ctx, x, z)
       ctx.loop_first_press = nil
     end
   end
+  -- time modifier (hold x=13)
+  if x == NAV_TIME then
+    ctx.time_held = (z == 1)
+  end
   -- pattern mode (hold x=14)
   if x == NAV_PATTERN then
     ctx.pattern_held = (z == 1)
@@ -301,6 +383,12 @@ function M.grid_key(ctx, x, y, z)
   -- pattern slot selection mode
   if ctx.pattern_held then
     M.pattern_key(ctx, x, y)
+    return
+  end
+
+  -- time modifier: set per-param clock division
+  if ctx.time_held then
+    M.time_key(ctx, x, y)
     return
   end
 
@@ -417,6 +505,40 @@ function M.alt_track_key(ctx, x, y)
   if x == 16 then
     track.muted = not track.muted
     ctx.active_track = y
+  end
+end
+
+-- Time modifier key: set per-param clock division
+-- x=1-7 sets clock_div value; y selects target depending on page
+function M.time_key(ctx, x, y)
+  if x < 1 or x > 7 then return end
+  local page = ctx.active_page
+  local param_name = M.EXTENDED_REVERSE[page] or page
+
+  if page == "trigger" then
+    -- On trigger page: y=1-4 selects track, sets trigger param clock_div
+    if y >= 1 and y <= track_mod.NUM_TRACKS then
+      ctx.tracks[y].params.trigger.clock_div = x
+      ctx.tracks[y].params.trigger.tick = 0
+    end
+  elseif page == "alt_track" then
+    -- On alt_track page: y=1-7 maps to param names
+    if y >= 1 and y <= #track_mod.PARAM_NAMES and y <= 7 then
+      local name = track_mod.PARAM_NAMES[y]
+      local p = ctx.tracks[ctx.active_track].params[name]
+      if p then
+        p.clock_div = x
+        p.tick = 0
+      end
+    end
+  else
+    -- On value pages: any press sets the active param's clock_div
+    local track = ctx.tracks[ctx.active_track]
+    local p = track.params[param_name]
+    if p then
+      p.clock_div = x
+      p.tick = 0
+    end
   end
 end
 
