@@ -38,7 +38,8 @@ M.Y_MAP = {
   [7] = 16,
 }
 
--- X position map: alt_note (1-7) -> horizontal position (screen width 256)
+-- X position map: effective degree (1-7) -> horizontal position (screen width 256)
+-- Effective degree combines note + alt_note, mirroring the audio path
 M.X_MAP = {
   [1] = 32,
   [2] = 64,
@@ -76,7 +77,9 @@ function M.new(track_num)
       local glide_val = vals.glide or 1
       local is_muted = opts.muted or false
 
-      local x = M.X_MAP[alt_val] or 128
+      -- Combine note + alt_note into effective degree (mirrors audio path)
+      local effective_degree = ((note_val - 1) + (alt_val - 1)) % 7 + 1
+      local x = M.X_MAP[effective_degree] or 128
       local y = M.Y_MAP[oct_val] or 64
       local size = M.SIZE_MAP[vel_val] or 10
       local alpha = base_color[4]
