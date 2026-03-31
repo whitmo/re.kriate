@@ -179,6 +179,11 @@ function M.draw_alt_track_page(ctx, g)
     local mute_brightness = track.muted and 15 or (is_active_row and 4 or 2)
     g:led(16, t, mute_brightness)
   end
+  -- trigger clocking toggles (row 5, x=1-4 = tracks 1-4)
+  for t = 1, track_mod.NUM_TRACKS do
+    local track = ctx.tracks[t]
+    g:led(t, 5, track.trig_clock and 12 or 2)
+  end
 end
 
 -- Time page: per-parameter clock division selector
@@ -474,6 +479,15 @@ end
 
 -- Alt-track interaction
 function M.alt_track_key(ctx, x, y)
+  -- trigger clocking toggles (row 5, x=1-4)
+  if y == 5 and x >= 1 and x <= track_mod.NUM_TRACKS then
+    local track = ctx.tracks[x]
+    if track then
+      track.trig_clock = not track.trig_clock
+    end
+    return
+  end
+
   if y < 1 or y > track_mod.NUM_TRACKS then return end
   local track = ctx.tracks[y]
   if not track then return end

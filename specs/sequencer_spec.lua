@@ -1110,4 +1110,157 @@ describe("sequencer", function()
 
   end)
 
+  describe("trigger clocking", function()
+
+    it("non-trigger params advance only when trigger fires", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.trig_clock = true
+      -- Set up known note sequence
+      for i = 1, 16 do track.params.note.steps[i] = i end
+      track.params.note.pos = 1
+      track.params.note.loop_start = 1
+      track.params.note.loop_end = 8
+      track.params.note.clock_div = 1
+      track.params.note.tick = 0
+      -- trigger: off at pos 1, on at pos 2
+      track.params.trigger.steps[1] = 0
+      track.params.trigger.steps[2] = 1
+      track.params.trigger.pos = 1
+      track.params.trigger.loop_start = 1
+      track.params.trigger.loop_end = 4
+      track.params.trigger.clock_div = 1
+      track.params.trigger.tick = 0
+
+      -- Tick 1: trigger=0, note should NOT advance
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(1, track.params.note.pos, "note should not advance when trigger is 0")
+
+      -- Tick 2: trigger=1, note SHOULD advance
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(2, track.params.note.pos, "note should advance when trigger fires")
+    end)
+
+    it("trigger param always advances regardless of trig_clock", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.trig_clock = true
+      track.params.trigger.steps[1] = 0
+      track.params.trigger.steps[2] = 0
+      track.params.trigger.pos = 1
+      track.params.trigger.loop_start = 1
+      track.params.trigger.loop_end = 4
+      track.params.trigger.clock_div = 1
+      track.params.trigger.tick = 0
+
+      -- Even though trigger=0, the trigger param pos should advance
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(2, track.params.trigger.pos)
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(3, track.params.trigger.pos)
+    end)
+
+    it("non-trigger param tick counters frozen when trigger is 0", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.trig_clock = true
+      -- note has clock_div=2
+      track.params.note.clock_div = 2
+      track.params.note.tick = 0
+      track.params.note.pos = 1
+      -- all triggers off
+      for i = 1, 16 do track.params.trigger.steps[i] = 0 end
+      track.params.trigger.pos = 1
+      track.params.trigger.loop_start = 1
+      track.params.trigger.loop_end = 4
+      track.params.trigger.clock_div = 1
+      track.params.trigger.tick = 0
+
+      -- Step several times with no trigger firing
+      sequencer.step_track(ctx, 1)
+      sequencer.step_track(ctx, 1)
+      sequencer.step_track(ctx, 1)
+
+      -- tick counter should still be 0 (never incremented)
+      assert.are.equal(0, track.params.note.tick, "tick should not increment when trigger gated")
+      assert.are.equal(1, track.params.note.pos, "note pos should not move")
+    end)
+
+    it("default trig_clock is off (existing behavior preserved)", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      -- trig_clock should default to false
+      assert.is_falsy(track.trig_clock)
+
+      -- With trig_clock off, note advances even when trigger=0
+      for i = 1, 16 do track.params.note.steps[i] = i end
+      track.params.note.pos = 1
+      track.params.note.loop_start = 1
+      track.params.note.loop_end = 8
+      track.params.note.clock_div = 1
+      track.params.note.tick = 0
+      track.params.trigger.steps[1] = 0
+      track.params.trigger.pos = 1
+      track.params.trigger.clock_div = 1
+      track.params.trigger.tick = 0
+
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(2, track.params.note.pos, "note should advance normally when trig_clock is off")
+    end)
+
+    it("works with per-param clock division", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.trig_clock = true
+      -- note clock_div=2, triggers fire every step
+      track.params.note.clock_div = 2
+      track.params.note.tick = 0
+      track.params.note.pos = 1
+      track.params.note.loop_start = 1
+      track.params.note.loop_end = 8
+      for i = 1, 16 do track.params.note.steps[i] = i end
+      for i = 1, 16 do track.params.trigger.steps[i] = 1 end
+      track.params.trigger.pos = 1
+      track.params.trigger.loop_start = 1
+      track.params.trigger.loop_end = 4
+      track.params.trigger.clock_div = 1
+      track.params.trigger.tick = 0
+
+      -- Tick 1: trigger fires, but note clock_div=2 means tick goes 0→1, no advance
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(1, track.params.note.pos, "note waits for clock_div even when trigger fires")
+
+      -- Tick 2: trigger fires, note clock_div=2 means tick goes 1→2 >= 2, advance
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(2, track.params.note.pos, "note advances when trigger fires and clock_div reached")
+    end)
+
+    it("multiple non-trigger params all gated together", function()
+      local ctx = make_ctx()
+      local track = ctx.tracks[1]
+      track.trig_clock = true
+      -- Set up several params at known positions
+      for _, name in ipairs({"note", "octave", "duration", "velocity"}) do
+        track.params[name].pos = 1
+        track.params[name].clock_div = 1
+        track.params[name].tick = 0
+        track.params[name].loop_start = 1
+        track.params[name].loop_end = 8
+      end
+      -- trigger=0
+      track.params.trigger.steps[1] = 0
+      track.params.trigger.pos = 1
+      track.params.trigger.clock_div = 1
+      track.params.trigger.tick = 0
+
+      sequencer.step_track(ctx, 1)
+
+      -- All non-trigger params should be frozen
+      for _, name in ipairs({"note", "octave", "duration", "velocity"}) do
+        assert.are.equal(1, track.params[name].pos, name .. " should not advance")
+      end
+    end)
+
+  end)
+
 end)
