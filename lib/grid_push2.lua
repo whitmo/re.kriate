@@ -13,6 +13,26 @@
 local M = {}
 
 ------------------------------------------------------------------------
+-- Portable bit helpers (Lua 5.1/5.2/5.3 compatible)
+------------------------------------------------------------------------
+
+local floor = math.floor
+
+local function band(a, b) return a % (b + 1) end
+local function rshift(a, n) return floor(a / (2 ^ n)) end
+local function idiv(a, b) return floor(a / b) end
+
+-- Split an 8-bit color value into lo (bits 0-6) and hi (bit 7)
+local function split_byte(v)
+  return v % 128, floor(v / 128)
+end
+
+-- Extract high nibble from a byte (status & 0xF0)
+local function high_nibble(byte)
+  return byte - (byte % 16)
+end
+
+------------------------------------------------------------------------
 -- Constants
 ------------------------------------------------------------------------
 
@@ -44,12 +64,13 @@ end
 --- Set a color palette entry (index 0-127, RGB 0-255 each)
 function M.sysex_set_palette_entry(index, r, g, b, w)
   w = w or 0
+  local r_lo, r_hi = split_byte(r)
+  local g_lo, g_hi = split_byte(g)
+  local b_lo, b_hi = split_byte(b)
+  local w_lo, w_hi = split_byte(w)
   return build_sysex({
     0x03, index,
-    r & 0x7F, (r >> 7) & 0x01,
-    g & 0x7F, (g >> 7) & 0x01,
-    b & 0x7F, (b >> 7) & 0x01,
-    w & 0x7F, (w >> 7) & 0x01,
+    r_lo, r_hi, g_lo, g_hi, b_lo, b_hi, w_lo, w_hi,
   })
 end
 
@@ -75,7 +96,7 @@ function M.note_to_grid(note)
   if note < M.PAD_NOTE_MIN or note > M.PAD_NOTE_MAX then return nil, nil end
   local idx = note - M.PAD_NOTE_MIN
   local pad_col = idx % 8
-  local pad_row = idx // 8  -- 0=bottom row, 7=top row
+  local pad_row = idiv(idx, 8)  -- 0=bottom row, 7=top row
   return pad_col + 1, 8 - pad_row
 end
 
@@ -223,7 +244,7 @@ function M.new(opts)
   if midi_dev then
     midi_dev.event = function(data)
       if not data or #data < 3 then return end
-      local status = data[1] & 0xF0
+      local status = high_nibble(data[1])
       local byte2 = data[2]
       local byte3 = data[3]
 
