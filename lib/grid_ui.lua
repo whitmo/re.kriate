@@ -101,36 +101,24 @@ end
 function M.draw_value_page(ctx, g, page)
   local track = ctx.tracks[ctx.active_track]
   local param = track.params[page]
-  local is_prob = (page == "probability")
   for x = 1, track_mod.NUM_STEPS do
     local val = param.steps[x]
     local in_loop = x >= param.loop_start and x <= param.loop_end
     for y = 1, 7 do
       local brightness = 0
-      if is_prob then
-        local pct = val or 0
-        local row_thresh = (8 - y) * (100 / 7)
-        if pct >= row_thresh then
-          brightness = in_loop and 10 or 4
-        end
-        if x == param.pos and ctx.playing then
-          brightness = math.min(15, brightness + 5)
-        end
-      else
-        -- value display: row 1 = value 7, row 7 = value 1
-        local row_val = 8 - y
+      -- value display: row 1 = value 7, row 7 = value 1
+      local row_val = 8 - y
+      if row_val == val then
+        brightness = in_loop and 10 or 4
+      elseif row_val < val and in_loop then
+        brightness = 3
+      end
+      -- playhead column
+      if x == param.pos and ctx.playing then
         if row_val == val then
-          brightness = in_loop and 10 or 4
-        elseif row_val < val and in_loop then
-          brightness = 3
-        end
-        -- playhead column
-        if x == param.pos and ctx.playing then
-          if row_val == val then
-            brightness = 15
-          elseif row_val < val then
-            brightness = 6
-          end
+          brightness = 15
+        elseif row_val < val then
+          brightness = 6
         end
       end
       g:led(x, y, brightness)
@@ -431,17 +419,9 @@ end
 function M.value_key(ctx, x, y, page)
   local track = ctx.tracks[ctx.active_track]
   local param = track.params[page]
-  if page == "probability" then
-    local pct = math.floor(((8 - y) / 7) * 100 + 0.5)
-    if y == 7 then pct = 0 end
-    if pct < 0 then pct = 0 end
-    if pct > 100 then pct = 100 end
-    track_mod.set_step(param, x, pct)
-  else
-    -- row 1 = value 7, row 7 = value 1
-    local val = 8 - y
-    track_mod.set_step(param, x, val)
-  end
+  -- row 1 = value 7, row 7 = value 1 (all value pages including probability)
+  local val = 8 - y
+  track_mod.set_step(param, x, val)
 end
 
 -- Loop editing: first press = start, second press = end
