@@ -258,6 +258,17 @@ M.register("simulated", function(opts)
 end)
 
 ------------------------------------------------------------------------
+-- Built-in provider: push2 (Ableton Push 2 as 16x8 monome grid)
+------------------------------------------------------------------------
+
+M.register("push2", function(opts)
+  local push2 = require("lib/grid_push2")
+  local g = push2.new(opts)
+  g:init_hardware()
+  return g
+end)
+
+------------------------------------------------------------------------
 -- Built-in provider: synthetic (testing grid with dump & key simulation)
 ------------------------------------------------------------------------
 -- Extends "virtual" with:
