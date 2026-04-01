@@ -913,11 +913,12 @@ describe("sprite voice integration (gap)", function()
   it("play_sprite fires when trigger is 1 and not muted", function()
     local ctx = make_ctx()
     local sprite_called = false
+    local sprite_opts = nil
     ctx.sprite_voices = {
       [1] = {
         play = function(self, vals, dur, opts)
           sprite_called = true
-          assert.is_nil(opts)  -- not muted
+          sprite_opts = opts
         end,
       },
     }
@@ -927,6 +928,11 @@ describe("sprite voice integration (gap)", function()
     sequencer.step_track(ctx, 1)
 
     assert.is_true(sprite_called)
+    -- Should have step info but not be muted
+    assert.is_not_nil(sprite_opts)
+    assert.is_not_nil(sprite_opts.step)
+    assert.is_not_nil(sprite_opts.loop_len)
+    assert.is_nil(sprite_opts.muted)
   end)
 
   it("play_sprite fires with muted=true opts when muted", function()
