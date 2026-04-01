@@ -13,16 +13,13 @@
 --   sequencer:start       -- playback started
 --   sequencer:stop        -- playback stopped
 --   sequencer:reset       -- playheads reset
---   sequencer:step        -- {track, step_num, vals}  a track advanced one step
+--   sequencer:step        -- {track, step, vals}      a track advanced one step
 --   voice:note            -- {track, note, vel, dur}  a note was played
---   voice:all_off         -- {track}                  all notes silenced
 --   grid:key              -- {x, y, z}                grid key press/release
---   grid:redraw           -- {}                       grid was redrawn
 --   track:select          -- {track}                  active track changed
---   page:select           -- {page, prev_page}        active page changed
---   pattern:save          -- {slot}                   pattern saved
+--   track:mute            -- {track, muted}           track mute toggled
+--   page:select           -- {page, prev}             active page changed
 --   pattern:load          -- {slot}                   pattern loaded
---   param:change          -- {id, value, old_value}   param value changed
 
 local M = {}
 

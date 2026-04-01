@@ -244,7 +244,6 @@ local function ensure_probability_slots(slots)
   end
 end
 
-
 local function decode_payload(path)
   if tab and tab.load then
     local ok, data = pcall(tab.load, path)
@@ -374,6 +373,5 @@ end
 function pattern_persistence._test_set_fs(fs_impl)
   fs_override = fs_impl
 end
-
 
 return pattern_persistence

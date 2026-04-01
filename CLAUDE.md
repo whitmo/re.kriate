@@ -98,19 +98,20 @@ Kria is a multi-track step sequencer where each track has independent loop lengt
 - Scale quantization
 
 ## Active Technologies
-- Lua 5.4 (via busted test runner, seamstress runtime) + busted (test framework), seamstress v1.4.7, musicutil (norns/seamstress scale utilities) (002-quality-hardening)
-- N/A (in-memory patterns, no persistence layer) (002-quality-hardening)
-- Lua 5.4 (via busted test runner, seamstress v1.4.7 runtime) + seamstress v1.4.7, musicutil, busted (test framework) (004-osc-voice-integration)
-- N/A (in-memory params, no persistence layer) (004-osc-voice-integration)
-- Lua 5.3 (norns runtime) / Lua 5.4 (busted test runner) + norns runtime (screen, params, metro, grid, clock, util), nb (voice framework), lib/app.lua (shared sequencer logic) (005-norns-entrypoint)
-- N/A (in-memory state, no persistence layer) (005-norns-entrypoint)
-- Lua 5.4 (busted test runner), seamstress v1.4.7 runtime + seamstress v1.4.7, busted (test framework) (006-pattern-bank-ui)
-- N/A (in-memory patterns via lib/pattern.lua, no persistence layer) (006-pattern-bank-ui)
-- SuperCollider (sclang) for synth/listener, Lua 5.4 for test scrip + SuperCollider 3.x (user-installed), seamstress v1.4.7 (for test script OSC), lib/voices/osc.lua (existing, not modified) (008-supercollider-voice-example)
-- N/A (no persistence) (008-supercollider-voice-example)
-- Lua 5.3/5.4 + `lib/pattern_persistence.lua`, busted, optional norns `tab.save/tab.load` helpers (013-pattern-persistence)
-- Pattern bank files stored as `.krp` under platform data dirs with checksum validation (013-pattern-persistence)
+- Lua 5.3 (norns runtime) / Lua 5.4 (busted test runner, seamstress runtime)
+- seamstress v1.4.7 (desktop development runtime)
+- norns runtime (screen, params, metro, grid, clock, util) + nb (voice framework)
+- busted (test framework), musicutil (scale utilities)
+- SuperCollider 3.x (optional, for SC drum voice)
+- Pattern bank files stored as `.krp` under platform data dirs with checksum validation
 
-## Recent Changes
-- 002-quality-hardening: Added Lua 5.4 (via busted test runner, seamstress runtime) + busted (test framework), seamstress v1.4.7, musicutil (norns/seamstress scale utilities)
-- 013-pattern-persistence: Added disk-backed pattern-bank persistence, checksum validation, list/delete helpers, demo harness, and busted coverage
+## Recent Changes (PRs #67-76)
+- Probability parameter with per-param gating and ratchet interaction (#67)
+- SuperCollider drum voice backend (#69)
+- Push 2 grid adapter with Lua 5.3-compatible bit helpers (#71)
+- Sprite X position follows playhead step (#72)
+- Probability page stores 1-7 values matching PROBABILITY_MAP (#73)
+- Loop editing visual feedback (#74)
+- Control row layout redesign (#75)
+- Softcut voice wired into app.lua with buffer management runtime (#76)
+- Disk-backed pattern-bank persistence with checksum validation (013-pattern-persistence)

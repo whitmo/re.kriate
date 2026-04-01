@@ -44,14 +44,15 @@ end
 
 -- Value ranges per param (min, max). Trigger is 0/1; others are 1-7.
 local PARAM_RANGES = {
-  trigger  = {0, 1},
-  note     = {1, 7},
-  octave   = {1, 7},
-  duration = {1, 7},
-  velocity = {1, 7},
-  ratchet  = {1, 7},
-  alt_note = {1, 7},
-  glide    = {1, 7},
+  trigger     = {0, 1},
+  note        = {1, 7},
+  octave      = {1, 7},
+  duration    = {1, 7},
+  velocity    = {1, 7},
+  ratchet     = {1, 7},
+  alt_note    = {1, 7},
+  glide       = {1, 7},
+  probability = {1, 7},
 }
 
 -- Helper: validate step value against param-specific range

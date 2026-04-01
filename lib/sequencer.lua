@@ -262,6 +262,7 @@ function M.reset(ctx)
       track.params[name].tick = 0
     end
   end
+  if ctx.events then ctx.events:emit("sequencer:reset", {}) end
 end
 
 return M
