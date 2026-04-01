@@ -23,7 +23,7 @@ local SCALE_NAMES = {
 
 local NOTE_NAMES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
-local VOICE_TYPES = {"midi", "osc", "none"}
+local VOICE_TYPES = {"midi", "osc", "sc_drums", "none"}
 local DEFAULT_PATTERN_BANK = "default"
 local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 
@@ -50,6 +50,11 @@ local function build_voice(ctx, t)
     local host = params:get("osc_host")
     local port = params:get("osc_port")
     ctx.voices[t] = osc_voice.new(t, host, port)
+  elseif voice_type == "sc_drums" then
+    local sc_drums = require("lib/voices/sc_drums")
+    local host = params:get("osc_host")
+    local port = params:get("osc_port")
+    ctx.voices[t] = sc_drums.new(t, host, port)
   else
     ctx.voices[t] = nil
   end
