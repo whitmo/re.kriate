@@ -378,24 +378,27 @@ describe("grid_ui", function()
       end
     end)
 
-    it("renders probability bars by percentage", function()
+    it("renders probability value as bar graph (1-7 scale)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.active_page = "probability"
-      ctx.tracks[1].params.probability.steps[1] = 50
+      ctx.tracks[1].params.probability.steps[1] = 4  -- maps to 50% via PROBABILITY_MAP
       grid_ui.draw_value_page(ctx, g, "probability")
-      assert.is_true(led_at(g, 1, 5) > 0)   -- lower rows lit
-      assert.are.equal(0, led_at(g, 1, 2))  -- upper row off
+      -- value 4: row 4 (8-4=4) should be active, rows 5-7 (values 3,2,1) should be bar
+      assert.is_true(led_at(g, 1, 4) > 0)   -- active value row
+      assert.are.equal(0, led_at(g, 1, 2))  -- row above value off
     end)
 
-    it("lights all probability rows at 100%", function()
+    it("renders probability=7 with full bar graph", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.active_page = "probability"
-      ctx.tracks[1].params.probability.steps[1] = 100
+      ctx.tracks[1].params.probability.steps[1] = 7  -- maps to 100% via PROBABILITY_MAP
       grid_ui.draw_value_page(ctx, g, "probability")
-      for y = 1, 7 do
-        assert.is_true(led_at(g, 1, y) > 0)
+      -- value 7: row 1 (8-7=1) active, rows 2-7 are bar
+      assert.are.equal(10, led_at(g, 1, 1))  -- active value
+      for y = 2, 7 do
+        assert.are.equal(3, led_at(g, 1, y), "row " .. y .. " should be bar for value 7")
       end
     end)
 
@@ -781,12 +784,12 @@ describe("grid_ui", function()
       end
     end)
 
-    it("maps probability rows to percentages", function()
+    it("maps probability rows to 1-7 values like other params", function()
       local ctx = make_ctx({active_track = 1})
       grid_ui.value_key(ctx, 2, 7, "probability")
-      assert.are.equal(0, ctx.tracks[1].params.probability.steps[2])
+      assert.are.equal(1, ctx.tracks[1].params.probability.steps[2])  -- row 7 = value 1 (0%)
       grid_ui.value_key(ctx, 2, 1, "probability")
-      assert.are.equal(100, ctx.tracks[1].params.probability.steps[2])
+      assert.are.equal(7, ctx.tracks[1].params.probability.steps[2])  -- row 1 = value 7 (100%)
     end)
 
   end)
