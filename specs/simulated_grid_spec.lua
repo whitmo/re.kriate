@@ -208,9 +208,9 @@ describe("simulated grid", function()
       local colors = 0
       for _, c in ipairs(calls) do if c.type == "color" then colors = colors + 1 end end
       assert.are.equal(128, colors)
-      -- Cell (1,1) should have warm amber (brightness 15)
+      -- Cell (1,1) should have yellow theme bright color (brightness 15)
       assert.are.equal(255, calls[1].r)
-      assert.are.equal(178, calls[1].g)
+      assert.are.equal(250, calls[1].g)
     end)
 
     -- T034: screen.click path — handle_click delegates to simulated provider key callback

@@ -368,6 +368,13 @@ describe("seamstress entrypoint hardware mirroring wiring", function()
     package.loaded["lib/seamstress/grid_render"] = {
       draw = function() end,
       handle_click = function() end,
+      configure = function() end,
+      screen_width = function() return 256 end,
+      screen_height = function() return 128 end,
+      get_config = function() return {cols = 16, rows = 8} end,
+      set_modifier = function() end,
+      release_locked_keys = function() end,
+      THEME_ORDER = {"yellow", "red", "orange", "white"},
     }
 
     dofile("seamstress.lua")
