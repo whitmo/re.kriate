@@ -23,7 +23,7 @@ local SCALE_NAMES = {
 
 local NOTE_NAMES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
-local VOICE_TYPES = {"midi", "osc", "sc_drums", "none"}
+local VOICE_TYPES = {"midi", "osc", "sc_drums", "softcut", "none"}
 local DEFAULT_PATTERN_BANK = "default"
 local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 
@@ -55,6 +55,21 @@ local function build_voice(ctx, t)
     local host = params:get("osc_host")
     local port = params:get("osc_port")
     ctx.voices[t] = sc_drums.new(t, host, port)
+  elseif voice_type == "softcut" then
+    if not ctx.softcut_runtime then
+      local softcut_runtime = require("lib/voices/softcut_runtime")
+      ctx.softcut_runtime = softcut_runtime.new()
+    end
+    local softcut_zig = require("lib/voices/softcut_zig")
+    local sample_path = params:get("sample_path_" .. t)
+    local config = {
+      sample_path = (sample_path ~= "") and sample_path or nil,
+      root_note = params:get("sample_root_" .. t),
+      start_sec = params:get("sample_start_" .. t),
+      end_sec = params:get("sample_end_" .. t),
+      loop = params:get("sample_loop_" .. t) == 2,
+    }
+    ctx.voices[t] = softcut_zig.new(t, ctx.softcut_runtime, config)
   else
     ctx.voices[t] = nil
   end
@@ -192,7 +207,7 @@ function M.init(config)
   -- params: per-track groups
   local div_names = {"1/16", "1/12", "1/8", "1/6", "1/4", "1/2", "1/1"}
   for t = 1, track_mod.NUM_TRACKS do
-    params:add_group("track_" .. t, "track " .. t, 4)
+    params:add_group("track_" .. t, "track " .. t, 9)
 
     params:add_option("voice_" .. t, "voice", VOICE_TYPES, 1)
     if not use_config_voices then
@@ -210,6 +225,26 @@ function M.init(config)
           build_voice(ctx, t)
         end
       end)
+    end
+
+    -- softcut sample params (used when voice = "softcut")
+    params:add_text("sample_path_" .. t, "sample path", "")
+    params:add_number("sample_root_" .. t, "sample root", 0, 127, 60, nil, note_formatter)
+    params:add_number("sample_start_" .. t, "sample start", 0, 350, 0)
+    params:add_number("sample_end_" .. t, "sample end", 0, 350, 1)
+    params:add_option("sample_loop_" .. t, "sample loop", {"off", "on"}, 1)
+    if not use_config_voices then
+      local function rebuild_if_softcut()
+        local voice_idx = params:get("voice_" .. t)
+        if VOICE_TYPES[voice_idx] == "softcut" then
+          build_voice(ctx, t)
+        end
+      end
+      params:set_action("sample_path_" .. t, rebuild_if_softcut)
+      params:set_action("sample_root_" .. t, rebuild_if_softcut)
+      params:set_action("sample_start_" .. t, rebuild_if_softcut)
+      params:set_action("sample_end_" .. t, rebuild_if_softcut)
+      params:set_action("sample_loop_" .. t, rebuild_if_softcut)
     end
 
     params:add_option("division_" .. t, "division", div_names, 1)
