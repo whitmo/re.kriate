@@ -14,9 +14,14 @@ For an interactive visual guide to the grid interface, see [`docs/grid-interface
 - 5 direction modes: forward, reverse, pendulum, drunk, random
 - Per-track mute
 - Scale quantization (14 scales via musicutil)
-- Voice abstraction: [nb](https://github.com/sixolet/nb) on norns, MIDI on seamstress
+- Multiple voice backends: MIDI, OSC, SuperCollider drums, softcut sampler
+- [nb](https://github.com/sixolet/nb) voice output on norns
+- Per-track swing and trigger clocking
+- Per-parameter clock division
 - Monome grid UI with trigger overview, per-parameter editing, and extended page toggle
+- Push 2 grid support (Ableton Push 2 as 16x8 monome grid)
 - Dedicated probability and alt-track grid pages for performance controls
+- Remote control API (OSC transport)
 - Keyboard fallback controls (seamstress)
 - Musically useful default patterns out of the box
 - Pattern bank disk persistence API with checksum validation
@@ -28,8 +33,9 @@ For an interactive visual guide to the grid interface, see [`docs/grid-interface
 
 ### Seamstress
 
-- Direct MIDI output (one device per track, configurable channel)
+- Configurable voice per track (MIDI, OSC, SuperCollider drums, softcut sampler)
 - Keyboard controls (no encoders/keys needed)
+- Simulated grid display with mouse interaction
 - Sprite rendering -- visual feedback on the seamstress screen
 
 ## Requirements
@@ -96,12 +102,12 @@ Row 8 layout:
   6        trigger page (double-tap: ratchet)
   7        note page (double-tap: alt note)
   8        octave page (double-tap: glide)
-  9        duration page
-  10       velocity page
-  11       probability page
-  12       loop edit (hold)
+  9        cycle: duration → velocity → probability
+  11       loop edit (hold)
+  12       pattern mode (hold)
+  13       mute toggle
+  14       scale page
   15       alt-track page
-  16       play / stop
 ```
 
 **Trigger page:** rows 1-4 show all 4 tracks at once. Press to toggle steps.
@@ -193,6 +199,7 @@ the screen.
 | ratchet | 1-7 | note repeats per step (1 = normal) |
 | alt note | 1-7 | degree offset added to note (1 = none) |
 | glide | 1-7 | portamento amount (1 = none) |
+| probability | 1-7 | trigger probability (1 = 0%, 7 = 100%) |
 
 ### Direction modes
 
@@ -207,30 +214,42 @@ Each track has a direction mode that controls how all its parameters step throug
 ## Architecture
 
 ```
-re_kriate.lua              norns entrypoint (thin global hooks)
-seamstress.lua             seamstress entrypoint (MIDI voices, keyboard, sprites)
+re_kriate.lua                    norns entrypoint (thin global hooks)
+seamstress.lua                   seamstress entrypoint (MIDI voices, keyboard, sprites)
 
-lib/app.lua                init, params, grid, screen, key/enc
-lib/sequencer.lua          clock-driven step advancement, voice output
-lib/track.lua              data model (steps, loops, defaults)
-lib/grid_ui.lua            grid display and input
-lib/scale.lua              scale quantization via musicutil
-lib/pattern.lua            pattern save/load slots
-lib/pattern_persistence.lua pattern bank save/load/list/delete on disk
-lib/direction.lua          playhead direction modes (forward, reverse, pendulum, drunk, random)
-lib/grid_provider.lua      pluggable grid provider interface
+lib/app.lua                      init, params, grid, screen, key/enc
+lib/sequencer.lua                clock-driven step advancement, voice output
+lib/track.lua                    data model (steps, loops, defaults)
+lib/grid_ui.lua                  grid display and input
+lib/scale.lua                    scale quantization via musicutil
+lib/pattern.lua                  pattern save/load slots
+lib/pattern_persistence.lua      pattern bank save/load/list/delete on disk
+lib/direction.lua                playhead direction modes
+lib/grid_provider.lua            pluggable grid provider interface (monome, midigrid, virtual, simulated, push2, synthetic)
+lib/grid_push2.lua               Ableton Push 2 grid adapter
+lib/events.lua                   lightweight pub/sub event bus
+lib/log.lua                      leveled logging with crash-capture wrappers
 
-lib/voices/midi.lua        direct MIDI voice output
-lib/voices/sprite.lua      visual sprite events
-lib/voices/recorder.lua    test voice (captures events)
+lib/voices/midi.lua              direct MIDI voice output
+lib/voices/osc.lua               OSC voice output
+lib/voices/sc_drums.lua          SuperCollider drum voice
+lib/voices/softcut_zig.lua       softcut sampler voice
+lib/voices/softcut_runtime.lua   buffer management runtime for softcut
+lib/voices/sprite.lua            visual sprite events
+lib/voices/recorder.lua          test voice (captures events)
 
-lib/norns/nb_voice.lua     nb voice wrapper (norns only)
+lib/norns/nb_voice.lua           nb voice wrapper (norns only)
 
 lib/seamstress/keyboard.lua      keyboard input handler
 lib/seamstress/screen_ui.lua     seamstress screen display
+lib/seamstress/grid_render.lua   simulated grid renderer
 lib/seamstress/sprite_render.lua sprite drawing
 
-docs/grid-interface.html   interactive visual guide to the grid UI
+lib/remote/api.lua               transport-agnostic remote control API
+lib/remote/grid_api.lua          remote grid state and key injection
+lib/remote/osc.lua               OSC transport for remote API
+
+docs/grid-interface.html         interactive visual guide to the grid UI
 ```
 
 All state flows through a single `ctx` table. No custom globals.

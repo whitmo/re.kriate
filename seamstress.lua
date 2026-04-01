@@ -12,7 +12,6 @@ package.path = script_dir .. "?.lua;" .. script_dir .. "?/init.lua;" .. package.
 local log = require("lib/log")
 local app = require("lib/app")
 local sprite_voice = require("lib/voices/sprite")
-local screen_ui = require("lib/seamstress/screen_ui")
 local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
 local grid_render = require("lib/seamstress/grid_render")
@@ -40,7 +39,6 @@ function init()
   ctx = app.init({
     midi_dev = midi.connect(1),
     sprite_voices = sprite_voices,
-    screen_mod = screen_ui,
     grid_provider = "simulated",
     -- Keep the on-screen grid active while mirroring LED/key traffic to monome hardware.
     grid_opts = {

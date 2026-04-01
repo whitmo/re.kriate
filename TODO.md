@@ -23,5 +23,5 @@
 - [ ] Nav x=15 enters alt_track page; rows 1-4 map to tracks
 - [ ] Cols 1-4 set direction (forward/reverse/pendulum/random) per row
 - [ ] Cols 5-11 set division 1-7 per row
-- [ ] Cols 12-15 set swing 0/25/50/100 per row; LEDs show coarse bar
+- [ ] Cols 13-15 set swing 0/50/100 per row; LEDs show coarse bar
 - [ ] Col 16 toggles mute for that track
