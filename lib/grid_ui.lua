@@ -56,6 +56,9 @@ function M.redraw(ctx)
   elseif ctx.time_held then
     -- time modifier: show per-param clock division selector
     M.draw_time_page(ctx, g)
+  elseif ctx.loop_held and ctx.active_page ~= "alt_track" then
+    -- loop modifier: show loop boundaries for editing
+    M.draw_loop_page(ctx, g)
   else
     local page = ctx.active_page
 
@@ -262,6 +265,50 @@ function M.draw_pattern_slots(ctx, g)
       brightness = 6
     end
     g:led(col, row, brightness)
+  end
+end
+
+-- Loop editing display: shows loop boundaries for current page
+-- Trigger page: rows 1-4 = tracks, columns show trigger loop region
+-- Value pages: columns show loop region for active param (full height)
+function M.draw_loop_page(ctx, g)
+  local page = ctx.active_page
+
+  if page == "trigger" then
+    for t = 1, track_mod.NUM_TRACKS do
+      local param = ctx.tracks[t].params.trigger
+      local is_active = (t == ctx.active_track)
+      for x = 1, track_mod.NUM_STEPS do
+        local in_loop = x >= param.loop_start and x <= param.loop_end
+        local brightness = 0
+        if is_active and ctx.loop_first_press and x == ctx.loop_first_press then
+          brightness = 15
+        elseif in_loop then
+          brightness = is_active and 10 or 4
+        elseif is_active then
+          brightness = 2
+        end
+        g:led(x, t, brightness)
+      end
+    end
+  else
+    local track = ctx.tracks[ctx.active_track]
+    local param = track.params[page]
+    if not param then return end
+    for x = 1, track_mod.NUM_STEPS do
+      local in_loop = x >= param.loop_start and x <= param.loop_end
+      local brightness
+      if ctx.loop_first_press and x == ctx.loop_first_press then
+        brightness = 15
+      elseif in_loop then
+        brightness = 10
+      else
+        brightness = 2
+      end
+      for y = 1, 7 do
+        g:led(x, y, brightness)
+      end
+    end
   end
 end
 

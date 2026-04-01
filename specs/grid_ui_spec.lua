@@ -1599,4 +1599,175 @@ describe("grid_ui", function()
 
   end)
 
+  -- ========================================================================
+  -- Loop page display tests
+  -- ========================================================================
+
+  describe("draw_loop_page", function()
+
+    describe("trigger page", function()
+
+      it("shows active track loop region at brightness 10", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
+        ctx.tracks[1].params.trigger.loop_start = 3
+        ctx.tracks[1].params.trigger.loop_end = 8
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        -- In-loop columns on active track row
+        assert.are.equal(10, led_at(g, 3, 1))
+        assert.are.equal(10, led_at(g, 8, 1))
+        assert.are.equal(10, led_at(g, 5, 1))
+      end)
+
+      it("shows out-of-loop columns on active track at brightness 2", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
+        ctx.tracks[1].params.trigger.loop_start = 3
+        ctx.tracks[1].params.trigger.loop_end = 8
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        assert.are.equal(2, led_at(g, 1, 1))
+        assert.are.equal(2, led_at(g, 2, 1))
+        assert.are.equal(2, led_at(g, 9, 1))
+        assert.are.equal(2, led_at(g, 16, 1))
+      end)
+
+      it("shows inactive track loop region at brightness 4", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
+        ctx.tracks[2].params.trigger.loop_start = 1
+        ctx.tracks[2].params.trigger.loop_end = 4
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        assert.are.equal(4, led_at(g, 1, 2))
+        assert.are.equal(4, led_at(g, 4, 2))
+        -- Out-of-loop on inactive track: 0
+        assert.are.equal(0, led_at(g, 5, 2))
+      end)
+
+      it("highlights loop_first_press at brightness 15 on active track", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
+        ctx.loop_first_press = 5
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        assert.are.equal(15, led_at(g, 5, 1))
+      end)
+
+      it("does not highlight loop_first_press on inactive track", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
+        ctx.loop_first_press = 5
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        -- Track 2 at column 5 should not be 15
+        assert.are_not.equal(15, led_at(g, 5, 2))
+      end)
+
+    end)
+
+    describe("value pages", function()
+
+      it("shows loop region at brightness 10 across all rows", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "note", active_track = 1, loop_held = true })
+        ctx.tracks[1].params.note.loop_start = 2
+        ctx.tracks[1].params.note.loop_end = 6
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        for y = 1, 7 do
+          assert.are.equal(10, led_at(g, 3, y), "in-loop col 3, row " .. y)
+        end
+      end)
+
+      it("shows out-of-loop columns at brightness 2", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "note", active_track = 1, loop_held = true })
+        ctx.tracks[1].params.note.loop_start = 2
+        ctx.tracks[1].params.note.loop_end = 6
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        for y = 1, 7 do
+          assert.are.equal(2, led_at(g, 1, y), "out-of-loop col 1, row " .. y)
+          assert.are.equal(2, led_at(g, 10, y), "out-of-loop col 10, row " .. y)
+        end
+      end)
+
+      it("highlights loop_first_press at brightness 15", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "note", active_track = 1, loop_held = true })
+        ctx.loop_first_press = 7
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        for y = 1, 7 do
+          assert.are.equal(15, led_at(g, 7, y), "first press col 7, row " .. y)
+        end
+      end)
+
+      it("works on extended pages (ratchet)", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "ratchet", active_track = 1, loop_held = true })
+        ctx.tracks[1].params.ratchet.loop_start = 4
+        ctx.tracks[1].params.ratchet.loop_end = 10
+
+        grid_ui.draw_loop_page(ctx, g)
+
+        assert.are.equal(10, led_at(g, 5, 4), "in-loop on ratchet")
+        assert.are.equal(2, led_at(g, 2, 4), "out-of-loop on ratchet")
+      end)
+
+    end)
+
+    describe("redraw integration", function()
+
+      it("routes to loop page when loop_held on trigger page", function()
+        local ctx, g = make_ctx({ active_page = "trigger", loop_held = true })
+        ctx.tracks[1].params.trigger.loop_start = 1
+        ctx.tracks[1].params.trigger.loop_end = 4
+
+        grid_ui.redraw(ctx)
+
+        -- Active track (1) in-loop should be 10
+        assert.are.equal(10, g:get_led(1, 1))
+        assert.are.equal(10, g:get_led(4, 1))
+        -- Out-of-loop on active track should be 2
+        assert.are.equal(2, g:get_led(5, 1))
+      end)
+
+      it("routes to loop page when loop_held on value page", function()
+        local ctx, g = make_ctx({ active_page = "note", loop_held = true })
+        ctx.tracks[1].params.note.loop_start = 1
+        ctx.tracks[1].params.note.loop_end = 8
+
+        grid_ui.redraw(ctx)
+
+        -- In-loop column, all rows should be 10
+        assert.are.equal(10, g:get_led(5, 4))
+        -- Out-of-loop should be 2
+        assert.are.equal(2, g:get_led(10, 4))
+      end)
+
+      it("does not route to loop page on alt_track", function()
+        local ctx, g = make_ctx({ active_page = "alt_track", loop_held = true })
+
+        grid_ui.redraw(ctx)
+
+        -- Alt-track page should still show direction buttons, not loop display
+        -- Track 1 direction is "forward" (ALT_DIRECTIONS[1])
+        assert.is_true(g:get_led(1, 1) > 0, "alt_track should render normally")
+      end)
+
+    end)
+
+  end)
+
 end)
