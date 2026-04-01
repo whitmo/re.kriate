@@ -11,8 +11,8 @@ local CELL_SIZE = 14
 local CELL_PITCH = 16
 local GRID_COLS = 16
 local GRID_ROWS = 8
-local NAV_LOOP_X = 12
-local NAV_PATTERN_X = 14
+local NAV_LOOP_X = 11
+local NAV_PATTERN_X = 12
 local NAV_Y = 8
 
 -- Track latched nav buttons per grid instance

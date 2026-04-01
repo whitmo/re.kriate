@@ -493,7 +493,7 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 4, 8), 3)
     end)
 
-    it("highlights active page", function()
+    it("highlights active page on x=6-8", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.active_page = "octave"
@@ -501,40 +501,56 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 6, 8), 3)   -- trigger (not active)
       assert.are.equal(led_at(g, 7, 8), 3)   -- note (not active)
       assert.are.equal(led_at(g, 8, 8), 12)  -- octave (active)
-      assert.are.equal(led_at(g, 9, 8), 3)   -- duration (not active)
-      assert.are.equal(led_at(g, 10, 8), 3)  -- velocity (not active)
+      assert.are.equal(led_at(g, 9, 8), 3)   -- x=9 cycle group (not active)
     end)
 
-    it("highlights loop key when held", function()
+    it("highlights x=9 for cycle group pages", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "velocity"
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 9, 8), 12)  -- velocity is in cycle group
+      assert.are.equal(led_at(g, 6, 8), 3)   -- trigger (not active)
+    end)
+
+    it("highlights loop key when held (x=11)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.loop_held = true
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 12, 8), 12)
+      assert.are.equal(led_at(g, 11, 8), 12)
     end)
 
-    it("dims loop key when not held", function()
+    it("dims loop key when not held (x=11)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.loop_held = false
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 12, 8), 3)
+      assert.are.equal(led_at(g, 11, 8), 3)
     end)
 
-    it("highlights play button when playing", function()
+    it("highlights pattern key when held (x=12)", function()
       local ctx = make_ctx()
       local g = spy_grid()
-      ctx.playing = true
+      ctx.pattern_held = true
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 16, 8), 12)
+      assert.are.equal(led_at(g, 12, 8), 12)
     end)
 
-    it("dims play button when stopped", function()
+    it("highlights mute indicator when muted (x=13)", function()
       local ctx = make_ctx()
       local g = spy_grid()
-      ctx.playing = false
+      ctx.tracks[ctx.active_track].muted = true
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 16, 8), 3)
+      assert.are.equal(led_at(g, 13, 8), 12)
+    end)
+
+    it("highlights meta key when on alt_track page (x=15)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "alt_track"
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 15, 8), 12)
     end)
 
   end)
@@ -610,59 +626,79 @@ describe("grid_ui", function()
       assert.are.equal(ctx.active_page, "octave")
     end)
 
-    it("selects duration page (x=9)", function()
+    it("selects duration page on first press of x=9", function()
       local ctx = make_ctx()
+      ctx.active_page = "trigger"
       grid_ui.nav_key(ctx, 9, 1)
       assert.are.equal(ctx.active_page, "duration")
     end)
 
-    it("selects velocity page (x=10)", function()
-      local ctx = make_ctx()
-      grid_ui.nav_key(ctx, 10, 1)
-      assert.are.equal(ctx.active_page, "velocity")
-    end)
-
-    it("selects probability page (x=11)", function()
+    it("cycles x=9: duration → velocity → probability → duration", function()
       local ctx = make_ctx()
       ctx.active_page = "trigger"
-      grid_ui.nav_key(ctx, 11, 1)
+      grid_ui.nav_key(ctx, 9, 1)
+      assert.are.equal("duration", ctx.active_page)
+      grid_ui.nav_key(ctx, 9, 1)
+      assert.are.equal("velocity", ctx.active_page)
+      grid_ui.nav_key(ctx, 9, 1)
       assert.are.equal("probability", ctx.active_page)
+      grid_ui.nav_key(ctx, 9, 1)
+      assert.are.equal("duration", ctx.active_page)
     end)
 
-    it("selects alt_track page (x=15)", function()
+    it("selects meta/alt_track page (x=15)", function()
       local ctx = make_ctx()
       grid_ui.nav_key(ctx, 15, 1)
       assert.are.equal("alt_track", ctx.active_page)
     end)
 
-    it("sets loop_held on press of x=12", function()
+    it("selects scale page (x=14)", function()
       local ctx = make_ctx()
-      grid_ui.nav_key(ctx, 12, 1)
+      grid_ui.nav_key(ctx, 14, 1)
+      assert.are.equal("scale", ctx.active_page)
+    end)
+
+    it("sets loop_held on press of x=11", function()
+      local ctx = make_ctx()
+      grid_ui.nav_key(ctx, 11, 1)
       assert.is_true(ctx.loop_held)
     end)
 
-    it("clears loop_held and loop_first_press on release of x=12", function()
+    it("clears loop_held and loop_first_press on release of x=11", function()
       local ctx = make_ctx()
       ctx.loop_held = true
       ctx.loop_first_press = 5
-      grid_ui.nav_key(ctx, 12, 0)
+      grid_ui.nav_key(ctx, 11, 0)
       assert.is_false(ctx.loop_held)
       assert.is_nil(ctx.loop_first_press)
     end)
 
-    it("toggles play/stop on x=16 press", function()
+    it("sets pattern_held on press of x=12", function()
       local ctx = make_ctx()
-      ctx.playing = false
-      grid_ui.nav_key(ctx, 16, 1)
-      assert.is_true(ctx.playing)
-      grid_ui.nav_key(ctx, 16, 1)
-      assert.is_false(ctx.playing)
+      grid_ui.nav_key(ctx, 12, 1)
+      assert.is_true(ctx.pattern_held)
     end)
 
-    it("ignores play/stop on release", function()
+    it("clears pattern_held on release of x=12", function()
+      local ctx = make_ctx()
+      ctx.pattern_held = true
+      grid_ui.nav_key(ctx, 12, 0)
+      assert.is_false(ctx.pattern_held)
+    end)
+
+    it("toggles mute on x=13 press", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].muted = false
+      grid_ui.nav_key(ctx, 13, 1)
+      assert.is_true(ctx.tracks[1].muted)
+      grid_ui.nav_key(ctx, 13, 1)
+      assert.is_false(ctx.tracks[1].muted)
+    end)
+
+    it("x=16 is blank (no play/stop)", function()
       local ctx = make_ctx()
       ctx.playing = false
-      grid_ui.nav_key(ctx, 16, 0)
+      grid_ui.nav_key(ctx, 16, 1)
       assert.is_false(ctx.playing)
     end)
 
@@ -1367,19 +1403,19 @@ describe("grid_ui", function()
       assert.are.equal("octave", ctx.active_page)
     end)
 
-    it("pressing duration nav (x=9) does not toggle to extended page", function()
+    it("pressing x=9 cycles duration → velocity (no extended page toggle)", function()
       local ctx, g = make_ctx({ active_page = "duration" })
 
-      -- Duration has no extended page, pressing again stays on duration
+      -- Duration is in x=9 cycle group, pressing again advances to velocity
       grid_ui.key(ctx, 9, 8, 1)
-      assert.are.equal("duration", ctx.active_page)
+      assert.are.equal("velocity", ctx.active_page)
     end)
 
-    it("pressing velocity nav (x=10) does not toggle to extended page", function()
+    it("pressing x=9 cycles velocity → probability", function()
       local ctx, g = make_ctx({ active_page = "velocity" })
 
-      grid_ui.key(ctx, 10, 8, 1)
-      assert.are.equal("velocity", ctx.active_page)
+      grid_ui.key(ctx, 9, 8, 1)
+      assert.are.equal("probability", ctx.active_page)
     end)
 
     it("extended pages are included in PAGES list", function()
@@ -1443,34 +1479,10 @@ describe("grid_ui", function()
 
   describe("time modifier", function()
 
-    describe("nav_key", function()
-      it("sets time_held on press of x=13", function()
-        local ctx = make_ctx()
-        grid_ui.nav_key(ctx, 13, 1)
-        assert.is_true(ctx.time_held)
-      end)
-
-      it("clears time_held on release of x=13", function()
-        local ctx = make_ctx()
-        ctx.time_held = true
-        grid_ui.nav_key(ctx, 13, 0)
-        assert.is_false(ctx.time_held)
-      end)
-
-      it("shows time LED lit when held", function()
-        local ctx, g = make_ctx()
-        ctx.time_held = true
-        grid_ui.redraw(ctx)
-        assert.are.equal(12, g:get_led(13, 8))
-      end)
-
-      it("shows time LED dim when not held", function()
-        local ctx, g = make_ctx()
-        ctx.time_held = false
-        grid_ui.redraw(ctx)
-        assert.are.equal(3, g:get_led(13, 8))
-      end)
-    end)
+    -- Note: time modifier no longer has a dedicated nav button.
+    -- time_held is set programmatically or via future meta page.
+    -- These tests verify the time_key/draw_time_page logic still works
+    -- when time_held is set on the context directly.
 
     describe("time_key on trigger page", function()
       it("sets trigger clock_div for the pressed track row", function()

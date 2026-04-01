@@ -532,15 +532,15 @@ describe("synthetic grid provider", function()
 
     it("loop editing via hold + press", function()
       local ctx, g = synth_grid.setup({ active_page = "trigger", active_track = 1 })
-      -- Hold loop button (x=12, y=8)
-      synth_grid.press(g, 12, 8)
+      -- Hold loop button (x=11, y=8)
+      synth_grid.press(g, 11, 8)
       assert.is_true(ctx.loop_held)
       -- Press loop start (step 3)
       synth_grid.press(g, 3, 1)
       -- Press loop end (step 8)
       synth_grid.press(g, 8, 1)
       -- Release loop button
-      synth_grid.release(g, 12, 8)
+      synth_grid.release(g, 11, 8)
       -- Verify loop was set
       assert.are.equal(3, ctx.tracks[1].params.trigger.loop_start)
       assert.are.equal(8, ctx.tracks[1].params.trigger.loop_end)
