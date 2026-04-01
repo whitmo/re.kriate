@@ -1,6 +1,10 @@
 -- seamstress.lua: kria sequencer entrypoint for seamstress
 --
--- Grid: full kria grid UI (same as norns)
+-- Grid: full kria grid UI (same as norns) with virtual grid features:
+--   - Ctrl+click = hold keys, Ctrl+Shift+click = lock/toggle keys
+--   - Esc = release all locked keys
+--   - Ctrl+Shift+T = cycle visual theme
+--
 -- Keyboard: space=play/stop, r=reset, 1-4=track, q/w/e/t/y=page
 --
 -- Requires MIDI device on port 1 (configurable via params)
@@ -17,17 +21,21 @@ local keyboard = require("lib/seamstress/keyboard")
 local grid_render = require("lib/seamstress/grid_render")
 local track_mod = require("lib/track")
 
-local GRID_WIDTH = 16 * 16  -- cols * pitch
-local GRID_HEIGHT = 8 * 16  -- rows * pitch
-
 local ctx
 
 function init()
   log.session_start()
 
-  -- Size window to the simulated grid so it fills the view
+  -- Configure grid renderer (size, theme, protocol)
+  grid_render.configure({
+    size = 128,        -- 64, 128, or 256
+    theme = "yellow",  -- yellow, red, orange, white
+    protocol = "mext", -- mext (varibright), series, 40h
+  })
+
+  -- Size window to match configured grid
   if screen.set_size then
-    screen.set_size(GRID_WIDTH, GRID_HEIGHT)
+    screen.set_size(grid_render.screen_width(), grid_render.screen_height())
   end
 
   -- Sprite voices (additive visual output, one per track)
@@ -36,22 +44,45 @@ function init()
     sprite_voices[t] = sprite_voice.new(t)
   end
 
+  local rc = grid_render.get_config()
   ctx = app.init({
     midi_dev = midi.connect(1),
     sprite_voices = sprite_voices,
     grid_provider = "simulated",
-    -- Keep the on-screen grid active while mirroring LED/key traffic to monome hardware.
     grid_opts = {
+      cols = rc.cols,
+      rows = rc.rows,
       mirror_monome = true,
     },
   })
 
-  -- Keyboard input
+  -- Keyboard input — track modifiers for grid gestures before forwarding
   screen.key = log.wrap(function(char, modifiers, is_repeat, state)
+    -- Always update modifier state (even on key release) for hold/lock gestures
+    grid_render.set_modifier("ctrl", modifiers and (modifiers.ctrl or modifiers.super) or false)
+    grid_render.set_modifier("shift", modifiers and modifiers.shift or false)
+
+    -- Esc releases all locked grid keys
+    if char == "escape" and state == 1 then
+      grid_render.release_locked_keys(ctx.g)
+    end
+
+    -- Ctrl+Shift+T cycles visual theme
+    if char == "t" and state == 1 and modifiers and modifiers.ctrl and modifiers.shift then
+      local order = grid_render.THEME_ORDER
+      local cur = grid_render.get_config().theme
+      local idx = 1
+      for i, name in ipairs(order) do
+        if name == cur then idx = i; break end
+      end
+      grid_render.configure({theme = order[(idx % #order) + 1]})
+      return
+    end
+
     keyboard.key(ctx, char, modifiers, is_repeat, state)
   end, "screen.key")
 
-  -- Mouse input → simulated grid
+  -- Mouse input → simulated grid (gesture mode determined by modifier state)
   screen.click = log.wrap(function(x, y, state, button)
     grid_render.handle_click(ctx.g, x, y, state, button)
   end, "grid_click")
@@ -72,7 +103,7 @@ function redraw()
   -- Black canvas background
   screen.color(0, 0, 0, 255)
   screen.move(1, 1)
-  screen.rect_fill(256, 128)
+  screen.rect_fill(grid_render.screen_width(), grid_render.screen_height())
   -- Simulated grid
   grid_render.draw(ctx.g, screen)
   -- Sprites on top
