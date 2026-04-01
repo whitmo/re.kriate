@@ -11,7 +11,7 @@ local direction_mod = require("lib/direction")
 local M = {}
 
 -- Page names (primary + extended)
-M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "ratchet", "alt_note", "glide", "alt_track"}
+M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "ratchet", "alt_note", "glide", "alt_track", "scale"}
 
 -- Extended page mappings: primary -> extended
 M.EXTENDED_PAGES = {trigger = "ratchet", note = "alt_note", octave = "glide"}
@@ -20,26 +20,29 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 -- Nav row (row 8) layout:
 -- x=1-4: track select
--- x=6: trigger page (double-tap: ratchet)
--- x=7: note page (double-tap: alt_note)
--- x=8: octave page (double-tap: glide)
--- x=9: duration page
--- x=10: velocity page
--- x=11: probability page
--- x=5: mute toggle
--- x=12: loop modifier (hold)
--- x=13: time modifier (hold) — per-param clock division
--- x=14: pattern mode (hold)
--- x=15: alt-track page (direction/division/swing/mute)
--- x=16: play/stop
+-- x=5: (blank)
+-- x=6: trigger page (press again: ratchet)
+-- x=7: note page (press again: alt_note)
+-- x=8: octave page (press again: glide)
+-- x=9: cycles duration → velocity → probability
+-- x=10: (blank)
+-- x=11: loop modifier (hold)
+-- x=12: pattern mode (hold)
+-- x=13: mute toggle
+-- x=14: scale
+-- x=15: meta (alt-track settings: direction/division/swing/mute)
+-- x=16: (available)
 
-local NAV_TRACK = {1, 2, 3, 4} -- @@ unused
-local NAV_MUTE = 5
-local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration", [10] = "velocity", [11] = "probability", [15] = "alt_track"}
-local NAV_LOOP = 12
-local NAV_TIME = 13
-local NAV_PATTERN = 14
-local NAV_PLAY = 16
+local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration"}
+-- Page group for x=9: pressing cycles through these pages
+local NAV_PAGE_CYCLE_9 = {"duration", "velocity", "probability"}
+-- Quick lookup: which pages belong to the x=9 cycle group
+local NAV_PAGE_CYCLE_9_SET = {duration = true, velocity = true, probability = true}
+local NAV_LOOP = 11
+local NAV_PATTERN = 12
+local NAV_MUTE = 13
+local NAV_SCALE = 14
+local NAV_META = 15
 
 local ALT_DIRECTIONS = {"forward", "reverse", "pendulum", "drunk", "random"}
 local ALT_DIVISIONS = {1,2,3,4,5,6,7}
@@ -66,6 +69,8 @@ function M.redraw(ctx)
       M.draw_trigger_page(ctx, g)
     elseif page == "alt_track" then
       M.draw_alt_track_page(ctx, g)
+    elseif page == "scale" then
+      -- scale page: placeholder (rows 1-7 blank, nav still draws)
     else
       -- All other pages (including extended: ratchet, alt_note, glide) use value display
       M.draw_value_page(ctx, g, page)
@@ -315,26 +320,29 @@ end
 -- Navigation row
 function M.draw_nav(ctx, g)
   local y = 8
-  -- track select
+  -- track select (x=1-4)
   for i = 1, 4 do
     g:led(i, y, i == ctx.active_track and 12 or 3)
   end
-  -- mute indicator (x=5)
+  -- x=5: blank (no LED)
+  -- page select x=6-9 (highlight correct button even when on extended page)
+  local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
+  for x = 6, 8 do
+    g:led(x, y, NAV_PAGE[x] == active_primary and 12 or 3)
+  end
+  -- x=9: lit if current page is in the cycle group (duration/velocity/probability)
+  g:led(9, y, NAV_PAGE_CYCLE_9_SET[ctx.active_page] and 12 or 3)
+  -- x=10: blank (no LED)
+  -- modifiers (x=11-13)
+  g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
+  g:led(NAV_PATTERN, y, ctx.pattern_held and 12 or 3)
   local muted = ctx.tracks[ctx.active_track] and ctx.tracks[ctx.active_track].muted
   g:led(NAV_MUTE, y, muted and 12 or 3)
-  -- page select (highlight correct button even when on extended page)
-  local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
-  for x, page in pairs(NAV_PAGE) do
-    g:led(x, y, page == active_primary and 12 or 3)
-  end
-  -- loop modifier
-  g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
-  -- time modifier
-  g:led(NAV_TIME, y, ctx.time_held and 12 or 3)
-  -- pattern mode
-  g:led(NAV_PATTERN, y, ctx.pattern_held and 12 or 3)
-  -- play/stop
-  g:led(NAV_PLAY, y, ctx.playing and 12 or 3)
+  -- scale (x=14)
+  g:led(NAV_SCALE, y, ctx.active_page == "scale" and 12 or 3)
+  -- meta (x=15)
+  g:led(NAV_META, y, ctx.active_page == "alt_track" and 12 or 3)
+  -- x=16: blank (no LED)
 end
 
 function M.key(ctx, x, y, z)
@@ -351,23 +359,15 @@ function M.key(ctx, x, y, z)
 end
 
 function M.nav_key(ctx, x, z)
-  -- track select (momentary not needed, select on press)
+  -- track select x=1-4 (select on press)
   if x >= 1 and x <= 4 and z == 1 then
     ctx.active_track = x
     if ctx.events then
       ctx.events:emit("track:select", {track=x})
     end
   end
-  -- mute toggle (x=5)
-  if x == NAV_MUTE and z == 1 then
-    local track = ctx.tracks[ctx.active_track]
-    track.muted = not track.muted
-    if ctx.events then
-      ctx.events:emit("track:mute", {track=ctx.active_track, muted=track.muted})
-    end
-  end
-  -- page select with extended page toggle
-  if NAV_PAGE[x] and z == 1 then
+  -- page select x=6-8 with extended page toggle
+  if x >= 6 and x <= 8 and NAV_PAGE[x] and z == 1 then
     local old_page = ctx.active_page
     local target_page = NAV_PAGE[x]
     if ctx.active_page == target_page then
@@ -375,44 +375,69 @@ function M.nav_key(ctx, x, z)
       if M.EXTENDED_PAGES[target_page] then
         ctx.active_page = M.EXTENDED_PAGES[target_page]
       end
-      -- If no extended page (duration, velocity), stay on same page
     elseif M.EXTENDED_REVERSE[ctx.active_page] == target_page then
       -- Currently on extended page, pressing its primary button: toggle back
       ctx.active_page = target_page
     else
-      -- Different page button: switch to primary page (clear extended)
+      -- Different page button: switch to primary page
       ctx.active_page = target_page
     end
     if ctx.active_page ~= old_page and ctx.events then
       ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
     end
   end
-  -- loop modifier (hold)
+  -- page select x=9: cycle through duration → velocity → probability
+  if x == 9 and z == 1 then
+    local old_page = ctx.active_page
+    -- Find current position in cycle group
+    local idx = nil
+    for i, p in ipairs(NAV_PAGE_CYCLE_9) do
+      if ctx.active_page == p then idx = i; break end
+    end
+    if idx then
+      -- Advance to next in cycle (wrap around)
+      ctx.active_page = NAV_PAGE_CYCLE_9[(idx % #NAV_PAGE_CYCLE_9) + 1]
+    else
+      -- Not currently on a cycle-9 page: go to first (duration)
+      ctx.active_page = NAV_PAGE_CYCLE_9[1]
+    end
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
+  end
+  -- loop modifier hold (x=11)
   if x == NAV_LOOP then
     ctx.loop_held = z == 1
     if z == 0 then
       ctx.loop_first_press = nil
     end
   end
-  -- time modifier (hold x=13)
-  if x == NAV_TIME then
-    ctx.time_held = (z == 1)
-  end
-  -- pattern mode (hold x=14)
+  -- pattern mode hold (x=12)
   if x == NAV_PATTERN then
     ctx.pattern_held = (z == 1)
   end
-  -- alt-track page toggle (x=15)
-  if x == 15 and z == 1 then
-    ctx.active_page = "alt_track"
+  -- mute toggle (x=13)
+  if x == NAV_MUTE and z == 1 then
+    local track = ctx.tracks[ctx.active_track]
+    track.muted = not track.muted
+    if ctx.events then
+      ctx.events:emit("track:mute", {track=ctx.active_track, muted=track.muted})
+    end
   end
-  -- play/stop
-  if x == NAV_PLAY and z == 1 then
-    local seq = require("lib/sequencer")
-    if ctx.playing then
-      seq.stop(ctx)
-    else
-      seq.start(ctx)
+  -- scale (x=14)
+  if x == NAV_SCALE and z == 1 then
+    local old_page = ctx.active_page
+    ctx.active_page = "scale"
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
+  end
+  -- meta / alt-track (x=15)
+  if x == NAV_META and z == 1 then
+    local old_page = ctx.active_page
+    ctx.active_page = "alt_track"
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
     end
   end
 end
