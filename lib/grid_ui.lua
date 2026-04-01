@@ -6,11 +6,13 @@
 
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
+local meta_pattern = require("lib/meta_pattern")
+local direction_mod = require("lib/direction")
 
 local M = {}
 
 -- Page names (primary + extended)
-M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "ratchet", "alt_note", "glide", "alt_track", "scale"}
+M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "ratchet", "alt_note", "glide", "alt_track", "meta_pattern", "scale"}
 
 -- Extended page mappings: primary -> extended
 M.EXTENDED_PAGES = {trigger = "ratchet", note = "alt_note", octave = "glide"}
@@ -29,7 +31,7 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 -- x=12: pattern mode (hold)
 -- x=13: mute toggle
 -- x=14: scale
--- x=15: meta (alt-track settings: direction/division/swing/mute)
+-- x=15: meta (alt-track settings; double-press: meta-pattern sequencer)
 -- x=16: (available)
 
 local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration"}
@@ -68,6 +70,8 @@ function M.redraw(ctx)
       M.draw_trigger_page(ctx, g)
     elseif page == "alt_track" then
       M.draw_alt_track_page(ctx, g)
+    elseif page == "meta_pattern" then
+      M.draw_meta_pattern_page(ctx, g)
     elseif page == "scale" then
       M.draw_scale_page(ctx, g)
     else
@@ -387,8 +391,9 @@ function M.draw_nav(ctx, g)
   g:led(NAV_MUTE, y, muted and 12 or 3)
   -- scale (x=14)
   g:led(NAV_SCALE, y, ctx.active_page == "scale" and 12 or 3)
-  -- meta (x=15)
-  g:led(NAV_META, y, ctx.active_page == "alt_track" and 12 or 3)
+  -- meta (x=15): alt-track or meta-pattern
+  local meta_active = ctx.active_page == "alt_track" or ctx.active_page == "meta_pattern"
+  g:led(NAV_META, y, meta_active and 12 or 3)
   -- x=16: blank (no LED)
 end
 
@@ -479,10 +484,16 @@ function M.nav_key(ctx, x, z)
       ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
     end
   end
-  -- meta / alt-track (x=15)
+  -- meta / alt-track (x=15): double-press toggles alt_track <-> meta_pattern
   if x == NAV_META and z == 1 then
     local old_page = ctx.active_page
-    ctx.active_page = "alt_track"
+    if ctx.active_page == "alt_track" then
+      ctx.active_page = "meta_pattern"
+    elseif ctx.active_page == "meta_pattern" then
+      ctx.active_page = "alt_track"
+    else
+      ctx.active_page = "alt_track"
+    end
     if ctx.active_page ~= old_page and ctx.events then
       ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
     end
@@ -515,6 +526,14 @@ function M.grid_key(ctx, x, y, z)
   -- scale page
   if ctx.active_page == "scale" then
     M.scale_key(ctx, x, y)
+    return
+  end
+
+  -- meta-pattern page
+  if ctx.active_page == "meta_pattern" then
+    if z == 1 then
+      M.meta_pattern_key(ctx, x, y)
+    end
     return
   end
 
@@ -659,6 +678,124 @@ function M.scale_key(ctx, x, y)
     if ctx.events then
       ctx.events:emit("scale:type", {scale_type = ctx.scale_type})
     end
+  end
+end
+
+-- Meta-pattern page display
+-- Row 1-2: Pattern slot selector (16 slots across 2 rows, same as pattern mode)
+-- Row 3: Loop count for selected meta-step (cols 1-7)
+-- Row 5: Meta-sequence overview (cols 1-16 = meta-steps)
+-- Row 7: Controls (x=1 = toggle active)
+function M.draw_meta_pattern_page(ctx, g)
+  local meta = ctx.meta
+  if not meta then return end
+
+  local sel = meta.selected_step
+  local step = meta.steps[sel]
+
+  -- Rows 1-2: Pattern slot selector for selected meta-step
+  for slot = 1, 16 do
+    local col = ((slot - 1) % 8) + 1
+    local row = ((slot - 1) < 8) and 1 or 2
+    local populated = pattern.is_populated(ctx.patterns, slot)
+    local is_assigned = (step.slot == slot and slot > 0)
+    local brightness = 2
+    if is_assigned and populated then
+      brightness = 15
+    elseif is_assigned then
+      brightness = 12
+    elseif populated then
+      brightness = 8
+    end
+    g:led(col, row, brightness)
+  end
+
+  -- Row 3: Loop count bar (1-7)
+  for x = 1, 7 do
+    local brightness = 2
+    if x == step.loops then
+      brightness = 15
+    elseif x < step.loops then
+      brightness = 6
+    end
+    g:led(x, 3, brightness)
+  end
+
+  -- Row 5: Meta-sequence overview
+  for i = 1, meta_pattern.MAX_STEPS do
+    local is_playback = (meta.active and meta.pos == i)
+    local is_selected = (sel == i)
+    local has_pattern = (meta.steps[i].slot > 0)
+    local brightness = 2
+    if is_playback then
+      brightness = 15
+    elseif is_selected then
+      brightness = 12
+    elseif has_pattern then
+      brightness = 8
+    end
+    g:led(i, 5, brightness)
+  end
+
+  -- Row 6: Cued pattern indicator
+  if meta.cued_slot then
+    for x = 1, 16 do
+      g:led(x, 6, x == meta.cued_slot and 10 or 0)
+    end
+  end
+
+  -- Row 7: Controls
+  g:led(1, 7, meta.active and 15 or 4)
+end
+
+-- Meta-pattern page key handler
+function M.meta_pattern_key(ctx, x, y)
+  local meta = ctx.meta
+  if not meta then return end
+
+  -- Rows 1-2: Assign pattern slot to selected meta-step
+  if y >= 1 and y <= 2 and x >= 1 and x <= 8 then
+    local slot = (y - 1) * 8 + x
+    local sel = meta.selected_step
+    if meta.steps[sel].slot == slot then
+      -- Toggle off: clear step
+      meta_pattern.clear_step(meta, sel)
+    else
+      meta_pattern.set_step(meta, sel, slot, meta.steps[sel].loops)
+    end
+    if ctx.events then
+      ctx.events:emit("meta:edit", { step = sel, slot = meta.steps[sel].slot })
+    end
+    return
+  end
+
+  -- Row 3: Set loop count (1-7)
+  if y == 3 and x >= 1 and x <= 7 then
+    local sel = meta.selected_step
+    meta.steps[sel].loops = x
+    return
+  end
+
+  -- Row 5: Select meta-step for editing
+  if y == 5 and x >= 1 and x <= meta_pattern.MAX_STEPS then
+    meta.selected_step = x
+    return
+  end
+
+  -- Row 6: Cue a pattern slot (press to cue, press again to cancel)
+  if y == 6 and x >= 1 and x <= 16 then
+    if meta.cued_slot == x then
+      meta_pattern.cancel_cue(meta)
+    else
+      meta_pattern.cue(meta, x)
+    end
+    return
+  end
+
+  -- Row 7: Controls
+  if y == 7 and x == 1 then
+    meta_pattern.toggle(meta, ctx)
+    return
   end
 end
 

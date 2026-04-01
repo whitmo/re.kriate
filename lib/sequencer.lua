@@ -4,6 +4,7 @@
 local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
 local direction_mod = require("lib/direction")
+local meta_pattern = require("lib/meta_pattern")
 local log = require("lib/log")
 
 local M = {}
@@ -106,15 +107,16 @@ function M.stop(ctx)
 end
 
 function M.track_clock(ctx, track_num)
-  local track = ctx.tracks[track_num]
   local step_count = 0
   while ctx.playing do
+    -- Re-read track each iteration to pick up meta-pattern switches
+    local track = ctx.tracks[track_num]
     local div = M.DIVISION_MAP[track.division] or M.DIVISION_MAP[1]
     step_count = step_count + 1
     local is_odd = (step_count % 2 == 1)
     clock.sync(M.swing_duration(div, track.swing or 0, is_odd))
     if ctx.playing then
-      M.step_track(ctx, track_num)  -- always advance, mute checked inside
+      M.step_track(ctx, track_num)
     end
   end
 end
@@ -126,6 +128,7 @@ function M.step_track(ctx, track_num)
   -- advance trigger first (always ticks independently)
   local vals = {}
   local trig_param = track.params.trigger
+  local old_trig_pos = trig_param.pos
   if track_mod.should_advance(trig_param) then
     vals.trigger = direction_mod.advance(trig_param, dir)
   else
@@ -234,6 +237,13 @@ function M.step_track(ctx, track_num)
     -- muted track with no trigger: just mark grid dirty
     ctx.grid_dirty = true
     return
+  end
+
+  -- Meta-pattern: detect trigger loop wrap on track 1
+  if track_num == 1 and ctx.meta and ctx.meta.active then
+    if trig_param.pos == trig_param.loop_start and old_trig_pos ~= trig_param.loop_start then
+      meta_pattern.on_loop_complete(ctx.meta, ctx)
+    end
   end
 
   -- request grid redraw
