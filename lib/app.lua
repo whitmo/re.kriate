@@ -7,6 +7,7 @@ local sequencer = require("lib/sequencer")
 local grid_ui = require("lib/grid_ui")
 local pattern = require("lib/pattern")
 local pattern_persistence = require("lib/pattern_persistence")
+local meta_pattern = require("lib/meta_pattern")
 local direction = require("lib/direction")
 local grid_provider = require("lib/grid_provider")
 local events = require("lib/events")
@@ -187,6 +188,7 @@ function M.init(config)
     events = events.new(),
     pattern_held = false,
     pattern_slot = 1,
+    meta = meta_pattern.new(),
     midi_dev = config.midi_dev,
   }
 
