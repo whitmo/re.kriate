@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>re.kriate — Feature Map &amp; Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'Fira Code', 'SF Mono', Consolas, monospace;
+
+  /* Blueprint palette — deep slate + teal + amber */
+  --bg: #0c1520;
+  --surface: #111d2e;
+  --surface2: #162436;
+  --surface-elevated: #1a2a3f;
+  --border: rgba(100, 160, 210, 0.12);
+  --border-bright: rgba(100, 160, 210, 0.25);
+  --text: #c8dae8;
+  --text-dim: #6889a5;
+  --accent: #2dd4bf;
+  --accent-dim: rgba(45, 212, 191, 0.1);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245, 158, 11, 0.1);
+  --rose: #f43f5e;
+  --rose-dim: rgba(244, 63, 94, 0.1);
+  --blue: #38bdf8;
+  --blue-dim: rgba(56, 189, 248, 0.1);
+  --green: #4ade80;
+  --green-dim: rgba(74, 222, 128, 0.1);
+  --slate: #64748b;
+  --slate-dim: rgba(100, 116, 139, 0.1);
+
+  /* Semantic */
+  --core: var(--accent);
+  --core-dim: var(--accent-dim);
+  --voice: var(--amber);
+  --voice-dim: var(--amber-dim);
+  --ui: var(--blue);
+  --ui-dim: var(--blue-dim);
+  --storage: var(--green);
+  --storage-dim: var(--green-dim);
+  --platform: var(--rose);
+  --platform-dim: var(--rose-dim);
+  --infra: var(--slate);
+  --infra-dim: var(--slate-dim);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #eef3f8;
+    --surface: #ffffff;
+    --surface2: #f0f4f8;
+    --surface-elevated: #ffffff;
+    --border: rgba(15, 50, 80, 0.1);
+    --border-bright: rgba(15, 50, 80, 0.2);
+    --text: #1a2d42;
+    --text-dim: #5a7a95;
+    --accent: #0d9488;
+    --accent-dim: rgba(13, 148, 136, 0.08);
+    --amber: #b45309;
+    --amber-dim: rgba(180, 83, 9, 0.08);
+    --rose: #be123c;
+    --rose-dim: rgba(190, 18, 60, 0.08);
+    --blue: #0369a1;
+    --blue-dim: rgba(3, 105, 161, 0.08);
+    --green: #15803d;
+    --green-dim: rgba(21, 128, 61, 0.08);
+    --slate: #475569;
+    --slate-dim: rgba(71, 85, 105, 0.08);
+  }
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; min-width: 0; }
+
+body {
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 15% 10%, var(--core-dim) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 80%, var(--voice-dim) 0%, transparent 35%),
+    repeating-linear-gradient(0deg, transparent, transparent 59px, var(--border) 59px, var(--border) 60px),
+    repeating-linear-gradient(90deg, transparent, transparent 59px, var(--border) 59px, var(--border) 60px);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font-body);
+  padding: 40px;
+  min-height: 100vh;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeScale {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.anim {
+  opacity: 0;
+  animation: fadeUp 0.5s ease-out forwards;
+  animation-delay: calc(var(--i, 0) * 80ms + 100ms);
+}
+.anim-scale {
+  opacity: 0;
+  animation: fadeScale 0.4s ease-out forwards;
+  animation-delay: calc(var(--i, 0) * 80ms + 100ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim, .anim-scale { animation: none; opacity: 1; }
+}
+
+/* Layout */
+.wrap {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 0 36px;
+}
+.main { min-width: 0; }
+
+/* TOC */
+.toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  padding: 14px 0;
+  grid-row: 1 / -1;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}
+.toc::-webkit-scrollbar { width: 3px; }
+.toc::-webkit-scrollbar-thumb { background: var(--surface-elevated); border-radius: 2px; }
+.toc-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  padding: 0 0 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.toc a {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+  line-height: 1.4;
+  margin-bottom: 1px;
+}
+.toc a:hover { color: var(--text); background: var(--surface2); }
+.toc a.active { color: var(--text); border-left-color: var(--accent); }
+
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: 1fr; }
+  .toc {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; gap: 4px; padding: 10px 0;
+    overflow-x: auto; grid-row: auto;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+    max-height: none;
+  }
+  .toc-title { display: none; }
+  .toc a { white-space: nowrap; border-left: none; border-bottom: 2px solid transparent; }
+  .toc a.active { border-bottom-color: var(--accent); border-left: none; }
+  body { padding: 16px; }
+}
+
+/* Cards */
+.ve-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 22px;
+  position: relative;
+  overflow-wrap: break-word;
+}
+.ve-card--hero {
+  background: color-mix(in srgb, var(--surface) 88%, var(--accent) 12%);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-color: color-mix(in srgb, var(--border) 40%, var(--accent) 60%);
+}
+.ve-card--elevated {
+  background: var(--surface-elevated);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+.ve-card--recessed {
+  background: color-mix(in srgb, var(--bg) 70%, var(--surface) 30%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.ve-card__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ve-card__label::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* Section headers */
+.sec-head {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 28px 0 14px;
+  margin-top: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  scroll-margin-top: 80px;
+}
+
+/* Hero */
+h1 {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  margin-bottom: 8px;
+}
+h1 span { color: var(--accent); }
+.subtitle {
+  font-size: 16px;
+  color: var(--text-dim);
+  max-width: 640px;
+  line-height: 1.5;
+  margin-bottom: 32px;
+}
+
+/* Grids */
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin: 16px 0; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+@media (max-width: 900px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Feature cards */
+.feat {
+  padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+}
+.feat h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.feat p {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.feat .tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-top: 6px;
+  font-weight: 500;
+}
+.tag--complete { background: var(--green-dim); color: var(--green); }
+.tag--partial { background: var(--amber-dim); color: var(--amber); }
+.tag--planned { background: var(--slate-dim); color: var(--slate); }
+
+/* Module table */
+.mod-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 16px 0;
+}
+.mod-table th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--border-bright);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+.mod-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.mod-table tr:hover td { background: var(--surface); }
+.mod-table code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface2);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* KPI row */
+.kpi-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+.kpi {
+  text-align: center;
+  padding: 16px 24px;
+  min-width: 120px;
+  flex: 1;
+}
+.kpi .num {
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.kpi .lbl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  margin: 14px 0;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Mermaid */
+.mermaid-wrap {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  overflow: hidden;
+  margin: 16px 0;
+}
+.mermaid-inner {
+  overflow: auto;
+  cursor: grab;
+  transform-origin: 0 0;
+}
+.mermaid-inner.grabbing { cursor: grabbing; }
+.mermaid .nodeLabel { color: var(--text) !important; }
+.mermaid .edgeLabel { color: var(--text-dim) !important; background-color: var(--surface) !important; }
+.mermaid .edgeLabel rect { fill: var(--surface) !important; }
+.zoom-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 10;
+}
+.zoom-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.zoom-btn:hover { background: var(--surface-elevated); color: var(--text); }
+
+/* Details */
+details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 10px 0;
+  background: var(--surface);
+}
+details summary {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+details summary:hover { color: var(--text); }
+details[open] summary { border-bottom: 1px solid var(--border); }
+details .inner { padding: 14px; font-size: 12px; line-height: 1.5; }
+
+/* Vertical flow arrow */
+.flow-arrow {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+.flow-arrow svg { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc" id="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#overview">Overview</a>
+  <a href="#stats">Stats</a>
+  <a href="#arch">Architecture</a>
+  <a href="#core">Core Engine</a>
+  <a href="#grid">Grid &amp; UI</a>
+  <a href="#voices">Voice Backends</a>
+  <a href="#storage">Pattern Storage</a>
+  <a href="#platform">Platform Support</a>
+  <a href="#infra">Infrastructure</a>
+  <a href="#modules">Module Index</a>
+  <a href="#coverage">Test Coverage</a>
+  <a href="#gaps">Gaps &amp; Roadmap</a>
+</nav>
+
+<div class="main">
+
+<!-- HERO -->
+<div class="anim" style="--i:0">
+<h1>re.<span>kriate</span></h1>
+<p class="subtitle">A norns/seamstress polymetric step sequencer inspired by monome kria. 4 tracks, 9 parameters per track, per-parameter independent loops, 5 direction modes, grid UI, multiple voice backends, disk persistence.</p>
+</div>
+
+<!-- KPIs -->
+<div id="overview"></div>
+<div id="stats" class="sec-head anim" style="--i:1">Project Stats</div>
+<div class="kpi-row anim-scale" style="--i:2">
+  <div class="kpi ve-card ve-card--hero"><div class="num" style="color:var(--accent)">17</div><div class="lbl">Lib Modules</div></div>
+  <div class="kpi ve-card ve-card--elevated"><div class="num" style="color:var(--blue)">~2,500</div><div class="lbl">Lines of Lua</div></div>
+  <div class="kpi ve-card ve-card--elevated"><div class="num" style="color:var(--green)">32</div><div class="lbl">Spec Files</div></div>
+  <div class="kpi ve-card ve-card--elevated"><div class="num" style="color:var(--amber)">6</div><div class="lbl">Voice Backends</div></div>
+  <div class="kpi ve-card ve-card--elevated"><div class="num" style="color:var(--rose)">2</div><div class="lbl">Platforms</div></div>
+</div>
+
+<div class="legend anim" style="--i:3">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--core)"></div> Core Engine</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--ui)"></div> Grid &amp; UI</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--voice)"></div> Voice Backends</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--storage)"></div> Pattern Storage</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--platform)"></div> Platform</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--infra)"></div> Infrastructure</div>
+</div>
+
+<!-- ARCHITECTURE DIAGRAM -->
+<div id="arch" class="sec-head anim" style="--i:4">Architecture Overview</div>
+<div class="mermaid-wrap anim" style="--i:5">
+  <div class="zoom-controls">
+    <button class="zoom-btn" onclick="zoomDiagram(1.2)" title="Zoom in">+</button>
+    <button class="zoom-btn" onclick="zoomDiagram(0.8)" title="Zoom out">&minus;</button>
+    <button class="zoom-btn" onclick="resetZoom()" title="Reset">R</button>
+  </div>
+  <div class="mermaid-inner" id="mermaid-container">
+    <pre class="mermaid">
+flowchart TD
+  subgraph entry["Entrypoints"]
+    NE["re_kriate.lua\n(norns)"]
+    SE["seamstress.lua\n(seamstress)"]
+  end
+
+  APP["lib/app.lua\nOrchestration + Params"]
+
+  subgraph core["Core Engine"]
+    SEQ["lib/sequencer.lua\nClock + Step + Swing"]
+    TRK["lib/track.lua\nData Model (9 params)"]
+    DIR["lib/direction.lua\n5 Modes"]
+    SCL["lib/scale.lua\nQuantization"]
+  end
+
+  subgraph ui["Grid &amp; UI"]
+    GU["lib/grid_ui.lua\n10 Pages"]
+    GP["lib/grid_provider.lua\nMonome / Midi / Sim"]
+    KB["keyboard.lua\nSeamstress Keys"]
+    SU["screen_ui.lua\nText Display"]
+    SR["sprite_render.lua\nVisual Engine"]
+    GR["grid_render.lua\nSim Grid Draw"]
+  end
+
+  subgraph voices["Voice Backends"]
+    VM["midi.lua"]
+    VO["osc.lua"]
+    VS["sprite.lua"]
+    VN["nb_voice.lua"]
+    VZ["softcut_zig.lua"]
+  end
+
+  subgraph storage["Pattern Storage"]
+    PM["lib/pattern.lua\n16 In-Memory Slots"]
+    PP["lib/pattern_persistence.lua\nDisk + Checksum"]
+  end
+
+  EVT["lib/events.lua\nPub/Sub Bus"]
+  LOG["lib/log.lua"]
+
+  NE --> APP
+  SE --> APP
+  APP --> SEQ
+  APP --> GU
+  APP --> PM
+  APP --> PP
+  SEQ --> TRK
+  SEQ --> DIR
+  SEQ --> SCL
+  SEQ --> EVT
+  SEQ --> VM & VO & VS & VN & VZ
+  GU --> GP
+  GU --> EVT
+  APP --> KB
+  APP --> SU
+  APP --> SR
+  SR --> GR
+  EVT -.-> APP
+
+  classDef entryC fill:#1e293b,stroke:#f43f5e,stroke-width:2px
+  classDef coreC fill:#0f2b2a,stroke:#2dd4bf,stroke-width:2px
+  classDef uiC fill:#0c1f3a,stroke:#38bdf8,stroke-width:2px
+  classDef voiceC fill:#2a1f0a,stroke:#f59e0b,stroke-width:2px
+  classDef storageC fill:#0a2a15,stroke:#4ade80,stroke-width:2px
+  classDef infraC fill:#1a1a2e,stroke:#64748b,stroke-width:2px
+
+  class NE,SE entryC
+  class SEQ,TRK,DIR,SCL coreC
+  class GU,GP,KB,SU,SR,GR uiC
+  class VM,VO,VS,VN,VZ voiceC
+  class PM,PP storageC
+  class EVT,LOG infraC
+    </pre>
+  </div>
+</div>
+
+<!-- CORE ENGINE -->
+<div id="core" class="sec-head anim" style="--i:6">Core Engine</div>
+<div class="grid-2 anim" style="--i:7">
+  <div class="ve-card feat" style="border-left-color:var(--core)">
+    <div class="ve-card__label" style="color:var(--core)">Sequencer</div>
+    <h3>lib/sequencer.lua <span style="color:var(--text-dim);font-weight:400">(232 lines)</span></h3>
+    <p>Clock-driven per-track coroutines. Step advancement with per-parameter independent loops. Swing/shuffle 0-100%. Ratchet repeats. Probability note drops. Portamento/glide. Sprite visual voice output alongside audio.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--core)">
+    <div class="ve-card__label" style="color:var(--core)">Track Data Model</div>
+    <h3>lib/track.lua <span style="color:var(--text-dim);font-weight:400">(208 lines)</span></h3>
+    <p>9 parameters: trigger, note, octave, duration, velocity, probability (core) + ratchet, alt_note, glide (extended). 4 tracks × 16 steps. Per-param clock divider. Musically useful defaults.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--core)">
+    <div class="ve-card__label" style="color:var(--core)">Direction</div>
+    <h3>lib/direction.lua <span style="color:var(--text-dim);font-weight:400">(94 lines)</span></h3>
+    <p>5 playhead modes: forward, reverse, pendulum (bounce), drunk (random walk), random. Pendulum tracks direction state internally.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--core)">
+    <div class="ve-card__label" style="color:var(--core)">Scale</div>
+    <h3>lib/scale.lua <span style="color:var(--text-dim);font-weight:400">(37 lines)</span></h3>
+    <p>14 scales via musicutil (Major through Chromatic). 8 octaves from configurable root. Scale degree + octave → MIDI note conversion.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+</div>
+
+<details class="anim" style="--i:8">
+  <summary>Parameter Deep Dive — 9 params × 4 tracks × 16 steps</summary>
+  <div class="inner">
+    <table class="mod-table">
+      <tr><th>Parameter</th><th>Range</th><th>Grid Page</th><th>Notes</th></tr>
+      <tr><td><code>trigger</code></td><td>0/1</td><td>Trigger (rows 1-4, all tracks)</td><td>On/off per step</td></tr>
+      <tr><td><code>note</code></td><td>1-7</td><td>Note (7-row bar graph)</td><td>Scale degree</td></tr>
+      <tr><td><code>octave</code></td><td>1-7</td><td>Octave</td><td>Octave offset</td></tr>
+      <tr><td><code>duration</code></td><td>1-7</td><td>Duration</td><td>Maps to 1/16 beat → 4 beats</td></tr>
+      <tr><td><code>velocity</code></td><td>1-7</td><td>Velocity</td><td>Maps to 0.15 → 1.0</td></tr>
+      <tr><td><code>probability</code></td><td>1-7</td><td>Probability</td><td>Per-step note drop chance</td></tr>
+      <tr><td><code>ratchet</code></td><td>1-7</td><td>Ratchet (ext: trigger↔)</td><td>1-7 note repeats per step</td></tr>
+      <tr><td><code>alt_note</code></td><td>1-7</td><td>Alt Note (ext: note↔)</td><td>Secondary note offset</td></tr>
+      <tr><td><code>glide</code></td><td>1-7</td><td>Glide (ext: octave↔)</td><td>0 → 1.6s portamento</td></tr>
+    </table>
+  </div>
+</details>
+
+<!-- GRID & UI -->
+<div id="grid" class="sec-head anim" style="--i:9">Grid &amp; UI</div>
+<div class="ve-card ve-card--hero anim" style="--i:10; border-left:3px solid var(--ui)">
+  <div class="ve-card__label" style="color:var(--ui)">Grid Interface — 16×8 Monome Grid</div>
+  <div class="grid-2" style="margin:0">
+    <div>
+      <h3 style="font-size:14px;margin-bottom:8px">10 Pages</h3>
+      <p style="font-size:12px;color:var(--text-dim);line-height:1.6">
+        <strong>Trigger</strong> — 4 rows × 16 steps (all tracks visible)<br>
+        <strong>Note, Octave, Duration, Velocity, Probability</strong> — 7-row bar graphs<br>
+        <strong>Ratchet, Alt Note, Glide</strong> — Extended pages (double-tap nav to toggle)<br>
+        <strong>Alt-Track</strong> — Direction (4 cols) + Division (7 cols) + Swing (4 cols) + Mute (1 col)
+      </p>
+    </div>
+    <div>
+      <h3 style="font-size:14px;margin-bottom:8px">Navigation Row (Row 8)</h3>
+      <p style="font-size:12px;color:var(--text-dim);line-height:1.6">
+        <code>x=1-4</code> Track select<br>
+        <code>x=5</code> Mute toggle<br>
+        <code>x=6-11,15</code> Page select<br>
+        <code>x=12</code> Loop edit (hold)<br>
+        <code>x=14</code> Pattern hold<br>
+        <code>x=16</code> Play/Stop
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="grid-3 anim" style="--i:11">
+  <div class="ve-card feat" style="border-left-color:var(--ui)">
+    <div class="ve-card__label" style="color:var(--ui)">Grid Provider</div>
+    <h3>lib/grid_provider.lua</h3>
+    <p>Pluggable backend: monome (hardware), midigrid (MIDI emulation), simulated (seamstress visual). Registration + factory pattern.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--ui)">
+    <div class="ve-card__label" style="color:var(--ui)">Sprite Renderer</div>
+    <h3>lib/seamstress/sprite_render.lua</h3>
+    <p>7 shapes (circle, rect, triangle, diamond, star, line, dot). Track colors, echo trails, glide lines, beat grid, playhead. Drift + float movement.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--ui)">
+    <div class="ve-card__label" style="color:var(--ui)">Keyboard</div>
+    <h3>lib/seamstress/keyboard.lua</h3>
+    <p>Full keybinding set: space=play, r=reset, 1-4=track, qwety=pages, d=direction, ctrl+s/l=save/load, ctrl+1-9=pattern slots.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+</div>
+
+<!-- VOICES -->
+<div id="voices" class="sec-head anim" style="--i:12">Voice Backends</div>
+<div class="grid-3 anim" style="--i:13">
+  <div class="ve-card feat" style="border-left-color:var(--voice)">
+    <div class="ve-card__label" style="color:var(--voice)">MIDI</div>
+    <h3>lib/voices/midi.lua <span style="color:var(--text-dim);font-weight:400">(66 lines)</span></h3>
+    <p>Note on/off, per-channel routing, portamento CC 5/65, all-notes-off CC 123. Monophonic with cancel-previous.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--voice)">
+    <div class="ve-card__label" style="color:var(--voice)">OSC</div>
+    <h3>lib/voices/osc.lua <span style="color:var(--text-dim);font-weight:400">(49 lines)</span></h3>
+    <p>Configurable host/port. Paths: <code>/rekriate/track/{n}/note</code>, <code>note_off</code>, <code>all_notes_off</code>, <code>portamento</code>.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--voice)">
+    <div class="ve-card__label" style="color:var(--voice)">Sprite / Visual</div>
+    <h3>lib/voices/sprite.lua <span style="color:var(--text-dim);font-weight:400">(168 lines)</span></h3>
+    <p>Additive visual voice alongside audio. 7 shapes, RGBA track colors, velocity→size, octave→Y, alt_note→X. Echo + glide rendering.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--voice)">
+    <div class="ve-card__label" style="color:var(--voice)">nb Voice (norns)</div>
+    <h3>lib/norns/nb_voice.lua <span style="color:var(--text-dim);font-weight:400">(37 lines)</span></h3>
+    <p>Wrapper around norns nb player. Defers to nb param system for voice selection and pitch control.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--voice)">
+    <div class="ve-card__label" style="color:var(--voice)">Softcut / Zig</div>
+    <h3>lib/voices/softcut_zig.lua</h3>
+    <p>Sampler voice via softcut backend. Pitch transposition (MIDI→rate), loop support. Config defined but not fully wired into main flow.</p>
+    <span class="tag tag--partial">Partial</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--voice)">
+    <div class="ve-card__label" style="color:var(--voice)">Recorder (test)</div>
+    <h3>lib/voices/recorder.lua <span style="color:var(--text-dim);font-weight:400">(91 lines)</span></h3>
+    <p>Captures play_note calls into buffer. Shared buffer across tracks. Used for test verification.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+</div>
+
+<!-- STORAGE -->
+<div id="storage" class="sec-head anim" style="--i:14">Pattern Storage</div>
+<div class="grid-2 anim" style="--i:15">
+  <div class="ve-card feat" style="border-left-color:var(--storage)">
+    <div class="ve-card__label" style="color:var(--storage)">In-Memory Patterns</div>
+    <h3>lib/pattern.lua <span style="color:var(--text-dim);font-weight:400">(44 lines)</span></h3>
+    <p>16 slots for instant save/recall during performance. Deep-copy save preserves full track state. Grid UI shows slot occupancy on rows 1-2.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--storage)">
+    <div class="ve-card__label" style="color:var(--storage)">Disk Persistence</div>
+    <h3>lib/pattern_persistence.lua</h3>
+    <p>.krp files with Adler-32 checksum validation. Platform-aware paths: norns <code>~/dust/data/</code>, seamstress XDG. Save/load/list/delete operations. Sanitized filenames.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+</div>
+
+<!-- PLATFORM -->
+<div id="platform" class="sec-head anim" style="--i:16">Platform Support</div>
+<div class="grid-2 anim" style="--i:17">
+  <div class="ve-card ve-card--elevated feat" style="border-left-color:var(--platform)">
+    <div class="ve-card__label" style="color:var(--platform)">norns</div>
+    <h3>re_kriate.lua <span style="color:var(--text-dim);font-weight:400">(72 lines)</span></h3>
+    <p>Thin global hooks (init/redraw/key/enc/cleanup) delegating to lib/app. nb voice integration. Screen metro at 15fps. Hardware grid via monome provider.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card ve-card--elevated feat" style="border-left-color:var(--platform)">
+    <div class="ve-card__label" style="color:var(--platform)">seamstress</div>
+    <h3>seamstress.lua <span style="color:var(--text-dim);font-weight:400">(93 lines)</span></h3>
+    <p>Grid simulation on screen with mouse clicks. Sprite rendering. Keyboard input. MIDI port 1. Screen metro at 30fps. Full dev environment without hardware.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+</div>
+
+<!-- INFRA -->
+<div id="infra" class="sec-head anim" style="--i:18">Infrastructure</div>
+<div class="grid-3 anim" style="--i:19">
+  <div class="ve-card feat" style="border-left-color:var(--infra)">
+    <div class="ve-card__label" style="color:var(--infra)">Event Bus</div>
+    <h3>lib/events.lua <span style="color:var(--text-dim);font-weight:400">(255 lines)</span></h3>
+    <p>Lightweight pub/sub. Wildcard support (<code>prefix:*</code>). Taxonomy: sequencer:*, voice:*, grid:*, track:*, page:*, pattern:*, param:*.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--infra)">
+    <div class="ve-card__label" style="color:var(--infra)">Logging</div>
+    <h3>lib/log.lua <span style="color:var(--text-dim);font-weight:400">(74 lines)</span></h3>
+    <p>Leveled logging (info/warn/error) to <code>~/.re_kriate.log</code>. xpcall wrapper for safe error capture.</p>
+    <span class="tag tag--complete">Complete</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--infra)">
+    <div class="ve-card__label" style="color:var(--infra)">Remote API</div>
+    <h3>lib/remote/</h3>
+    <p>HTTP/WebSocket/OSC remote control. Grid state inspection. Spec written but not wired into main sequencer.</p>
+    <span class="tag tag--planned">Planned</span>
+  </div>
+</div>
+
+<!-- MODULE INDEX -->
+<div id="modules" class="sec-head anim" style="--i:20">Module Index</div>
+<div class="anim" style="--i:21; overflow-x:auto">
+<table class="mod-table">
+  <thead>
+    <tr><th>Module</th><th>Path</th><th>Lines</th><th>Role</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>sequencer</code></td><td>lib/sequencer.lua</td><td>232</td><td>Clock, step advancement, swing, voice dispatch</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>track</code></td><td>lib/track.lua</td><td>208</td><td>Per-track data model, 9 params, defaults</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>app</code></td><td>lib/app.lua</td><td>393</td><td>Orchestration, params, init/cleanup</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>grid_ui</code></td><td>lib/grid_ui.lua</td><td>397+</td><td>Grid display (10 pages) + input handling</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>events</code></td><td>lib/events.lua</td><td>255</td><td>Pub/sub event bus with wildcards</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>sprite</code></td><td>lib/voices/sprite.lua</td><td>168</td><td>Visual voice (7 shapes, echo, glide)</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>keyboard</code></td><td>lib/seamstress/keyboard.lua</td><td>111</td><td>Seamstress keyboard input</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>screen_ui</code></td><td>lib/seamstress/screen_ui.lua</td><td>104</td><td>Text screen display</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>direction</code></td><td>lib/direction.lua</td><td>94</td><td>5 playhead direction modes</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>recorder</code></td><td>lib/voices/recorder.lua</td><td>91</td><td>Test utility voice</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>log</code></td><td>lib/log.lua</td><td>74</td><td>Leveled file logging</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>midi</code></td><td>lib/voices/midi.lua</td><td>66</td><td>MIDI note output</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>osc</code></td><td>lib/voices/osc.lua</td><td>49</td><td>OSC message output</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>pattern</code></td><td>lib/pattern.lua</td><td>44</td><td>16-slot in-memory patterns</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>scale</code></td><td>lib/scale.lua</td><td>37</td><td>Scale quantization</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>nb_voice</code></td><td>lib/norns/nb_voice.lua</td><td>37</td><td>norns nb player wrapper</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>softcut_zig</code></td><td>lib/voices/softcut_zig.lua</td><td>~150</td><td>Sampler voice backend</td><td><span class="tag tag--partial">Partial</span></td></tr>
+    <tr><td><code>grid_provider</code></td><td>lib/grid_provider.lua</td><td>~100</td><td>Pluggable grid backend</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>pattern_persistence</code></td><td>lib/pattern_persistence.lua</td><td>~120</td><td>Disk I/O with checksums</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>sprite_render</code></td><td>lib/seamstress/sprite_render.lua</td><td>~200</td><td>2D sprite rendering engine</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>grid_render</code></td><td>lib/seamstress/grid_render.lua</td><td>~100</td><td>Simulated grid drawing</td><td><span class="tag tag--complete">Complete</span></td></tr>
+    <tr><td><code>remote/api</code></td><td>lib/remote/api.lua</td><td>—</td><td>HTTP/WebSocket remote</td><td><span class="tag tag--planned">Planned</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- TEST COVERAGE -->
+<div id="coverage" class="sec-head anim" style="--i:22">Test Coverage</div>
+<div class="ve-card ve-card--recessed anim" style="--i:23">
+  <div class="ve-card__label" style="color:var(--green)">32 Spec Files — Comprehensive</div>
+  <div class="grid-4" style="margin:8px 0 0">
+    <div><strong style="font-size:12px">Core</strong>
+      <p style="font-size:11px;color:var(--text-dim)">sequencer (1098 lines)<br>track, direction (300)<br>scale (272), probability (51)</p>
+    </div>
+    <div><strong style="font-size:12px">UI</strong>
+      <p style="font-size:11px;color:var(--text-dim)">grid_ui (1436 lines)<br>keyboard (446), screen_ui (168)<br>grid_render (264), grid_provider (347)</p>
+    </div>
+    <div><strong style="font-size:12px">Voices &amp; Events</strong>
+      <p style="font-size:11px;color:var(--text-dim)">osc_voice (533)<br>events (518), events_integration (454)<br>pattern (385), persistence (317)</p>
+    </div>
+    <div><strong style="font-size:12px">Integration</strong>
+      <p style="font-size:11px;color:var(--text-dim)">integration (902 lines)<br>e2e_integration (1098)<br>norns_entry (441), seamstress_entry (408)</p>
+    </div>
+  </div>
+</div>
+
+<!-- GAPS -->
+<div id="gaps" class="sec-head anim" style="--i:24">Gaps &amp; Roadmap</div>
+<div class="grid-3 anim" style="--i:25">
+  <div class="ve-card feat" style="border-left-color:var(--amber)">
+    <div class="ve-card__label" style="color:var(--amber)">In Progress</div>
+    <h3>Softcut/Zig Sampler</h3>
+    <p>Config and pitch transposition defined. Needs full integration into sequencer voice dispatch and seamstress/norns entrypoints.</p>
+    <span class="tag tag--partial">Partial</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--slate)">
+    <div class="ve-card__label" style="color:var(--slate)">Specced</div>
+    <h3>Remote API</h3>
+    <p>HTTP/WebSocket/OSC control surface. Grid state inspection and manipulation. Spec written, code stubbed in lib/remote/.</p>
+    <span class="tag tag--planned">Planned</span>
+  </div>
+  <div class="ve-card feat" style="border-left-color:var(--slate)">
+    <div class="ve-card__label" style="color:var(--slate)">Reference Only</div>
+    <h3>SuperCollider Voice</h3>
+    <p>Example SC synth in spec. Not auto-integrated as a voice backend. Would need a voice adapter similar to midi.lua.</p>
+    <span class="tag tag--planned">Planned</span>
+  </div>
+</div>
+
+<div style="padding:40px 0 20px;text-align:center;font-size:11px;color:var(--text-dim)">
+  re.kriate Feature Map — Generated 2026-03-31 — Gas Town / Mayor
+</div>
+
+</div><!-- /main -->
+</div><!-- /wrap -->
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    look: 'classic',
+    flowchart: { curve: 'basis', padding: 16 },
+    themeVariables: {
+      primaryColor: isDark ? '#162436' : '#e0f2fe',
+      primaryBorderColor: isDark ? '#2dd4bf' : '#0d9488',
+      primaryTextColor: isDark ? '#c8dae8' : '#1a2d42',
+      secondaryColor: isDark ? '#1a2a0a' : '#ecfdf5',
+      secondaryBorderColor: isDark ? '#4ade80' : '#15803d',
+      secondaryTextColor: isDark ? '#c8dae8' : '#1a2d42',
+      tertiaryColor: isDark ? '#2a1f0a' : '#fef3c7',
+      tertiaryBorderColor: isDark ? '#f59e0b' : '#b45309',
+      tertiaryTextColor: isDark ? '#c8dae8' : '#1a2d42',
+      lineColor: isDark ? '#4a6a85' : '#94a3b8',
+      fontSize: '14px',
+      fontFamily: "'DM Sans', system-ui, sans-serif",
+    }
+  });
+
+  // Zoom controls
+  let currentZoom = 1;
+  const container = document.getElementById('mermaid-container');
+
+  window.zoomDiagram = function(factor) {
+    currentZoom *= factor;
+    currentZoom = Math.max(0.3, Math.min(3, currentZoom));
+    container.style.transform = `scale(${currentZoom})`;
+    container.style.transformOrigin = '0 0';
+  };
+  window.resetZoom = function() {
+    currentZoom = 1;
+    container.style.transform = '';
+  };
+
+  container.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      zoomDiagram(e.deltaY < 0 ? 1.1 : 0.9);
+    }
+  }, { passive: false });
+
+  // Drag to pan
+  let isDragging = false, startX, startY, scrollLeft, scrollTop;
+  container.addEventListener('mousedown', (e) => {
+    if (currentZoom <= 1) return;
+    isDragging = true;
+    container.classList.add('grabbing');
+    startX = e.pageX - container.offsetLeft;
+    startY = e.pageY - container.offsetTop;
+    scrollLeft = container.parentElement.scrollLeft;
+    scrollTop = container.parentElement.scrollTop;
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    container.parentElement.scrollLeft = scrollLeft - (e.pageX - container.offsetLeft - startX);
+    container.parentElement.scrollTop = scrollTop - (e.pageY - container.offsetTop - startY);
+  });
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+    container.classList.remove('grabbing');
+  });
+
+  // TOC active state
+  const tocLinks = document.querySelectorAll('.toc a');
+  const sections = Array.from(tocLinks).map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        tocLinks.forEach(a => a.classList.remove('active'));
+        const active = document.querySelector(`.toc a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
