@@ -70,7 +70,7 @@ function M.redraw(ctx)
     elseif page == "alt_track" then
       M.draw_alt_track_page(ctx, g)
     elseif page == "scale" then
-      -- scale page: placeholder (rows 1-7 blank, nav still draws)
+      M.draw_scale_page(ctx, g)
     else
       -- All other pages (including extended: ratchet, alt_note, glide) use value display
       M.draw_value_page(ctx, g, page)
@@ -317,6 +317,54 @@ function M.draw_loop_page(ctx, g)
   end
 end
 
+-- Scale page: root note selection, scale type selection, scale visualization
+-- Row 1: x=1-12 chromatic note class (C=1, C#=2, ..., B=12)
+-- Row 2: x=1-10 octave 0-9
+-- Row 3: x=1-7 scale types 1-7
+-- Row 4: x=1-7 scale types 8-14
+-- Row 5: x=1-12 scale note visualization (which chromatic notes are in scale)
+function M.draw_scale_page(ctx, g)
+  local root = ctx.root_note or 60
+  local pitch_class = root % 12  -- 0-11
+  local octave = math.floor(root / 12)  -- 0-10
+  local scale_idx = ctx.scale_type or 1
+
+  -- Row 1: chromatic note selection (x=1-12)
+  for x = 1, 12 do
+    local selected = (x - 1) == pitch_class
+    g:led(x, 1, selected and 15 or 3)
+  end
+
+  -- Row 2: octave selection (x=1-10)
+  for x = 1, 10 do
+    local selected = (x - 1) == octave
+    g:led(x, 2, selected and 15 or 3)
+  end
+
+  -- Row 3: scale types 1-7
+  for x = 1, 7 do
+    local selected = x == scale_idx
+    g:led(x, 3, selected and 15 or 3)
+  end
+
+  -- Row 4: scale types 8-14
+  for x = 1, 7 do
+    local selected = (x + 7) == scale_idx
+    g:led(x, 4, selected and 15 or 3)
+  end
+
+  -- Row 5: scale note visualization
+  if ctx.scale_notes and #ctx.scale_notes > 0 then
+    local in_scale = {}
+    for _, note in ipairs(ctx.scale_notes) do
+      in_scale[note % 12] = true
+    end
+    for x = 1, 12 do
+      g:led(x, 5, in_scale[x - 1] and 8 or 1)
+    end
+  end
+end
+
 -- Navigation row
 function M.draw_nav(ctx, g)
   local y = 8
@@ -465,6 +513,12 @@ function M.grid_key(ctx, x, y, z)
     return
   end
 
+  -- scale page
+  if ctx.active_page == "scale" then
+    M.scale_key(ctx, x, y)
+    return
+  end
+
   local page = ctx.active_page
 
   -- loop editing mode
@@ -571,6 +625,41 @@ function M.alt_track_key(ctx, x, y)
   if x == 16 then
     track.muted = not track.muted
     ctx.active_track = y
+  end
+end
+
+-- Scale page key: set root note or scale type
+function M.scale_key(ctx, x, y)
+  local root = ctx.root_note or 60
+
+  if y == 1 and x >= 1 and x <= 12 then
+    -- Set pitch class, keep octave
+    local octave = math.floor(root / 12)
+    local new_root = octave * 12 + (x - 1)
+    ctx.root_note = math.min(127, new_root)
+    if ctx.events then
+      ctx.events:emit("scale:root", {root_note = ctx.root_note})
+    end
+  elseif y == 2 and x >= 1 and x <= 10 then
+    -- Set octave, keep pitch class
+    local pc = root % 12
+    local new_root = (x - 1) * 12 + pc
+    ctx.root_note = math.min(127, new_root)
+    if ctx.events then
+      ctx.events:emit("scale:root", {root_note = ctx.root_note})
+    end
+  elseif y == 3 and x >= 1 and x <= 7 then
+    -- Scale types 1-7
+    ctx.scale_type = x
+    if ctx.events then
+      ctx.events:emit("scale:type", {scale_type = ctx.scale_type})
+    end
+  elseif y == 4 and x >= 1 and x <= 7 then
+    -- Scale types 8-14
+    ctx.scale_type = x + 7
+    if ctx.events then
+      ctx.events:emit("scale:type", {scale_type = ctx.scale_type})
+    end
   end
 end
 

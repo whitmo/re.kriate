@@ -278,6 +278,14 @@ function M.init(config)
   -- build initial scale
   M.rebuild_scale(ctx)
 
+  -- sync grid scale changes to params
+  ctx.events:on("scale:root", function(data)
+    params:set("root_note", data.root_note)
+  end)
+  ctx.events:on("scale:type", function(data)
+    params:set("scale_type", data.scale_type)
+  end)
+
   -- grid (pluggable: config.grid_provider selects backend)
   ctx.g = grid_provider.connect(config.grid_provider, config.grid_opts)
   ctx.g.key = log.wrap(function(x, y, z)
@@ -358,7 +366,10 @@ end
 
 function M.rebuild_scale(ctx)
   local root = params:get("root_note")
-  local scale_type = SCALE_NAMES[params:get("scale_type")]
+  local scale_idx = params:get("scale_type")
+  local scale_type = SCALE_NAMES[scale_idx]
+  ctx.root_note = root
+  ctx.scale_type = scale_idx
   local notes = scale_mod.build_scale(root, scale_type)
   if notes then ctx.scale_notes = notes end
 end
