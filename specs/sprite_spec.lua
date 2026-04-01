@@ -96,13 +96,13 @@ describe("sprite voice", function()
     it("spawns a main sprite event from kria vals", function()
       local sv = sprite.new(1)
       local vals = {note = 3, octave = 5, alt_note = 2, velocity = 6}
-      sv:play(vals, 0.5)
+      sv:play(vals, 0.5, {step = 4, loop_len = 16})
 
       -- Main sprite is first event
       local e = sv.active_events[1]
       assert.are.equal(3, e.shape)
-      -- X from effective degree: ((note-1)+(alt_note-1))%7+1 = ((3-1)+(2-1))%7+1 = 4
-      assert.are.equal(sprite.X_MAP[4], e.x)
+      -- X from step position: step 4 of 16 across 256px
+      assert.are.equal(sprite.step_to_x(4, 16), e.x)
       assert.are.equal(sprite.Y_MAP[5], e.y)
       assert.are.equal(sprite.SIZE_MAP[6], e.size)
       assert.are.equal(0.5, e.duration)
@@ -141,33 +141,59 @@ describe("sprite voice", function()
       assert.are.equal(4, #sv.active_events)
     end)
 
-    it("distributes sprites spatially when note values differ", function()
+    it("distributes sprites spatially across steps", function()
       local sv = sprite.new(1)
-      sv:play({note = 1, octave = 4, alt_note = 1, velocity = 4}, 1)
-      sv:play({note = 3, octave = 4, alt_note = 1, velocity = 4}, 1)
-      sv:play({note = 5, octave = 4, alt_note = 1, velocity = 4}, 1)
+      sv:play({note = 1, octave = 4, alt_note = 1, velocity = 4}, 1, {step = 1, loop_len = 16})
+      sv:play({note = 3, octave = 4, alt_note = 1, velocity = 4}, 1, {step = 8, loop_len = 16})
+      sv:play({note = 5, octave = 4, alt_note = 1, velocity = 4}, 1, {step = 16, loop_len = 16})
 
-      local e1 = sv.active_events[1]  -- note=1, alt=1 -> degree 1
-      local e2 = sv.active_events[3]  -- note=3, alt=1 -> degree 3
-      local e3 = sv.active_events[5]  -- note=5, alt=1 -> degree 5
+      local e1 = sv.active_events[1]  -- step 1
+      local e2 = sv.active_events[3]  -- step 8
+      local e3 = sv.active_events[5]  -- step 16
 
-      -- Different note values must produce different X positions
+      -- Different steps must produce different X positions
       assert.are_not.equal(e1.x, e2.x)
       assert.are_not.equal(e2.x, e3.x)
       assert.are_not.equal(e1.x, e3.x)
 
-      -- Verify they match expected positions via effective degree
-      assert.are.equal(sprite.X_MAP[1], e1.x)
-      assert.are.equal(sprite.X_MAP[3], e2.x)
-      assert.are.equal(sprite.X_MAP[5], e3.x)
+      -- Verify they match expected step-based positions
+      assert.are.equal(sprite.step_to_x(1, 16), e1.x)
+      assert.are.equal(sprite.step_to_x(8, 16), e2.x)
+      assert.are.equal(sprite.step_to_x(16, 16), e3.x)
+
+      -- Step 1 should be near left, step 16 near right
+      assert.is_true(e1.x < 32)
+      assert.is_true(e3.x > 224)
     end)
 
-    it("combines note and alt_note for X position (mirrors audio path)", function()
+    it("falls back to effective degree for X when no step info", function()
       local sv = sprite.new(1)
       -- note=3, alt_note=4 -> effective = ((3-1)+(4-1))%7+1 = 6
       sv:play({note = 3, octave = 4, alt_note = 4, velocity = 4}, 1)
       local e = sv.active_events[1]
       assert.are.equal(sprite.X_MAP[6], e.x)
+    end)
+
+    it("uses step position for X when step info provided", function()
+      local sv = sprite.new(1)
+      sv:play({note = 3, octave = 4, alt_note = 4, velocity = 4}, 1, {step = 10, loop_len = 16})
+      local e = sv.active_events[1]
+      assert.are.equal(sprite.step_to_x(10, 16), e.x)
+      -- Step 10 of 16 should be past center
+      assert.is_true(e.x > 128)
+    end)
+
+    it("spans full display width across 16 steps", function()
+      local sv = sprite.new(1)
+      sv:play({note = 1, octave = 4, alt_note = 4, velocity = 4}, 1, {step = 1, loop_len = 16})
+      sv:play({note = 1, octave = 4, alt_note = 4, velocity = 4}, 1, {step = 16, loop_len = 16})
+      local e_first = sv.active_events[1]
+      local e_last = sv.active_events[3]  -- skip echo at [2]
+      -- First step near left edge, last step near right edge
+      assert.is_true(e_first.x < 20)
+      assert.is_true(e_last.x > 236)
+      -- Total span should cover most of the 256px width
+      assert.is_true(e_last.x - e_first.x > 200)
     end)
 
     it("stores track_num on events", function()
@@ -424,6 +450,42 @@ describe("sprite voice", function()
         assert.is_not_nil(sprite.TRACK_COLORS[t])
         assert.are.equal(4, #sprite.TRACK_COLORS[t])
       end
+    end)
+  end)
+
+  describe("step_to_x", function()
+    it("maps step 1 of 16 near left edge", function()
+      local x = sprite.step_to_x(1, 16)
+      assert.is_true(x >= 0 and x < 20)
+    end)
+
+    it("maps step 16 of 16 near right edge", function()
+      local x = sprite.step_to_x(16, 16)
+      assert.is_true(x > 236 and x <= 256)
+    end)
+
+    it("maps step 8 of 16 near center", function()
+      local x = sprite.step_to_x(8, 16)
+      assert.is_true(x > 100 and x < 140)
+    end)
+
+    it("increases monotonically with step", function()
+      for s = 2, 16 do
+        assert.is_true(sprite.step_to_x(s, 16) > sprite.step_to_x(s - 1, 16))
+      end
+    end)
+
+    it("handles short loops", function()
+      -- 4-step loop should still span width
+      local x1 = sprite.step_to_x(1, 4)
+      local x4 = sprite.step_to_x(4, 4)
+      assert.is_true(x4 - x1 > 150)
+    end)
+
+    it("returns center for invalid input", function()
+      assert.are.equal(128, sprite.step_to_x(nil, 16))
+      assert.are.equal(128, sprite.step_to_x(1, nil))
+      assert.are.equal(128, sprite.step_to_x(1, 0))
     end)
   end)
 end)

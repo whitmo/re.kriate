@@ -177,7 +177,7 @@ function M.step_track(ctx, track_num)
 
     -- if muted, skip audio but still fire ghost sprite (mute takes precedence over probability)
     if track.muted then
-      M.play_sprite(ctx, track_num, vals, duration, {muted = true})
+      M.play_sprite(ctx, track_num, vals, duration, {muted = true, step = trig_param.pos, loop_len = trig_param.loop_end})
       ctx.grid_dirty = true
       return
     end
@@ -229,7 +229,7 @@ function M.step_track(ctx, track_num)
     end
 
     -- sprite voice: fire with raw kria vals (additive, alongside audio)
-    M.play_sprite(ctx, track_num, vals, duration)
+    M.play_sprite(ctx, track_num, vals, duration, {step = trig_param.pos, loop_len = trig_param.loop_end})
   elseif track.muted then
     -- muted track with no trigger: just mark grid dirty
     ctx.grid_dirty = true
