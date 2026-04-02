@@ -27,6 +27,7 @@ end
 function M.key(ctx, char, modifiers, is_repeat, state)
   if state ~= 1 then return end
   if is_repeat then return end
+  if type(char) ~= "string" then return end
 
   if char == " " then
     if ctx.playing then
