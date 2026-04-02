@@ -21,12 +21,12 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 -- Nav row (row 8) layout:
 -- x=1-4: track select
--- x=5: (blank)
+-- x=5: KEY 1 — time modifier (hold, Ansible KEY 1)
 -- x=6: trigger page (press again: ratchet)
 -- x=7: note page (press again: alt_note)
 -- x=8: octave page (press again: glide)
 -- x=9: cycles duration → velocity → probability
--- x=10: (blank)
+-- x=10: KEY 2 — config/alt-track page (press, Ansible KEY 2)
 -- x=11: loop modifier (hold)
 -- x=12: pattern mode (hold)
 -- x=13: mute toggle
@@ -39,6 +39,8 @@ local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration
 local NAV_PAGE_CYCLE_9 = {"duration", "velocity", "probability"}
 -- Quick lookup: which pages belong to the x=9 cycle group
 local NAV_PAGE_CYCLE_9_SET = {duration = true, velocity = true, probability = true}
+local NAV_KEY1 = 5    -- Ansible KEY 1: time modifier (hold)
+local NAV_KEY2 = 10   -- Ansible KEY 2: config/alt-track (press)
 local NAV_LOOP = 11
 local NAV_PATTERN = 12
 local NAV_MUTE = 13
@@ -375,7 +377,8 @@ function M.draw_nav(ctx, g)
   for i = 1, 4 do
     g:led(i, y, i == ctx.active_track and 12 or 3)
   end
-  -- x=5: blank (no LED)
+  -- x=5: KEY 1 (time modifier)
+  g:led(NAV_KEY1, y, ctx.time_held and 12 or 3)
   -- page select x=6-9 (highlight correct button even when on extended page)
   local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
   for x = 6, 8 do
@@ -383,7 +386,9 @@ function M.draw_nav(ctx, g)
   end
   -- x=9: lit if current page is in the cycle group (duration/velocity/probability)
   g:led(9, y, NAV_PAGE_CYCLE_9_SET[ctx.active_page] and 12 or 3)
-  -- x=10: blank (no LED)
+  -- x=10: KEY 2 (config/alt-track)
+  local config_active = ctx.active_page == "alt_track" or ctx.active_page == "meta_pattern"
+  g:led(NAV_KEY2, y, config_active and 12 or 3)
   -- modifiers (x=11-13)
   g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
   g:led(NAV_PATTERN, y, ctx.pattern_held and 12 or 3)
@@ -411,6 +416,18 @@ function M.key(ctx, x, y, z)
 end
 
 function M.nav_key(ctx, x, z)
+  -- KEY 1: time modifier hold (x=5)
+  if x == NAV_KEY1 then
+    ctx.time_held = (z == 1)
+  end
+  -- KEY 2: config/alt-track (x=10, press only)
+  if x == NAV_KEY2 and z == 1 then
+    local old_page = ctx.active_page
+    ctx.active_page = "alt_track"
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
+  end
   -- track select x=1-4 (select on press)
   if x >= 1 and x <= 4 and z == 1 then
     ctx.active_track = x

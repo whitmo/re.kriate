@@ -545,6 +545,38 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 13, 8), 12)
     end)
 
+    it("highlights KEY 1 when time_held (x=5)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.time_held = true
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 5, 8), 12)
+    end)
+
+    it("dims KEY 1 when not time_held (x=5)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.time_held = false
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 5, 8), 3)
+    end)
+
+    it("highlights KEY 2 when on alt_track page (x=10)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "alt_track"
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 10, 8), 12)
+    end)
+
+    it("dims KEY 2 when on other pages (x=10)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "trigger"
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 10, 8), 3)
+    end)
+
     it("highlights meta key when on alt_track page (x=15)", function()
       local ctx = make_ctx()
       local g = spy_grid()
@@ -693,6 +725,33 @@ describe("grid_ui", function()
       assert.is_true(ctx.tracks[1].muted)
       grid_ui.nav_key(ctx, 13, 1)
       assert.is_false(ctx.tracks[1].muted)
+    end)
+
+    it("KEY 1 (x=5) sets time_held on press", function()
+      local ctx = make_ctx()
+      grid_ui.nav_key(ctx, 5, 1)
+      assert.is_true(ctx.time_held)
+    end)
+
+    it("KEY 1 (x=5) clears time_held on release", function()
+      local ctx = make_ctx()
+      ctx.time_held = true
+      grid_ui.nav_key(ctx, 5, 0)
+      assert.is_false(ctx.time_held)
+    end)
+
+    it("KEY 2 (x=10) switches to alt_track page on press", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      grid_ui.nav_key(ctx, 10, 1)
+      assert.are.equal("alt_track", ctx.active_page)
+    end)
+
+    it("KEY 2 (x=10) does nothing on release", function()
+      local ctx = make_ctx()
+      ctx.active_page = "note"
+      grid_ui.nav_key(ctx, 10, 0)
+      assert.are.equal("note", ctx.active_page)
     end)
 
     it("x=16 is blank (no play/stop)", function()
