@@ -260,8 +260,8 @@ describe("events integration", function()
       -- Press KEY 1 (x=5): time modifier, no page change
       grid_ui.key(ctx, 5, 8, 1)
       assert.is_nil(received)
-      -- Press blank position x=16
-      grid_ui.key(ctx, 16, 8, 1)
+      -- Press blank position x=14
+      grid_ui.key(ctx, 14, 8, 1)
       assert.is_nil(received)
     end)
 
