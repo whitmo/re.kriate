@@ -326,14 +326,14 @@ describe("scale grid page", function()
       assert.are.equal(15, led_at(g, 3, 4))
       assert.are.equal(3, led_at(g, 1, 4))
 
-      -- Row 8 nav: scale button (x=14) highlighted
-      assert.are.equal(12, led_at(g, 14, 8))
+      -- Row 8 nav: scale button (x=15) highlighted
+      assert.are.equal(12, led_at(g, 15, 8))
     end)
 
-    it("nav key x=14 switches to scale page", function()
+    it("nav key x=15 switches to scale page", function()
       local ctx = make_ctx()
       ctx.active_page = "trigger"
-      grid_ui.key(ctx, 14, 8, 1) -- nav row press on scale button
+      grid_ui.key(ctx, 15, 8, 1) -- nav row press on scale button
       assert.are.equal("scale", ctx.active_page)
     end)
   end)

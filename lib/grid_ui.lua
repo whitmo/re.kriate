@@ -30,9 +30,9 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 -- x=11: loop modifier (hold)
 -- x=12: pattern mode (hold)
 -- x=13: mute toggle
--- x=14: scale
--- x=15: meta (alt-track settings; double-press: meta-pattern sequencer)
--- x=16: (available)
+-- x=14: (blank separator)
+-- x=15: scale
+-- x=16: meta (alt-track settings; double-press: meta-pattern sequencer)
 
 local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration"}
 -- Page group for x=9: pressing cycles through these pages
@@ -44,8 +44,8 @@ local NAV_KEY2 = 10   -- Ansible KEY 2: config/alt-track (press)
 local NAV_LOOP = 11
 local NAV_PATTERN = 12
 local NAV_MUTE = 13
-local NAV_SCALE = 14
-local NAV_META = 15
+local NAV_SCALE = 15
+local NAV_META = 16
 
 local ALT_DIRECTIONS = {"forward", "reverse", "pendulum", "drunk", "random"}
 local ALT_DIVISIONS = {1,2,3,4,5,6,7}
