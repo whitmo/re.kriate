@@ -366,6 +366,38 @@ describe("keyboard", function()
 
   end)
 
+  describe("ansible key emulation", function()
+
+    it("f1 toggles time_held on", function()
+      local ctx = make_ctx()
+      ctx.time_held = false
+      keyboard.key(ctx, "f1", {}, false, 1)
+      assert.is_true(ctx.time_held)
+    end)
+
+    it("f1 toggles time_held off", function()
+      local ctx = make_ctx()
+      ctx.time_held = true
+      keyboard.key(ctx, "f1", {}, false, 1)
+      assert.is_false(ctx.time_held)
+    end)
+
+    it("f2 switches to alt_track page", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      keyboard.key(ctx, "f2", {}, false, 1)
+      assert.are.equal("alt_track", ctx.active_page)
+    end)
+
+    it("f2 from any page switches to alt_track", function()
+      local ctx = make_ctx()
+      ctx.active_page = "note"
+      keyboard.key(ctx, "f2", {}, false, 1)
+      assert.are.equal("alt_track", ctx.active_page)
+    end)
+
+  end)
+
   describe("direction cycling", function()
 
     it("d cycles direction from forward to reverse", function()

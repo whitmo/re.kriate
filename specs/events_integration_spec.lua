@@ -257,12 +257,24 @@ describe("events integration", function()
       ctx.events:on("page:select", function(data)
         received = data
       end)
-      -- Press blank position x=5 (no function assigned)
+      -- Press KEY 1 (x=5): time modifier, no page change
       grid_ui.key(ctx, 5, 8, 1)
       assert.is_nil(received)
-      -- Press blank position x=10
-      grid_ui.key(ctx, 10, 8, 1)
+      -- Press blank position x=16
+      grid_ui.key(ctx, 16, 8, 1)
       assert.is_nil(received)
+    end)
+
+    it("KEY 2 (x=10) emits page:select when switching to alt_track", function()
+      local ctx = make_ctx({active_page = "duration"})
+      local received = nil
+      ctx.events:on("page:select", function(data)
+        received = data
+      end)
+      grid_ui.key(ctx, 10, 8, 1)
+      assert.is_not_nil(received)
+      assert.are.equal("alt_track", received.page)
+      assert.are.equal("duration", received.prev)
     end)
 
     it("works without events on ctx", function()

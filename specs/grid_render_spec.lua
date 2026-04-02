@@ -649,6 +649,15 @@ describe("grid_render", function()
       assert.are.same({x = 12, y = 8, z = 1}, grid._keys[1])
     end)
 
+    it("KEY 1 button (5,8) toggles on press", function()
+      local grid = with_key_log(make_mock_grid())
+      local px, py = grid_render.grid_to_pixel(5, 8)
+      grid_render.handle_click(grid, px, py, 1, 1) -- toggle on
+      assert.are.same({x = 5, y = 8, z = 1}, grid._keys[1])
+      grid_render.handle_click(grid, px, py, 1, 1) -- toggle off
+      assert.are.same({x = 5, y = 8, z = 0}, grid._keys[2])
+    end)
+
     it("nav latch works with right-click too", function()
       local grid = with_key_log(make_mock_grid())
       local px, py = grid_render.grid_to_pixel(11, 8)

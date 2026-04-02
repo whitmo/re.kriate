@@ -93,6 +93,12 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     if not ctx.loop_held then
       ctx.loop_first_press = nil
     end
+  elseif char == "f1" then
+    -- Ansible KEY 1: toggle time modifier
+    ctx.time_held = not ctx.time_held
+  elseif char == "f2" then
+    -- Ansible KEY 2: config/alt-track page
+    ctx.active_page = "alt_track"
   elseif KEY_PAGE[char] then
     local target = KEY_PAGE[char]
     if ctx.active_page == target and grid_ui.EXTENDED_PAGES[target] then

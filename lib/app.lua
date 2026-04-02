@@ -179,6 +179,7 @@ function M.init(config)
     active_page = "trigger",
     playing = false,
     loop_held = false,
+    time_held = false,
     loop_first_press = nil,
     grid_dirty = true,
     scale_notes = {},
