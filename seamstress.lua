@@ -57,6 +57,43 @@ function init()
     },
   })
 
+  -- Patch params-menu key handler to support page up/down navigation
+  -- and guard against unmapped SDL keycodes that crash params-menu.lua:187
+  -- (seamstress keycodes.lua has no entries for page up/down, so char is nil)
+  local SDL_PAGEUP = 0x4000004B
+  local SDL_PAGEDOWN = 0x4000004E
+  local keycodes = require("keycodes")
+  local orig_screen_dispatch = _seamstress.screen.key
+  _seamstress.screen.key = function(symbol, modifiers_mask, is_repeat, state, window)
+    if window == 2 then
+      if symbol == SDL_PAGEUP and state == 1 then
+        -- Page Up: exit param group (go up to parent level)
+        paramsMenu.key({name = "backspace"}, keycodes.modifier(modifiers_mask), false, 1)
+        return
+      elseif symbol == SDL_PAGEDOWN and state == 1 then
+        -- Page Down: enter param group (drill into current item)
+        paramsMenu.key({name = "return"}, keycodes.modifier(modifiers_mask), false, 1)
+        return
+      elseif keycodes[symbol] == nil then
+        -- Unknown keycode (no entry in keycodes table) — consume to prevent crash
+        return
+      end
+      -- Escape in params edit/map modes: exit group (alt navigation for laptops)
+      -- Only intercept in mEDIT(1)/mMAP(2) where escape has no default action;
+      -- let it pass through for mTEXT/mPSETSAVE/mPSETEDIT where it cancels input
+      local char = keycodes[symbol]
+      if type(char) == "table" and char.name == "escape" and state == 1
+          and (paramsMenu.mode == 1 or paramsMenu.mode == 2) then
+        paramsMenu.key({name = "backspace"}, keycodes.modifier(modifiers_mask), false, 1)
+        return
+      end
+    elseif window == 1 and keycodes[symbol] == nil then
+      -- Unknown keycode in main window — consume (keyboard.lua also guards)
+      return
+    end
+    return orig_screen_dispatch(symbol, modifiers_mask, is_repeat, state, window)
+  end
+
   -- Keyboard input — track modifiers for grid gestures before forwarding
   screen.key = log.wrap(function(char, modifiers, is_repeat, state)
     -- Always update modifier state (even on key release) for hold/lock gestures

@@ -33,6 +33,46 @@ local function restore_globals(saved)
   end
 end
 
+-- Minimal keycodes mock matching seamstress core/keycodes.lua behavior
+local function make_keycodes_mock()
+  local kc = {}
+  kc.__index = function(t, index)
+    if t == kc then
+      if type(index) == "number" then
+        if index >= 0 and index <= 255 then
+          return string.char(index)
+        end
+      end
+      return nil
+    end
+  end
+  setmetatable(kc, kc)
+  kc[27] = {name = "escape"}
+  kc[8] = {name = "backspace"}
+  kc[13] = {name = "return"}
+  kc[0x40000052] = {name = "up"}
+  kc[0x40000051] = {name = "down"}
+  kc.modifier = function() return {} end
+  return kc
+end
+
+-- Set up _seamstress and paramsMenu globals needed by the screen.key patch
+local function setup_seamstress_globals()
+  if not rawget(_G, "_seamstress") then
+    rawset(_G, "_seamstress", {})
+  end
+  _seamstress.screen = _seamstress.screen or {}
+  _seamstress.screen.key = _seamstress.screen.key or function() end
+
+  if not rawget(_G, "paramsMenu") then
+    rawset(_G, "paramsMenu", {
+      key = function() end,
+      redraw = function() end,
+      mode = 1, -- mEDIT
+    })
+  end
+end
+
 describe("seamstress entrypoint keyboard persistence wiring", function()
   local saved_modules
   local saved_globals
@@ -53,6 +93,7 @@ describe("seamstress entrypoint keyboard persistence wiring", function()
       "lib/seamstress/keyboard",
       "lib/seamstress/help_overlay",
       "musicutil",
+      "keycodes",
     })
     saved_globals = capture_globals({
       "clock",
@@ -64,7 +105,12 @@ describe("seamstress entrypoint keyboard persistence wiring", function()
       "init",
       "redraw",
       "cleanup",
+      "_seamstress",
+      "paramsMenu",
     })
+
+    package.loaded["keycodes"] = make_keycodes_mock()
+    setup_seamstress_globals()
 
     save_calls = {}
     load_calls = {}
@@ -268,6 +314,7 @@ describe("seamstress entrypoint hardware mirroring wiring", function()
       "lib/seamstress/keyboard",
       "lib/seamstress/grid_render",
       "lib/seamstress/help_overlay",
+      "keycodes",
     })
     saved_globals = capture_globals({
       "init",
@@ -276,7 +323,12 @@ describe("seamstress entrypoint hardware mirroring wiring", function()
       "midi",
       "screen",
       "metro",
+      "_seamstress",
+      "paramsMenu",
     })
+
+    package.loaded["keycodes"] = make_keycodes_mock()
+    setup_seamstress_globals()
 
     captured_app_config = nil
     captured_ctx = nil
@@ -436,5 +488,218 @@ describe("seamstress entrypoint hardware mirroring wiring", function()
     assert.are.equal(captured_ctx, app_cleanup_ctx)
     assert.is_true(captured_ctx.screen_metro._stopped)
     assert.is_true(log_closed)
+  end)
+end)
+
+describe("seamstress params-menu key navigation patch", function()
+  local saved_modules
+  local saved_globals
+  local params_key_calls
+
+  before_each(function()
+    saved_modules = capture_modules({
+      "lib/app",
+      "lib/log",
+      "lib/seamstress/keyboard",
+      "musicutil",
+      "keycodes",
+    })
+    saved_globals = capture_globals({
+      "clock",
+      "params",
+      "grid",
+      "metro",
+      "screen",
+      "midi",
+      "init",
+      "redraw",
+      "cleanup",
+      "_seamstress",
+      "paramsMenu",
+    })
+
+    params_key_calls = {}
+
+    package.loaded["keycodes"] = make_keycodes_mock()
+
+    rawset(_G, "_seamstress", {
+      screen = {
+        key = function() end,
+      },
+    })
+
+    rawset(_G, "paramsMenu", {
+      key = function(char, modifiers, is_repeat, state)
+        table.insert(params_key_calls, {
+          char = char,
+          modifiers = modifiers,
+          is_repeat = is_repeat,
+          state = state,
+        })
+      end,
+      redraw = function() end,
+      mode = 1, -- mEDIT
+    })
+
+    rawset(_G, "clock", {
+      get_beats = function() return 0 end,
+      run = function() return 1 end,
+      cancel = function() end,
+      sync = function() end,
+    })
+
+    rawset(_G, "params", {
+      add_separator = function() end,
+      add_group = function() end,
+      add_number = function() end,
+      add_option = function() end,
+      add_text = function() end,
+      set_action = function() end,
+      get = function() return 1 end,
+      set = function() end,
+    })
+
+    rawset(_G, "grid", {
+      connect = function()
+        return {
+          key = nil,
+          led = function() end,
+          refresh = function() end,
+          all = function() end,
+          cleanup = function() end,
+        }
+      end,
+    })
+
+    rawset(_G, "metro", {
+      init = function()
+        return {
+          time = 0,
+          event = nil,
+          start = function() end,
+          stop = function() end,
+        }
+      end,
+    })
+
+    rawset(_G, "screen", {
+      clear = function() end,
+      color = function() end,
+      move = function() end,
+      rect_fill = function() end,
+      refresh = function() end,
+    })
+
+    rawset(_G, "midi", {
+      connect = function()
+        return {
+          note_on = function() end,
+          note_off = function() end,
+          cc = function() end,
+        }
+      end,
+    })
+
+    package.loaded["lib/log"] = {
+      session_start = function() end,
+      close = function() end,
+      info = function() end,
+      warn = function() end,
+      error = function() end,
+      write = function() end,
+      wrap = function(fn) return fn end,
+    }
+
+    package.loaded["lib/app"] = {
+      init = function()
+        return {
+          grid_dirty = false,
+          g = { cleanup = function() end },
+        }
+      end,
+      cleanup = function() end,
+      save_pattern_bank = function() return true, "ok" end,
+      load_pattern_bank = function() return true end,
+      list_pattern_banks = function() return {} end,
+      delete_pattern_bank = function() return true end,
+    }
+
+    package.loaded["lib/seamstress/keyboard"] = { key = function() end }
+
+    dofile("seamstress.lua")
+    init()
+  end)
+
+  after_each(function()
+    restore_modules(saved_modules)
+    restore_globals(saved_globals)
+  end)
+
+  it("page up in params window sends backspace to exit group", function()
+    _seamstress.screen.key(0x4000004B, 0, false, 1, 2)
+
+    assert.are.equal(1, #params_key_calls)
+    assert.are.equal("backspace", params_key_calls[1].char.name)
+    assert.are.equal(1, params_key_calls[1].state)
+  end)
+
+  it("page down in params window sends return to enter group", function()
+    _seamstress.screen.key(0x4000004E, 0, false, 1, 2)
+
+    assert.are.equal(1, #params_key_calls)
+    assert.are.equal("return", params_key_calls[1].char.name)
+    assert.are.equal(1, params_key_calls[1].state)
+  end)
+
+  it("page up/down key release is consumed (no crash)", function()
+    _seamstress.screen.key(0x4000004B, 0, false, 0, 2)
+    _seamstress.screen.key(0x4000004E, 0, false, 0, 2)
+
+    assert.are.equal(0, #params_key_calls)
+  end)
+
+  it("unknown keycodes in params window are consumed", function()
+    -- Home key (0x4000004A) — not in keycodes table
+    _seamstress.screen.key(0x4000004A, 0, false, 1, 2)
+
+    assert.are.equal(0, #params_key_calls)
+  end)
+
+  it("escape in mEDIT mode sends backspace to exit group", function()
+    paramsMenu.mode = 1  -- mEDIT
+    _seamstress.screen.key(27, 0, false, 1, 2)
+
+    assert.are.equal(1, #params_key_calls)
+    assert.are.equal("backspace", params_key_calls[1].char.name)
+  end)
+
+  it("escape in mMAP mode sends backspace to exit group", function()
+    paramsMenu.mode = 2  -- mMAP
+    _seamstress.screen.key(27, 0, false, 1, 2)
+
+    assert.are.equal(1, #params_key_calls)
+    assert.are.equal("backspace", params_key_calls[1].char.name)
+  end)
+
+  it("escape in mTEXT mode passes through (does not intercept)", function()
+    paramsMenu.mode = 4  -- mTEXT
+    _seamstress.screen.key(27, 0, false, 1, 2)
+
+    -- Should pass through to original dispatch (not intercepted)
+    assert.are.equal(0, #params_key_calls)
+  end)
+
+  it("unknown keycodes in main window are consumed", function()
+    _seamstress.screen.key(0x4000004A, 0, false, 1, 1)
+
+    assert.are.equal(0, #params_key_calls)
+  end)
+
+  it("normal keys in params window pass through to original dispatch", function()
+    -- 'a' key (ASCII 97) — passes through to orig_screen_dispatch
+    _seamstress.screen.key(97, 0, false, 1, 2)
+
+    -- Should NOT be intercepted (goes to original dispatch, not paramsMenu.key mock)
+    assert.are.equal(0, #params_key_calls)
   end)
 end)
