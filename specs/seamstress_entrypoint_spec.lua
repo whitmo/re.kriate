@@ -51,6 +51,7 @@ describe("seamstress entrypoint keyboard persistence wiring", function()
       "lib/app",
       "lib/log",
       "lib/seamstress/keyboard",
+      "lib/seamstress/help_overlay",
       "musicutil",
     })
     saved_globals = capture_globals({
@@ -266,6 +267,7 @@ describe("seamstress entrypoint hardware mirroring wiring", function()
       "lib/seamstress/sprite_render",
       "lib/seamstress/keyboard",
       "lib/seamstress/grid_render",
+      "lib/seamstress/help_overlay",
     })
     saved_globals = capture_globals({
       "init",
@@ -376,6 +378,12 @@ describe("seamstress entrypoint hardware mirroring wiring", function()
       release_locked_keys = function() end,
       THEME_ORDER = {"yellow", "red", "orange", "white"},
     }
+    package.loaded["lib/seamstress/help_overlay"] = {
+      draw = function() end,
+      get_sections = function() return {} end,
+      WIDTH = 400,
+      HEIGHT = 380,
+    }
 
     dofile("seamstress.lua")
   end)
@@ -391,6 +399,23 @@ describe("seamstress entrypoint hardware mirroring wiring", function()
     assert.are.equal("simulated", captured_app_config.grid_provider)
     assert.is_table(captured_app_config.grid_opts)
     assert.is_true(captured_app_config.grid_opts.mirror_monome)
+  end)
+
+  it("? key toggles help_visible on ctx", function()
+    init()
+    assert.is_falsy(captured_ctx.help_visible)
+    screen.key("?", {}, false, 1)
+    assert.is_true(captured_ctx.help_visible)
+    screen.key("?", {}, false, 1)
+    assert.is_falsy(captured_ctx.help_visible)
+  end)
+
+  it("escape dismisses help overlay when visible", function()
+    init()
+    screen.key("?", {}, false, 1)
+    assert.is_true(captured_ctx.help_visible)
+    screen.key("escape", {}, false, 1)
+    assert.is_falsy(captured_ctx.help_visible)
   end)
 
   it("logs cleanup completion and stops the screen metro", function()

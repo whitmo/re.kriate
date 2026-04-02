@@ -19,6 +19,7 @@ local sprite_voice = require("lib/voices/sprite")
 local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
 local grid_render = require("lib/seamstress/grid_render")
+local help_overlay = require("lib/seamstress/help_overlay")
 local track_mod = require("lib/track")
 
 local ctx
@@ -62,8 +63,28 @@ function init()
     grid_render.set_modifier("ctrl", modifiers and (modifiers.ctrl or modifiers.super) or false)
     grid_render.set_modifier("shift", modifiers and modifiers.shift or false)
 
-    -- Esc releases all locked grid keys
+    -- Help overlay toggle (? key)
+    if char == "?" and state == 1 and not is_repeat then
+      ctx.help_visible = not ctx.help_visible
+      if screen.set_size then
+        if ctx.help_visible then
+          screen.set_size(help_overlay.WIDTH, help_overlay.HEIGHT)
+        else
+          screen.set_size(grid_render.screen_width(), grid_render.screen_height())
+        end
+      end
+      return
+    end
+
+    -- Esc dismisses help overlay if visible, otherwise releases locked keys
     if char == "escape" and state == 1 then
+      if ctx.help_visible then
+        ctx.help_visible = false
+        if screen.set_size then
+          screen.set_size(grid_render.screen_width(), grid_render.screen_height())
+        end
+        return
+      end
       grid_render.release_locked_keys(ctx.g)
     end
 
@@ -100,6 +121,11 @@ end
 
 function redraw()
   screen.clear()
+  if ctx and ctx.help_visible then
+    help_overlay.draw(screen, help_overlay.WIDTH, help_overlay.HEIGHT)
+    screen.refresh()
+    return
+  end
   -- Black canvas background
   screen.color(0, 0, 0, 255)
   screen.move(1, 1)
