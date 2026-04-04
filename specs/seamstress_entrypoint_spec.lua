@@ -63,6 +63,7 @@ local function setup_seamstress_globals()
   end
   _seamstress.screen = _seamstress.screen or {}
   _seamstress.screen.key = _seamstress.screen.key or function() end
+  _seamstress.clock = _seamstress.clock or { threads = {}, resume = function() end }
 
   if not rawget(_G, "paramsMenu") then
     rawset(_G, "paramsMenu", {
@@ -526,6 +527,10 @@ describe("seamstress params-menu key navigation patch", function()
       screen = {
         key = function() end,
       },
+      clock = {
+        threads = {},
+        resume = function() end,
+      },
     })
 
     rawset(_G, "paramsMenu", {
@@ -701,5 +706,30 @@ describe("seamstress params-menu key navigation patch", function()
 
     -- Should NOT be intercepted (goes to original dispatch, not paramsMenu.key mock)
     assert.are.equal(0, #params_key_calls)
+  end)
+
+  it("backspace in params window is intercepted and sent to paramsMenu.key", function()
+    -- Backspace (keycode 8) — now intercepted directly instead of falling through
+    _seamstress.screen.key(8, 0, false, 1, 2)
+
+    assert.are.equal(1, #params_key_calls)
+    assert.are.equal("backspace", params_key_calls[1].char.name)
+    assert.are.equal(1, params_key_calls[1].state)
+  end)
+
+  it("backspace key release is forwarded to paramsMenu.key", function()
+    _seamstress.screen.key(8, 0, false, 0, 2)
+
+    assert.are.equal(1, #params_key_calls)
+    assert.are.equal("backspace", params_key_calls[1].char.name)
+    assert.are.equal(0, params_key_calls[1].state)
+  end)
+
+  it("backspace with shift modifier is forwarded to paramsMenu.key", function()
+    -- Shift mask = 1 (bit 0)
+    _seamstress.screen.key(8, 1, false, 1, 2)
+
+    assert.are.equal(1, #params_key_calls)
+    assert.are.equal("backspace", params_key_calls[1].char.name)
   end)
 end)
