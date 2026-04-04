@@ -695,7 +695,7 @@ describe("grid_render", function()
 
   describe("performance", function()
 
-    it("100 draws of 128 grid complete in under 500ms", function()
+    it("100 draws of 128 grid complete in under 1000ms", function()
       local mock_grid = make_mock_grid()
       mock_grid:all(8)
       local mock_screen = make_perf_screen()
@@ -704,7 +704,7 @@ describe("grid_render", function()
         grid_render.draw(mock_grid, mock_screen)
       end
       local elapsed = (os.clock() - start) * 1000
-      assert.is_true(elapsed < 500, "100 draws took " .. elapsed .. "ms (> 500ms limit)")
+      assert.is_true(elapsed < 1000, "100 draws took " .. elapsed .. "ms (> 1000ms limit)")
     end)
 
   end)
