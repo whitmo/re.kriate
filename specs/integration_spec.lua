@@ -636,6 +636,7 @@ describe("integration", function()
       ctx.tracks[1].params.trigger.steps[1] = 1
       ctx.tracks[1].params.trigger.pos = 1
       ctx.tracks[1].params.ratchet.steps[1] = 3
+      ctx.tracks[1].params.ratchet.bits[1] = 7  -- 0b111: all 3 sub-gates active
       ctx.tracks[1].params.ratchet.pos = 1
 
       -- Override clock.run to execute synchronously (ratchet uses clock.run+clock.sleep)

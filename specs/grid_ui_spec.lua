@@ -991,67 +991,115 @@ describe("grid_ui", function()
 
     describe("ratchet page (T050)", function()
 
-      it("displays bar graph for ratchet param via draw_value_page", function()
+      it("displays sub-gate layout for ratchet count 3 with all bits active", function()
         local ctx = make_ctx()
         local g = mock_grid()
         ctx.active_track = 1
         ctx.tracks[1].params.ratchet.steps[1] = 3
+        ctx.tracks[1].params.ratchet.bits[1] = 7  -- 0b111: all 3 active
         ctx.tracks[1].params.ratchet.loop_start = 1
         ctx.tracks[1].params.ratchet.loop_end = 16
-        grid_ui.draw_value_page(ctx, g, "ratchet")
-        -- Value 3 at row 5 (8-3=5), brightness 10 in loop
-        assert.are.equal(led_at(g, 1, 5), 10)
-        -- Bar below: rows 6-7 at brightness 3
-        assert.are.equal(led_at(g, 1, 6), 3)
-        assert.are.equal(led_at(g, 1, 7), 3)
-        -- Above value: rows 1-4 should be off
-        for y = 1, 4 do
-          assert.are.equal(led_at(g, 1, y), 0, "row " .. y .. " should be off")
-        end
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- Row 1 (increment): dim marker = 2
+        assert.are.equal(2, led_at(g, 1, 1))
+        -- y=2 (bit 4): out of range (count=3, only bits 0-2) = 0
+        assert.are.equal(0, led_at(g, 1, 2))
+        -- y=3 (bit 3): out of range = 0
+        assert.are.equal(0, led_at(g, 1, 3))
+        -- y=4 (bit 2): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 4))
+        -- y=5 (bit 1): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 5))
+        -- y=6 (bit 0): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 6))
+        -- Row 7 (decrement): dim marker = 2
+        assert.are.equal(2, led_at(g, 1, 7))
       end)
 
-      it("shows playhead brightness on ratchet page", function()
-        local ctx = make_ctx()
-        local g = mock_grid()
-        ctx.playing = true
-        ctx.active_track = 2
-        ctx.tracks[2].params.ratchet.steps[7] = 5
-        ctx.tracks[2].params.ratchet.pos = 7
-        grid_ui.draw_value_page(ctx, g, "ratchet")
-        -- Value 5 at row 3 (8-5=3), playhead -> brightness 15
-        assert.are.equal(led_at(g, 7, 3), 15)
-        -- Bar below playhead: rows 4-7 at brightness 6
-        for y = 4, 7 do
-          assert.are.equal(led_at(g, 7, y), 6, "row " .. y .. " should be playhead bar")
-        end
-      end)
-
-      it("ratchet default value 1 lights only row 7", function()
+      it("shows rest sub-gates dimly within range", function()
         local ctx = make_ctx()
         local g = mock_grid()
         ctx.active_track = 1
-        -- Default ratchet is 1
+        ctx.tracks[1].params.ratchet.steps[1] = 3
+        ctx.tracks[1].params.ratchet.bits[1] = 5  -- 0b101: bits 0,2 on; bit 1 off (rest)
         ctx.tracks[1].params.ratchet.loop_start = 1
         ctx.tracks[1].params.ratchet.loop_end = 16
-        grid_ui.draw_value_page(ctx, g, "ratchet")
-        -- Value 1 at row 7, brightness 10
-        assert.are.equal(led_at(g, 1, 7), 10)
-        -- All rows above off
-        for y = 1, 6 do
-          assert.are.equal(led_at(g, 1, y), 0, "row " .. y .. " should be off for ratchet=1")
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- y=4 (bit 2): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 4))
+        -- y=5 (bit 1): in range, bit OFF (rest) = 5
+        assert.are.equal(5, led_at(g, 1, 5))
+        -- y=6 (bit 0): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 6))
+      end)
+
+      it("shows playhead highlight on ratchet page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.playing = true
+        ctx.active_track = 1
+        ctx.tracks[1].params.ratchet.steps[1] = 2
+        ctx.tracks[1].params.ratchet.bits[1] = 3  -- 0b11: both active
+        ctx.tracks[1].params.ratchet.pos = 1
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 16
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- Playhead: increment row = 6
+        assert.are.equal(6, led_at(g, 1, 1))
+        -- y=5 (bit 1): playhead + in range + on = 15
+        assert.are.equal(15, led_at(g, 1, 5))
+        -- y=6 (bit 0): playhead + in range + on = 15
+        assert.are.equal(15, led_at(g, 1, 6))
+        -- Decrement row = 6
+        assert.are.equal(6, led_at(g, 1, 7))
+      end)
+
+      it("shows default ratchet (count 1) with single sub-gate lit", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 16
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- Default: count=1, bits=1 (0b00001)
+        -- y=6 (bit 0): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 6))
+        -- y=2-5 (bits 1-4): out of range = 0
+        for y = 2, 5 do
+          assert.are.equal(0, led_at(g, 1, y), "row " .. y .. " should be off for ratchet=1")
         end
       end)
 
-      it("redraw dispatches ratchet page correctly", function()
+      it("redraw dispatches ratchet page to draw_ratchet_page", function()
         local ctx = make_ctx()
         ctx.active_page = "ratchet"
         ctx.active_track = 1
         ctx.tracks[1].params.ratchet.steps[2] = 4
+        ctx.tracks[1].params.ratchet.bits[2] = 15  -- 0b1111: all 4 active
         ctx.tracks[1].params.ratchet.loop_start = 1
         ctx.tracks[1].params.ratchet.loop_end = 16
         grid_ui.redraw(ctx)
-        -- Value 4 at row 4 (8-4=4) should be lit
-        assert.are.equal(led_at(ctx.g, 2, 4), 10)
+        -- y=3 (bit 3): in range, on = 12
+        assert.are.equal(12, led_at(ctx.g, 2, 3))
+        -- y=6 (bit 0): in range, on = 12
+        assert.are.equal(12, led_at(ctx.g, 2, 6))
+      end)
+
+      it("dims steps outside loop on ratchet page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        ctx.tracks[1].params.ratchet.steps[1] = 2
+        ctx.tracks[1].params.ratchet.bits[1] = 3
+        ctx.tracks[1].params.ratchet.steps[10] = 2
+        ctx.tracks[1].params.ratchet.bits[10] = 3
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 6
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- Step 1 (in loop): bit on = 12
+        assert.are.equal(12, led_at(g, 1, 5))
+        -- Step 10 (out of loop): bit on = 5 (dimmed)
+        assert.are.equal(5, led_at(g, 10, 5))
       end)
 
     end)
@@ -1198,48 +1246,51 @@ describe("grid_ui", function()
 
   describe("ratchet page display (T048)", function()
 
-    it("displays ratchet values as bar graph when active_page is ratchet", function()
+    it("displays sub-gate layout when active_page is ratchet", function()
       local ctx, g = make_ctx({ active_page = "ratchet" })
-      -- Set ratchet values: step 1 = 3, step 5 = 7
+      -- Set ratchet values: step 1 = 3 (all on), step 5 = 5 (all on)
       ctx.tracks[1].params.ratchet.steps[1] = 3
-      ctx.tracks[1].params.ratchet.steps[5] = 7
+      ctx.tracks[1].params.ratchet.bits[1] = 7  -- 0b111
+      ctx.tracks[1].params.ratchet.steps[5] = 5
+      ctx.tracks[1].params.ratchet.bits[5] = 31  -- 0b11111
 
       grid_ui.redraw(ctx)
 
-      -- Value 3 at step 1: row_val==3 at y = 8-3 = 5, brightness 10 (in loop)
-      assert.are.equal(10, g:get_led(1, 5))
-      -- Value 7 at step 5: row_val==7 at y = 8-7 = 1, brightness 10
-      assert.are.equal(10, g:get_led(5, 1))
-      -- Below the value (bar fill): step 1, row_val 2 at y=6, brightness 3
-      assert.are.equal(3, g:get_led(1, 6))
-      -- Above the value should be 0: step 1, row_val 4 at y=4
-      assert.are.equal(0, g:get_led(1, 4))
+      -- Step 1, count=3: y=4 (bit 2) should be lit, y=3 (bit 3) off
+      assert.are.equal(12, g:get_led(1, 4))
+      assert.are.equal(0, g:get_led(1, 3))
+      -- Step 5, count=5: y=2 (bit 4) should be lit
+      assert.are.equal(12, g:get_led(5, 2))
+      -- Row 1 (increment) = dim marker
+      assert.are.equal(2, g:get_led(1, 1))
     end)
 
     it("shows playhead highlight on ratchet page", function()
       local ctx, g = make_ctx({ active_page = "ratchet", playing = true })
       ctx.tracks[1].params.ratchet.steps[1] = 4
+      ctx.tracks[1].params.ratchet.bits[1] = 15  -- 0b1111: all on
       ctx.tracks[1].params.ratchet.pos = 1
 
       grid_ui.redraw(ctx)
 
-      -- Playhead at step 1: value 4, row_val==4 at y=4, brightness 15
-      assert.are.equal(15, g:get_led(1, 4))
-      -- Below value on playhead: row_val 3 at y=5, brightness 6
-      assert.are.equal(6, g:get_led(1, 5))
+      -- Playhead at step 1: y=3 (bit 3) in range + on + playhead = 15
+      assert.are.equal(15, g:get_led(1, 3))
+      -- y=6 (bit 0): in range + on + playhead = 15
+      assert.are.equal(15, g:get_led(1, 6))
+      -- Row 1 increment: playhead = 6
+      assert.are.equal(6, g:get_led(1, 1))
     end)
 
     it("shows default ratchet values (1) for a fresh track", function()
       local ctx, g = make_ctx({ active_page = "ratchet" })
-      -- Default ratchet value should be 1
 
       grid_ui.redraw(ctx)
 
-      -- Value 1 at step 1: row_val==1 at y=7, brightness 10
-      assert.are.equal(10, g:get_led(1, 7))
-      -- All rows above should be 0 for step 1
-      for y = 1, 6 do
-        assert.are.equal(0, g:get_led(1, y))
+      -- Default: count=1, bits=1. y=6 (bit 0) should be lit
+      assert.are.equal(12, g:get_led(1, 6))
+      -- y=2-5 should be off (out of range)
+      for y = 2, 5 do
+        assert.are.equal(0, g:get_led(1, y), "row " .. y .. " should be off for ratchet=1")
       end
     end)
 
@@ -1351,13 +1402,38 @@ describe("grid_ui", function()
 
   describe("value editing on extended pages (T060)", function()
 
-    it("edits ratchet values via grid press", function()
+    it("increment ratchet count via row 1 press", function()
       local ctx, g = make_ctx({ active_page = "ratchet" })
+      -- Default ratchet = 1
+      assert.are.equal(1, ctx.tracks[1].params.ratchet.steps[3])
 
-      -- Press at (x=3, y=5) -> value = 8-5 = 3
+      -- Press row 1 (increment) at step 3
+      grid_ui.key(ctx, 3, 1, 1)
+      assert.are.equal(2, ctx.tracks[1].params.ratchet.steps[3])
+      -- New bit should be set (bits = 0b11 = 3)
+      assert.are.equal(3, ctx.tracks[1].params.ratchet.bits[3])
+    end)
+
+    it("decrement ratchet count via row 7 press", function()
+      local ctx, g = make_ctx({ active_page = "ratchet" })
+      ctx.tracks[1].params.ratchet.steps[3] = 3
+      ctx.tracks[1].params.ratchet.bits[3] = 7  -- 0b111
+
+      -- Press row 7 (decrement) at step 3
+      grid_ui.key(ctx, 3, 7, 1)
+      assert.are.equal(2, ctx.tracks[1].params.ratchet.steps[3])
+      -- Bit 2 should be cleared (bits = 0b11 = 3)
+      assert.are.equal(3, ctx.tracks[1].params.ratchet.bits[3])
+    end)
+
+    it("toggle sub-gate bit via rows 2-6 press", function()
+      local ctx, g = make_ctx({ active_page = "ratchet" })
+      ctx.tracks[1].params.ratchet.steps[3] = 3
+      ctx.tracks[1].params.ratchet.bits[3] = 7  -- 0b111: all on
+
+      -- Press y=5 (bit_idx=1) to toggle bit 1 OFF
       grid_ui.key(ctx, 3, 5, 1)
-
-      assert.are.equal(3, ctx.tracks[1].params.ratchet.steps[3])
+      assert.are.equal(5, ctx.tracks[1].params.ratchet.bits[3])  -- 0b101
     end)
 
     it("edits alt_note values via grid press", function()
@@ -1381,10 +1457,11 @@ describe("grid_ui", function()
     it("edits ratchet on correct track", function()
       local ctx, g = make_ctx({ active_page = "ratchet", active_track = 3 })
 
-      grid_ui.key(ctx, 5, 3, 1)
+      -- Press row 1 (increment) at step 5 on track 3
+      grid_ui.key(ctx, 5, 1, 1)
 
       -- Should edit track 3, not track 1
-      assert.are.equal(5, ctx.tracks[3].params.ratchet.steps[5])
+      assert.are.equal(2, ctx.tracks[3].params.ratchet.steps[5])
       -- Track 1 should be unchanged (default = 1)
       assert.are.equal(1, ctx.tracks[1].params.ratchet.steps[5])
     end)
@@ -1533,28 +1610,33 @@ describe("grid_ui", function()
 
     it("ratchet page shows active track's ratchet param", function()
       local ctx, g = make_ctx({ active_page = "ratchet", active_track = 2 })
-      ctx.tracks[2].params.ratchet.steps[4] = 6
+      ctx.tracks[2].params.ratchet.steps[4] = 5
+      ctx.tracks[2].params.ratchet.bits[4] = 31  -- 0b11111: all 5 active
 
       grid_ui.redraw(ctx)
 
-      -- Value 6 at step 4: row_val==6 at y=2, brightness 10
-      assert.are.equal(10, g:get_led(4, 2))
+      -- Count=5 with all bits on: y=2 (bit 4) through y=6 (bit 0) = 12
+      assert.are.equal(12, g:get_led(4, 2))
+      assert.are.equal(12, g:get_led(4, 6))
     end)
 
     it("switching tracks changes displayed ratchet data", function()
       local ctx, g = make_ctx({ active_page = "ratchet", active_track = 1 })
-      ctx.tracks[1].params.ratchet.steps[1] = 5
+      ctx.tracks[1].params.ratchet.steps[1] = 4
+      ctx.tracks[1].params.ratchet.bits[1] = 15  -- 0b1111
       ctx.tracks[2].params.ratchet.steps[1] = 2
+      ctx.tracks[2].params.ratchet.bits[1] = 3   -- 0b11
 
-      -- Track 1 display
+      -- Track 1 display: count=4, y=3 (bit 3) should be lit
       grid_ui.redraw(ctx)
-      assert.are.equal(10, g:get_led(1, 3))  -- value 5, y = 8-5 = 3
+      assert.are.equal(12, g:get_led(1, 3))
 
-      -- Switch to track 2
+      -- Switch to track 2: count=2, y=3 (bit 3) out of range
       ctx.active_track = 2
       grid_ui.redraw(ctx)
-      assert.are.equal(10, g:get_led(1, 6))  -- value 2, y = 8-2 = 6
-      assert.are.equal(0, g:get_led(1, 3))   -- previous value row cleared
+      assert.are.equal(0, g:get_led(1, 3))
+      -- y=5 (bit 1) should be lit for track 2
+      assert.are.equal(12, g:get_led(1, 5))
     end)
 
   end)
