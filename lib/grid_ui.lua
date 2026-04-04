@@ -30,7 +30,7 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 -- x=11: loop modifier (hold)
 -- x=12: pattern mode (hold)
 -- x=13: mute toggle
--- x=14: (blank separator)
+-- x=14: probability modifier (hold)
 -- x=15: scale
 -- x=16: meta (alt-track settings; double-press: meta-pattern sequencer)
 
@@ -44,6 +44,7 @@ local NAV_KEY2 = 10   -- Ansible KEY 2: config/alt-track (press)
 local NAV_LOOP = 11
 local NAV_PATTERN = 12
 local NAV_MUTE = 13
+local NAV_PROB = 14
 local NAV_SCALE = 15
 local NAV_META = 16
 
@@ -65,6 +66,9 @@ function M.redraw(ctx)
   elseif ctx.loop_held and ctx.active_page ~= "alt_track" then
     -- loop modifier: show loop boundaries for editing
     M.draw_loop_page(ctx, g)
+  elseif ctx.prob_held then
+    -- probability modifier: show per-step probability overlay
+    M.draw_value_page(ctx, g, "probability")
   else
     local page = ctx.active_page
 
@@ -395,12 +399,13 @@ function M.draw_nav(ctx, g)
   -- x=10: KEY 2 (config/alt-track)
   local config_active = ctx.active_page == "alt_track" or ctx.active_page == "meta_pattern"
   g:led(NAV_KEY2, y, config_active and 12 or 0)
-  -- modifiers (x=11-13)
+  -- modifiers (x=11-14)
   g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
   g:led(NAV_PATTERN, y, ctx.pattern_held and 12 or 3)
   local muted = ctx.tracks[ctx.active_track] and ctx.tracks[ctx.active_track].muted
   g:led(NAV_MUTE, y, muted and 12 or 3)
-  -- scale (x=14)
+  g:led(NAV_PROB, y, ctx.prob_held and 12 or 3)
+  -- scale (x=15)
   g:led(NAV_SCALE, y, ctx.active_page == "scale" and 12 or 3)
   -- meta (x=15): alt-track or meta-pattern
   local meta_active = ctx.active_page == "alt_track" or ctx.active_page == "meta_pattern"
@@ -491,6 +496,10 @@ function M.nav_key(ctx, x, z)
   if x == NAV_PATTERN then
     ctx.pattern_held = (z == 1)
   end
+  -- probability modifier hold (x=14)
+  if x == NAV_PROB then
+    ctx.prob_held = (z == 1)
+  end
   -- mute toggle (x=13)
   if x == NAV_MUTE and z == 1 then
     local track = ctx.tracks[ctx.active_track]
@@ -535,6 +544,12 @@ function M.grid_key(ctx, x, y, z)
   -- time modifier: set per-param clock division
   if ctx.time_held then
     M.time_key(ctx, x, y)
+    return
+  end
+
+  -- probability modifier: edit probability values regardless of active page
+  if ctx.prob_held then
+    M.value_key(ctx, x, y, "probability")
     return
   end
 

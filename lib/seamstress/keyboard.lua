@@ -59,8 +59,7 @@ function M.key(ctx, char, modifiers, is_repeat, state)
       set_status(ctx, "delete failed: " .. tostring(err))
     end
   elseif char == "p" and modifiers and modifiers.ctrl then
-    ctx.active_page = "probability"
-    set_status(ctx, "probability page")
+    ctx.prob_held = not ctx.prob_held
   elseif char == "a" and modifiers and modifiers.ctrl then
     ctx.active_page = "alt_track"
     set_status(ctx, "alt-track page")

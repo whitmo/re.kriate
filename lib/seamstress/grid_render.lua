@@ -71,6 +71,7 @@ local locked_keys = setmetatable({}, {__mode = "k"})
 local NAV_KEY1_X = 5      -- Ansible KEY 1: time modifier
 local NAV_LOOP_X = 11
 local NAV_PATTERN_X = 12
+local NAV_PROB_X = 14     -- probability modifier
 local NAV_Y = 8
 
 -- ========================================================================
@@ -287,7 +288,7 @@ function M.handle_click(grid, px, py, state, button)
   ensure_state(grid)
 
   -- Nav modifier buttons (loop, pattern): toggle/latch on any click
-  if gy == NAV_Y and (gx == NAV_KEY1_X or gx == NAV_LOOP_X or gx == NAV_PATTERN_X) and grid_rows >= 8 then
+  if gy == NAV_Y and (gx == NAV_KEY1_X or gx == NAV_LOOP_X or gx == NAV_PATTERN_X or gx == NAV_PROB_X) and grid_rows >= 8 then
     if state ~= 1 then return end
     local key = gx .. ":" .. gy
     local currently = nav_latch[grid][key] == true
