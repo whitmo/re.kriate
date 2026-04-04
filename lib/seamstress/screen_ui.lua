@@ -8,6 +8,19 @@ local M = {}
 -- Extended page -> primary page mapping
 local EXTENDED_TO_PRIMARY = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
+-- Page tray: groups of pages with abbreviated labels
+local PAGE_TRAY = {
+  {pages = {"trigger", "ratchet"},    labels = {"TR", "RA"}},
+  {pages = {"note", "alt_note"},      labels = {"NO", "AN"}},
+  {pages = {"octave", "glide"},       labels = {"OC", "GL"}},
+  {pages = {"duration"},              labels = {"DU"}},
+  {pages = {"velocity"},              labels = {"VE"}},
+  {pages = {"probability"},           labels = {"PR"}},
+  {pages = {"alt_track"},             labels = {"AT"}},
+  {pages = {"meta_pattern"},          labels = {"MP"}},
+  {pages = {"scale"},                 labels = {"SC"}},
+}
+
 -- Pattern slot indicator colors
 local SLOT_DIM = {40, 40, 60, 255}
 local SLOT_MEDIUM = {100, 100, 140, 255}
@@ -91,6 +104,30 @@ function M.redraw(ctx)
         end
       end
     end
+  end
+
+  -- Page indicator tray
+  local tray_y = 112
+  local tray_spacing = 28
+  local tray_x = 5
+  for i, group in ipairs(PAGE_TRAY) do
+    local x = tray_x + (i - 1) * tray_spacing
+    local label = group.labels[1]
+    local active = false
+    for j, p in ipairs(group.pages) do
+      if ctx.active_page == p then
+        label = group.labels[j]
+        active = true
+        break
+      end
+    end
+    if active then
+      screen.color(200, 200, 255, 255)
+    else
+      screen.color(60, 60, 80, 255)
+    end
+    screen.move(x, tray_y)
+    screen.text(label)
   end
 
   -- Pattern bank indicators and transient message

@@ -15,6 +15,20 @@ local log = require("lib/log")
 
 local M = {}
 
+-- Page tray: groups of pages with 2-char abbreviated labels
+-- Extended pages (ratchet, alt_note, glide) share a slot with their primary page
+local PAGE_TRAY = {
+  {pages = {"trigger", "ratchet"},    labels = {"tr", "ra"}},
+  {pages = {"note", "alt_note"},      labels = {"no", "an"}},
+  {pages = {"octave", "glide"},       labels = {"oc", "gl"}},
+  {pages = {"duration"},              labels = {"du"}},
+  {pages = {"velocity"},              labels = {"ve"}},
+  {pages = {"probability"},           labels = {"pr"}},
+  {pages = {"alt_track"},             labels = {"at"}},
+  {pages = {"meta_pattern"},          labels = {"mp"}},
+  {pages = {"scale"},                 labels = {"sc"}},
+}
+
 local SCALE_NAMES = {
   "Major", "Natural Minor", "Dorian", "Mixolydian",
   "Lydian", "Phrygian", "Locrian", "Harmonic Minor",
@@ -388,6 +402,27 @@ function M.redraw(ctx)
   screen.text("track " .. ctx.active_track .. " | " .. ctx.active_page)
   screen.move(5, 40)
   screen.text(ctx.playing and "playing" or "stopped")
+
+  -- page indicator tray along bottom
+  local tray_y = 62
+  local tray_x = 2
+  local tray_spacing = 14
+  for i, group in ipairs(PAGE_TRAY) do
+    local x = tray_x + (i - 1) * tray_spacing
+    local label = group.labels[1]
+    local active = false
+    for j, p in ipairs(group.pages) do
+      if ctx.active_page == p then
+        label = group.labels[j]
+        active = true
+        break
+      end
+    end
+    screen.level(active and 15 or 3)
+    screen.move(x, tray_y)
+    screen.text(label)
+  end
+
   screen.update()
 end
 

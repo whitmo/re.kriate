@@ -427,6 +427,105 @@ describe("integration", function()
 
   end)
 
+  describe("app.redraw page indicator tray (re-egv)", function()
+    local captured_texts, captured_levels
+
+    -- Temporarily install a capturing screen mock
+    local function install_capture()
+      captured_texts = {}
+      captured_levels = {}
+      local cur_level = 0
+      screen.level = function(l) cur_level = l end
+      screen.text = function(s)
+        table.insert(captured_texts, s)
+        table.insert(captured_levels, cur_level)
+      end
+    end
+
+    local function restore_screen()
+      screen.level = function() end
+      screen.text = function() end
+    end
+
+    after_each(function() restore_screen() end)
+
+    it("renders all 9 page group labels", function()
+      local ctx = make_app()
+      install_capture()
+      app.redraw(ctx)
+      -- Check that tray labels appear in captured text
+      local expected = {"tr", "no", "oc", "du", "ve", "pr", "at", "mp", "sc"}
+      for _, label in ipairs(expected) do
+        local found = false
+        for _, t in ipairs(captured_texts) do
+          if t == label then found = true; break end
+        end
+        assert.is_true(found, "expected page label '" .. label .. "' in tray")
+      end
+    end)
+
+    it("highlights active page at level 15", function()
+      local ctx = make_app()
+      ctx.active_page = "note"
+      install_capture()
+      app.redraw(ctx)
+      for i, t in ipairs(captured_texts) do
+        if t == "no" then
+          assert.are.equal(15, captured_levels[i],
+            "active page label 'no' should be level 15")
+          return
+        end
+      end
+      error("label 'no' not found")
+    end)
+
+    it("dims inactive pages at level 3", function()
+      local ctx = make_app()
+      ctx.active_page = "trigger"
+      install_capture()
+      app.redraw(ctx)
+      for i, t in ipairs(captured_texts) do
+        if t == "du" then
+          assert.are.equal(3, captured_levels[i],
+            "inactive page label 'du' should be level 3")
+          return
+        end
+      end
+      error("label 'du' not found")
+    end)
+
+    it("shows extended label when on ratchet page", function()
+      local ctx = make_app()
+      ctx.active_page = "ratchet"
+      install_capture()
+      app.redraw(ctx)
+      local found_ra = false
+      for i, t in ipairs(captured_texts) do
+        if t == "ra" then
+          found_ra = true
+          assert.are.equal(15, captured_levels[i])
+        end
+      end
+      assert.is_true(found_ra, "expected 'ra' label when on ratchet page")
+    end)
+
+    it("shows extended label when on glide page", function()
+      local ctx = make_app()
+      ctx.active_page = "glide"
+      install_capture()
+      app.redraw(ctx)
+      local found_gl = false
+      for i, t in ipairs(captured_texts) do
+        if t == "gl" then
+          found_gl = true
+          assert.are.equal(15, captured_levels[i])
+        end
+      end
+      assert.is_true(found_gl, "expected 'gl' label when on glide page")
+    end)
+
+  end)
+
   describe("app.key (T065)", function()
 
     it("K2 toggles play state", function()
