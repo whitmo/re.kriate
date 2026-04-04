@@ -512,11 +512,12 @@ describe("row-level inspection: analyze grid regions", function()
     synth_grid.render(ctx)
     local row = synth_grid.get_row(g, 3)
 
-    -- Steps with triggers should be brightness 8
+    -- Steps with triggers in loop (1-6) -> brightness 8
     assert.are.equal(8, row[1])
     assert.are.equal(8, row[5])
-    assert.are.equal(8, row[9])
-    assert.are.equal(8, row[13])
+    -- Steps with triggers outside loop -> dimmed brightness 4
+    assert.are.equal(4, row[9])
+    assert.are.equal(4, row[13])
 
     -- Steps 2-4 are in default loop (1-6) but no trigger -> brightness 2
     assert.are.equal(2, row[2])
