@@ -92,13 +92,14 @@ function M.draw_trigger_page(ctx, g)
     local param = ctx.tracks[t].params.trigger
     for x = 1, track_mod.NUM_STEPS do
       local brightness = 0
+      local in_loop = x >= param.loop_start and x <= param.loop_end
       -- loop region indicator
-      if x >= param.loop_start and x <= param.loop_end then
+      if in_loop then
         brightness = 2
       end
-      -- step value
+      -- step value (dimmer outside loop)
       if param.steps[x] == 1 then
-        brightness = 8
+        brightness = in_loop and 8 or 4
       end
       -- playhead
       if x == param.pos and ctx.playing then
@@ -123,8 +124,8 @@ function M.draw_value_page(ctx, g, page)
       local row_val = 8 - y
       if row_val == val then
         brightness = in_loop and 10 or 4
-      elseif row_val < val and in_loop then
-        brightness = 3
+      elseif row_val < val then
+        brightness = in_loop and 3 or 1
       end
       -- playhead column
       if x == param.pos and ctx.playing then

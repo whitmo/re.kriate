@@ -193,13 +193,28 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 3, 1), 2)
     end)
 
-    it("shows brightness 8 for active trigger steps", function()
+    it("shows brightness 8 for active trigger steps in loop", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.tracks[1].params.trigger.steps[5] = 1
       grid_ui.draw_trigger_page(ctx, g)
-      -- Step 5 has trigger=1, should be 8
+      -- Step 5 has trigger=1, in default loop (1-6) -> brightness 8
       assert.are.equal(led_at(g, 5, 1), 8)
+    end)
+
+    it("shows brightness 4 for active trigger steps outside loop", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.tracks[1].params.trigger.loop_start = 1
+      ctx.tracks[1].params.trigger.loop_end = 4
+      ctx.tracks[1].params.trigger.steps[6] = 1
+      grid_ui.draw_trigger_page(ctx, g)
+      -- Step 6 has trigger=1, outside loop (1-4) -> dimmed brightness 4
+      assert.are.equal(led_at(g, 6, 1), 4)
+      -- Step 3 inside loop with trigger -> full brightness 8
+      ctx.tracks[1].params.trigger.steps[3] = 1
+      grid_ui.draw_trigger_page(ctx, g)
+      assert.are.equal(led_at(g, 3, 1), 8)
     end)
 
     it("shows brightness 15 for playhead when playing", function()
@@ -294,6 +309,23 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 1, 5), 3)
       assert.are.equal(led_at(g, 1, 6), 3)
       assert.are.equal(led_at(g, 1, 7), 3)
+    end)
+
+    it("shows dim bar graph below value at brightness 1 when outside loop", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_track = 1
+      ctx.tracks[1].params.note.steps[10] = 5
+      ctx.tracks[1].params.note.loop_start = 1
+      ctx.tracks[1].params.note.loop_end = 8
+      grid_ui.draw_value_page(ctx, g, "note")
+      -- Step 10 outside loop, value 5 at row 3 -> brightness 4 (value dot)
+      assert.are.equal(led_at(g, 10, 3), 4)
+      -- Bar below (rows 4,5,6,7) -> dim brightness 1 (outside loop)
+      assert.are.equal(led_at(g, 10, 4), 1)
+      assert.are.equal(led_at(g, 10, 5), 1)
+      assert.are.equal(led_at(g, 10, 6), 1)
+      assert.are.equal(led_at(g, 10, 7), 1)
     end)
 
     it("does not show bar above value", function()
