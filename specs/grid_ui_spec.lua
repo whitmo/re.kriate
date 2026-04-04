@@ -553,12 +553,12 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 5, 8), 12)
     end)
 
-    it("dims KEY 1 when not time_held (x=5)", function()
+    it("KEY 1 is off when not time_held (x=5)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.time_held = false
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 5, 8), 3)
+      assert.are.equal(led_at(g, 5, 8), 0)
     end)
 
     it("highlights KEY 2 when on alt_track page (x=10)", function()
@@ -569,12 +569,12 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 10, 8), 12)
     end)
 
-    it("dims KEY 2 when on other pages (x=10)", function()
+    it("KEY 2 is off when on other pages (x=10)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.active_page = "trigger"
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 10, 8), 3)
+      assert.are.equal(led_at(g, 10, 8), 0)
     end)
 
     it("highlights meta key when on alt_track page (x=16)", function()
