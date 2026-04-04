@@ -1243,14 +1243,14 @@ describe("grid_ui", function()
       end
     end)
 
-    it("highlights primary nav button (trigger x=6) when on ratchet page", function()
+    it("dims primary nav button (trigger x=6) when on ratchet page", function()
       local ctx, g = make_ctx({ active_page = "ratchet" })
 
       grid_ui.redraw(ctx)
 
-      -- Nav row is y=8. The trigger nav button at x=6 should be highlighted
-      -- because ratchet is trigger's extended page
-      assert.are.equal(12, g:get_led(6, 8))
+      -- Nav row is y=8. The trigger nav button at x=6 should be dimmed
+      -- because ratchet is trigger's extended/secondary page
+      assert.are.equal(8, g:get_led(6, 8))
       -- Other page buttons should be dim
       assert.are.equal(3, g:get_led(7, 8))  -- note
     end)
@@ -1288,13 +1288,13 @@ describe("grid_ui", function()
       assert.are.equal(15, g:get_led(4, 2))
     end)
 
-    it("highlights primary nav button (note x=7) when on alt_note page", function()
+    it("dims primary nav button (note x=7) when on alt_note page", function()
       local ctx, g = make_ctx({ active_page = "alt_note" })
 
       grid_ui.redraw(ctx)
 
-      -- Note nav button at x=7 should be highlighted for alt_note
-      assert.are.equal(12, g:get_led(7, 8))
+      -- Note nav button at x=7 should be dimmed for alt_note (secondary page)
+      assert.are.equal(8, g:get_led(7, 8))
       -- Trigger button should be dim
       assert.are.equal(3, g:get_led(6, 8))
     end)
@@ -1332,13 +1332,13 @@ describe("grid_ui", function()
       assert.are.equal(15, g:get_led(7, 5))
     end)
 
-    it("highlights primary nav button (octave x=8) when on glide page", function()
+    it("dims primary nav button (octave x=8) when on glide page", function()
       local ctx, g = make_ctx({ active_page = "glide" })
 
       grid_ui.redraw(ctx)
 
-      -- Octave nav button at x=8 should be highlighted for glide
-      assert.are.equal(12, g:get_led(8, 8))
+      -- Octave nav button at x=8 should be dimmed for glide (secondary page)
+      assert.are.equal(8, g:get_led(8, 8))
       -- Other page buttons dim
       assert.are.equal(3, g:get_led(6, 8))  -- trigger
     end)
