@@ -178,8 +178,15 @@ function redraw()
   screen.color(0, 0, 0, 255)
   screen.move(1, 1)
   screen.rect_fill(grid_render.screen_width(), grid_render.screen_height())
-  -- Simulated grid
-  grid_render.draw(ctx.g, screen)
+  -- Simulated grid (with loop boundary indicators for active param)
+  local loop_opts = nil
+  if ctx.tracks and ctx.active_track and ctx.active_page then
+    local param = ctx.tracks[ctx.active_track].params[ctx.active_page]
+    if param then
+      loop_opts = {loop_start = param.loop_start, loop_end = param.loop_end}
+    end
+  end
+  grid_render.draw(ctx.g, screen, loop_opts)
   -- Sprites on top
   sprite_render.draw(ctx)
   screen.refresh()

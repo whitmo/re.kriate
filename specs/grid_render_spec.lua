@@ -785,4 +785,97 @@ describe("grid_render", function()
 
   end)
 
+  -- ======================================================================
+  -- Loop boundary indicators
+  -- ======================================================================
+
+  describe("loop boundary indicators", function()
+
+    before_each(function()
+      grid_render.reset()
+    end)
+
+    it("draws two vertical lines when opts has loop_start and loop_end", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen, {loop_start = 3, loop_end = 8})
+      -- Find the light grey color calls (100, 100, 100) for loop indicators
+      local grey_calls = {}
+      for i, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 and call.b == 100 then
+          grey_calls[#grey_calls + 1] = i
+        end
+      end
+      assert.are.equal(2, #grey_calls, "expected 2 light grey color calls for loop boundaries")
+    end)
+
+    it("positions left boundary at loop_start column left edge", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen, {loop_start = 3, loop_end = 8})
+      -- After the first grey color call, next move should be at (3-1)*16 = 32
+      local found_start = false
+      for i, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 then
+          local next_move = mock_screen.calls[i + 1]
+          if next_move and next_move.type == "move" and next_move.x == 32 then
+            found_start = true
+            break
+          end
+        end
+      end
+      assert.is_true(found_start, "expected move to x=32 for loop_start=3")
+    end)
+
+    it("positions right boundary at loop_end column right edge", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen, {loop_start = 3, loop_end = 8})
+      -- Right boundary: (8-1)*16 + 14 = 126
+      local found_end = false
+      for i, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 then
+          local next_move = mock_screen.calls[i + 1]
+          if next_move and next_move.type == "move" and next_move.x == 126 then
+            found_end = true
+            break
+          end
+        end
+      end
+      assert.is_true(found_end, "expected move to x=126 for loop_end=8")
+    end)
+
+    it("does not draw indicators when opts is nil", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen)
+      for _, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 and call.b == 100 then
+          error("unexpected loop indicator color call when opts is nil")
+        end
+      end
+    end)
+
+    it("indicator height spans rows 1-7 (excludes nav row)", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen, {loop_start = 1, loop_end = 16})
+      -- Indicator height should be (8-1)*16 = 112 pixels (7 rows)
+      local found_rect = false
+      for i, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 then
+          -- Find the rect_fill after the next move
+          local rect = mock_screen.calls[i + 2]
+          if rect and rect.type == "rect_fill" and rect.w == 1 and rect.h == 112 then
+            found_rect = true
+            break
+          end
+        end
+      end
+      assert.is_true(found_rect, "expected rect_fill(1, 112) for 7-row indicator height")
+    end)
+
+  end)
+
 end)
+

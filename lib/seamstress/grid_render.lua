@@ -213,7 +213,8 @@ end
 --- Draw the simulated grid to the screen.
 --- @param grid table  Grid provider with get_led(x, y)
 --- @param scr table  Screen object with color(), move(), rect_fill()
-function M.draw(grid, scr)
+--- @param opts table|nil  Optional {loop_start=N, loop_end=N} for boundary indicators
+function M.draw(grid, scr, opts)
   local locks = locked_keys[grid]
   local er, eg, eb = compute_edge_rgb()
   local fill_size = cell_size - EDGE_INSET * 2
@@ -238,6 +239,18 @@ function M.draw(grid, scr)
         scr.rect_fill(dot, dot)
       end
     end
+  end
+  -- Loop boundary indicators (light grey vertical lines)
+  if opts and opts.loop_start and opts.loop_end then
+    local indicator_h = (grid_rows - 1) * cell_pitch
+    -- Left edge of loop_start column
+    scr.color(100, 100, 100, 255)
+    scr.move((opts.loop_start - 1) * cell_pitch, 0)
+    scr.rect_fill(1, indicator_h)
+    -- Right edge of loop_end column
+    scr.color(100, 100, 100, 255)
+    scr.move((opts.loop_end - 1) * cell_pitch + cell_size, 0)
+    scr.rect_fill(1, indicator_h)
   end
 end
 
