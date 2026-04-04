@@ -127,6 +127,68 @@ describe("screen_ui", function()
 
   end)
 
+  describe("page indicator tray", function()
+
+    it("shows abbreviated labels for all page groups", function()
+      local ctx = make_ctx()
+      screen_ui.redraw(ctx)
+      -- All 9 groups should have labels rendered
+      local expected = {"TR", "NO", "OC", "DU", "VE", "PR", "AT", "MP", "SC"}
+      for _, label in ipairs(expected) do
+        assert.truthy(find_text("^" .. label .. "$"),
+          "expected page label '" .. label .. "' in tray")
+      end
+    end)
+
+    it("highlights active page with bright color", function()
+      local ctx = make_ctx()
+      ctx.active_page = "note"
+      screen_ui.redraw(ctx)
+      local entry = find_text("^NO$")
+      assert.truthy(entry, "expected 'NO' label")
+      -- Active label should use bright color (200, 200, 255)
+      assert.are.equal(200, entry.color[1])
+    end)
+
+    it("dims inactive page labels", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      screen_ui.redraw(ctx)
+      local entry = find_text("^DU$")
+      assert.truthy(entry, "expected 'DU' label")
+      -- Inactive label should use dim color (60, 60, 80)
+      assert.are.equal(60, entry.color[1])
+    end)
+
+    it("shows extended page label when on ratchet", function()
+      local ctx = make_ctx()
+      ctx.active_page = "ratchet"
+      screen_ui.redraw(ctx)
+      local entry = find_text("^RA$")
+      assert.truthy(entry, "expected 'RA' label for ratchet page")
+      assert.are.equal(200, entry.color[1])
+    end)
+
+    it("shows extended page label when on alt_note", function()
+      local ctx = make_ctx()
+      ctx.active_page = "alt_note"
+      screen_ui.redraw(ctx)
+      local entry = find_text("^AN$")
+      assert.truthy(entry, "expected 'AN' label for alt_note page")
+      assert.are.equal(200, entry.color[1])
+    end)
+
+    it("shows extended page label when on glide", function()
+      local ctx = make_ctx()
+      ctx.active_page = "glide"
+      screen_ui.redraw(ctx)
+      local entry = find_text("^GL$")
+      assert.truthy(entry, "expected 'GL' label for glide page")
+      assert.are.equal(200, entry.color[1])
+    end)
+
+  end)
+
   describe("extended page indicator (T030)", function()
 
     it("shows parent and extended page for ratchet", function()
