@@ -382,8 +382,13 @@ function M.draw_nav(ctx, g)
   g:led(NAV_KEY1, y, ctx.time_held and 12 or 0)
   -- page select x=6-9 (highlight correct button even when on extended page)
   local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
+  local on_extended = M.EXTENDED_REVERSE[ctx.active_page] ~= nil
   for x = 6, 8 do
-    g:led(x, y, NAV_PAGE[x] == active_primary and 12 or 3)
+    if NAV_PAGE[x] == active_primary then
+      g:led(x, y, on_extended and 8 or 12)
+    else
+      g:led(x, y, 3)
+    end
   end
   -- x=9: lit if current page is in the cycle group (duration/velocity/probability)
   g:led(9, y, NAV_PAGE_CYCLE_9_SET[ctx.active_page] and 12 or 3)
