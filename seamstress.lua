@@ -20,6 +20,7 @@ local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
 local grid_render = require("lib/seamstress/grid_render")
 local help_overlay = require("lib/seamstress/help_overlay")
+local screen_ui = require("lib/seamstress/screen_ui")
 local track_mod = require("lib/track")
 
 local ctx
@@ -47,9 +48,9 @@ function init()
     protocol = "mext", -- mext (varibright), series, 40h
   })
 
-  -- Size window to match configured grid
+  -- Size window to match configured grid + tray
   if screen.set_size then
-    screen.set_size(grid_render.screen_width(), grid_render.screen_height())
+    screen.set_size(grid_render.screen_width(), grid_render.screen_height() + screen_ui.TRAY_HEIGHT)
   end
 
   -- Sprite voices (additive visual output, one per track)
@@ -120,7 +121,7 @@ function init()
         if ctx.help_visible then
           screen.set_size(help_overlay.WIDTH, help_overlay.HEIGHT)
         else
-          screen.set_size(grid_render.screen_width(), grid_render.screen_height())
+          screen.set_size(grid_render.screen_width(), grid_render.screen_height() + screen_ui.TRAY_HEIGHT)
         end
       end
       return
@@ -131,7 +132,7 @@ function init()
       if ctx.help_visible then
         ctx.help_visible = false
         if screen.set_size then
-          screen.set_size(grid_render.screen_width(), grid_render.screen_height())
+          screen.set_size(grid_render.screen_width(), grid_render.screen_height() + screen_ui.TRAY_HEIGHT)
         end
         return
       end
@@ -179,7 +180,7 @@ function redraw()
   -- Black canvas background
   screen.color(0, 0, 0, 255)
   screen.move(1, 1)
-  screen.rect_fill(grid_render.screen_width(), grid_render.screen_height())
+  screen.rect_fill(grid_render.screen_width(), grid_render.screen_height() + screen_ui.TRAY_HEIGHT)
   -- Simulated grid (with loop boundary indicators for active param)
   local loop_opts = nil
   if ctx.tracks and ctx.active_track and ctx.active_page then
@@ -191,6 +192,8 @@ function redraw()
   grid_render.draw(ctx.g, screen, loop_opts)
   -- Sprites on top
   sprite_render.draw(ctx)
+  -- Page indicator tray below grid
+  screen_ui.draw_tray(ctx, grid_render.screen_height())
   screen.refresh()
 end
 

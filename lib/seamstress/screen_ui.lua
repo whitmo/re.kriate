@@ -21,13 +21,16 @@ local PAGE_TRAY = {
   {pages = {"scale"},                 labels = {"SC"}},
 }
 
+-- Height of the tray overlay (page labels + pattern slots + padding)
+M.TRAY_HEIGHT = 20
+
 -- Pattern slot indicator colors
 local SLOT_DIM = {40, 40, 60, 255}
 local SLOT_MEDIUM = {100, 100, 140, 255}
 local SLOT_BRIGHT = {200, 200, 255, 255}
 
--- Draw 9 pattern slot indicators
-local function draw_pattern_slots(ctx)
+-- Draw 9 pattern slot indicators at given base_y
+local function draw_pattern_slots(ctx, base_y)
   local start_x = math.floor((256 - 122) / 2) -- center 9 slots of width 10 with 14px pitch
   for i = 1, 9 do
     local color = SLOT_DIM
@@ -38,21 +41,51 @@ local function draw_pattern_slots(ctx)
       color = SLOT_BRIGHT
     end
     screen.color(color[1], color[2], color[3], color[4])
-    screen.move(start_x + (i - 1) * 14, 122)
+    screen.move(start_x + (i - 1) * 14, base_y + 12)
     screen.rect_fill(10, 5)
   end
 end
 
--- Draw transient pattern message if not expired
-local function draw_pattern_message(ctx)
+-- Draw transient pattern message if not expired at given base_y
+local function draw_pattern_message(ctx, base_y)
   if not ctx.pattern_message then return end
   if os.clock() - ctx.pattern_message.time >= 1.5 then
     ctx.pattern_message = nil
     return
   end
   screen.color(200, 200, 255, 255)
-  screen.move(80, 112)
+  screen.move(80, base_y + 2)
   screen.text(ctx.pattern_message.text)
+end
+
+--- Draw page tray, pattern slots, and pattern message as an overlay.
+--- @param ctx table  Application context
+--- @param base_y number  Y pixel offset for the top of the tray area
+function M.draw_tray(ctx, base_y)
+  local tray_spacing = 28
+  local tray_x = 5
+  for i, group in ipairs(PAGE_TRAY) do
+    local x = tray_x + (i - 1) * tray_spacing
+    local label = group.labels[1]
+    local active = false
+    for j, p in ipairs(group.pages) do
+      if ctx.active_page == p then
+        label = group.labels[j]
+        active = true
+        break
+      end
+    end
+    if active then
+      screen.color(200, 200, 255, 255)
+    else
+      screen.color(60, 60, 80, 255)
+    end
+    screen.move(x, base_y + 2)
+    screen.text(label)
+  end
+
+  draw_pattern_slots(ctx, base_y)
+  draw_pattern_message(ctx, base_y)
 end
 
 function M.redraw(ctx)
@@ -106,33 +139,8 @@ function M.redraw(ctx)
     end
   end
 
-  -- Page indicator tray
-  local tray_y = 112
-  local tray_spacing = 28
-  local tray_x = 5
-  for i, group in ipairs(PAGE_TRAY) do
-    local x = tray_x + (i - 1) * tray_spacing
-    local label = group.labels[1]
-    local active = false
-    for j, p in ipairs(group.pages) do
-      if ctx.active_page == p then
-        label = group.labels[j]
-        active = true
-        break
-      end
-    end
-    if active then
-      screen.color(200, 200, 255, 255)
-    else
-      screen.color(60, 60, 80, 255)
-    end
-    screen.move(x, tray_y)
-    screen.text(label)
-  end
-
-  -- Pattern bank indicators and transient message
-  draw_pattern_slots(ctx)
-  draw_pattern_message(ctx)
+  -- Page indicator tray + pattern bank overlay
+  M.draw_tray(ctx, 110)
 
   screen.refresh()
 end
