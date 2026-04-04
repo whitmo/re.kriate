@@ -1873,4 +1873,66 @@ describe("grid_ui", function()
 
   end)
 
+  -- ========================================================================
+  -- Probability modifier (prob_held)
+  -- ========================================================================
+
+  describe("probability modifier", function()
+
+    it("grid nav x=14 press sets prob_held true", function()
+      local ctx = make_ctx()
+      ctx.prob_held = false
+      grid_ui.nav_key(ctx, 14, 1)
+      assert.is_true(ctx.prob_held)
+    end)
+
+    it("grid nav x=14 release clears prob_held", function()
+      local ctx = make_ctx()
+      ctx.prob_held = true
+      grid_ui.nav_key(ctx, 14, 0)
+      assert.is_false(ctx.prob_held)
+    end)
+
+    it("prob_held routes grid_key to probability value editing", function()
+      local ctx = make_ctx({ active_page = "trigger" })
+      ctx.prob_held = true
+      -- Press at (3, 2) — row 2 = value 6, step 3
+      grid_ui.grid_key(ctx, 3, 2, 1)
+      assert.are.equal(6, ctx.tracks[1].params.probability.steps[3])
+    end)
+
+    it("prob_held does not change active_page", function()
+      local ctx = make_ctx({ active_page = "note" })
+      ctx.prob_held = true
+      grid_ui.grid_key(ctx, 1, 1, 1)
+      assert.are.equal("note", ctx.active_page)
+    end)
+
+    it("prob_held draws probability overlay via redraw", function()
+      local ctx, g = make_ctx({ active_page = "trigger" })
+      ctx.prob_held = true
+      ctx.tracks[1].params.probability.steps[1] = 5
+      ctx.tracks[1].params.probability.loop_start = 1
+      ctx.tracks[1].params.probability.loop_end = 16
+      grid_ui.redraw(ctx)
+      -- Value 5 at step 1: row_val==5 at y=3 (8-5=3), brightness 10 in loop
+      assert.are.equal(10, g:get_led(1, 3))
+    end)
+
+    it("nav row shows prob LED lit when prob_held", function()
+      local ctx, g = make_ctx()
+      ctx.prob_held = true
+      grid_ui.redraw(ctx)
+      assert.are.equal(12, g:get_led(14, 8))
+    end)
+
+    it("nav row shows prob LED dim when not prob_held", function()
+      local ctx, g = make_ctx()
+      ctx.prob_held = false
+      grid_ui.redraw(ctx)
+      assert.are.equal(3, g:get_led(14, 8))
+    end)
+
+  end)
+
 end)
