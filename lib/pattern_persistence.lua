@@ -233,12 +233,35 @@ local function ensure_probability(track)
   }
 end
 
-local function ensure_probability_slots(slots)
+local MAX_RATCHET = 5
+
+local function ensure_ratchet_bits(track)
+  if not track or not track.params then return end
+  local ratchet = track.params.ratchet
+  if not ratchet then return end
+  -- Clamp values to new max range
+  for i = 1, 16 do
+    if ratchet.steps[i] then
+      ratchet.steps[i] = math.max(1, math.min(MAX_RATCHET, ratchet.steps[i]))
+    end
+  end
+  -- Add bits array if missing
+  if not ratchet.bits then
+    ratchet.bits = {}
+    for i = 1, 16 do
+      local count = ratchet.steps[i] or 1
+      ratchet.bits[i] = (1 << count) - 1  -- all subdivisions active
+    end
+  end
+end
+
+local function ensure_slots_migrated(slots)
   if not slots then return end
   for _, slot in pairs(slots) do
     if slot.tracks then
       for _, track in pairs(slot.tracks) do
         ensure_probability(track)
+        ensure_ratchet_bits(track)
       end
     end
   end
@@ -325,7 +348,7 @@ function pattern_persistence.load(ctx, name)
   end
 
   if not data.slots then return nil, "invalid_payload" end
-  ensure_probability_slots(data.slots)
+  ensure_slots_migrated(data.slots)
 
   local slots = data.slots
   ctx.patterns = deep_copy(slots)

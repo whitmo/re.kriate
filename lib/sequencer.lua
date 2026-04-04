@@ -150,6 +150,9 @@ function M.step_track(ctx, track_num)
   end
   vals.probability = prob_val
 
+  -- Save ratchet position before advancement (used for ratchet_bits lookup)
+  local ratchet_read_pos = track.params.ratchet and track.params.ratchet.pos
+
   -- advance remaining params with trigger clocking + per-param probability gating
   local prob_pct = track_mod.PROBABILITY_MAP[prob_val] or 100
   for _, name in ipairs(track_mod.PARAM_NAMES) do
@@ -167,6 +170,12 @@ function M.step_track(ctx, track_num)
         vals[name] = track_mod.peek(p)
       end
     end
+  end
+
+  -- Read ratchet_bits from the saved position (before advancement)
+  local ratchet_param = track.params.ratchet
+  if ratchet_param and ratchet_param.bits and ratchet_read_pos then
+    vals.ratchet_bits = ratchet_param.bits[ratchet_read_pos]
   end
 
   -- emit step event (before mute check so listeners see all steps)
@@ -215,20 +224,27 @@ function M.step_track(ctx, track_num)
       end
     end
 
-    -- ratchet: subdivide into N evenly-spaced notes
+    -- ratchet: subdivide into N evenly-spaced sub-gates
+    -- Each sub-gate checks ratchet_bits to decide whether to fire or rest
     local ratchet_count = vals.ratchet or 1
+    local ratchet_bits = vals.ratchet_bits or ((1 << ratchet_count) - 1)
     if ratchet_count > 1 then
       local sub_dur = duration / ratchet_count
       clock.run(log.wrap(function()
         for i = 1, ratchet_count do
-          M.play_note(ctx, track_num, midi_note, velocity, sub_dur)
+          local bit_idx = i - 1
+          if (ratchet_bits >> bit_idx) & 1 == 1 then
+            M.play_note(ctx, track_num, midi_note, velocity, sub_dur)
+          end
           if i < ratchet_count then
             clock.sync(sub_dur)
           end
         end
       end, "ratchet:" .. track_num))
     else
-      M.play_note(ctx, track_num, midi_note, velocity, duration)
+      if (ratchet_bits & 1) == 1 then
+        M.play_note(ctx, track_num, midi_note, velocity, duration)
+      end
     end
 
     -- sprite voice: fire with raw kria vals (additive, alongside audio)

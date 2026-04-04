@@ -377,6 +377,7 @@ describe("trigger probability", function()
       local track = ctx.tracks[1]
       track.params.trigger.steps[1] = 1
       track.params.ratchet.steps[1] = 4
+      track.params.ratchet.bits[1] = 15  -- 0b1111: all 4 active
       track.params.probability.steps[1] = 7  -- 100%
       reset_positions(track)
 
@@ -391,6 +392,7 @@ describe("trigger probability", function()
       local track = ctx.tracks[1]
       track.params.trigger.steps[1] = 1
       track.params.ratchet.steps[1] = 4
+      track.params.ratchet.bits[1] = 15  -- 0b1111: all 4 active
       track.params.probability.steps[1] = 1  -- 0%
       reset_positions(track)
 
@@ -406,6 +408,7 @@ describe("trigger probability", function()
       local track = ctx.tracks[1]
       track.params.trigger.steps[1] = 1
       track.params.ratchet.steps[1] = 3
+      track.params.ratchet.bits[1] = 7  -- 0b111: all 3 active
       track.params.probability.steps[1] = 4  -- 50%
 
       local fired_counts = {}

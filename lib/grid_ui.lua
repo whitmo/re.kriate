@@ -80,8 +80,10 @@ function M.redraw(ctx)
       M.draw_meta_pattern_page(ctx, g)
     elseif page == "scale" then
       M.draw_scale_page(ctx, g)
+    elseif page == "ratchet" then
+      M.draw_ratchet_page(ctx, g)
     else
-      -- All other pages (including extended: ratchet, alt_note, glide) use value display
+      -- All other pages (including extended: alt_note, glide) use value display
       M.draw_value_page(ctx, g, page)
     end
   end
@@ -141,6 +143,52 @@ function M.draw_value_page(ctx, g, page)
       end
       g:led(x, y, brightness)
     end
+  end
+end
+
+-- Ratchet page: dedicated sub-gate display (matches kria ansible/n.kria UX)
+-- Row 1 (y=1): increment button row (dim markers)
+-- Rows 2-6 (y=2-6): subdivision toggles (5 slots, y=2=top/sub5, y=6=bottom/sub1)
+-- Row 7 (y=7): decrement button row (dim markers)
+function M.draw_ratchet_page(ctx, g)
+  local track = ctx.tracks[ctx.active_track]
+  local param = track.params.ratchet
+  for x = 1, track_mod.NUM_STEPS do
+    local count = param.steps[x]
+    local bits = param.bits and param.bits[x] or ((1 << count) - 1)
+    local in_loop = x >= param.loop_start and x <= param.loop_end
+    local is_playhead = x == param.pos and ctx.playing
+
+    -- Row 1: increment
+    local inc_brightness = 2
+    if is_playhead then inc_brightness = 6 end
+    g:led(x, 1, inc_brightness)
+
+    -- Rows 2-6: subdivision toggles
+    -- y=2 → bit 4 (subdivision 5, top), y=6 → bit 0 (subdivision 1, bottom)
+    for y = 2, 6 do
+      local bit_idx = 6 - y  -- y=2→4, y=3→3, y=4→2, y=5→1, y=6→0
+      local in_range = bit_idx < count
+      local bit_on = (bits >> bit_idx) & 1 == 1
+      local brightness = 0
+
+      if in_range and bit_on then
+        brightness = in_loop and 12 or 5
+      elseif in_range then
+        brightness = in_loop and 5 or 2
+      end
+
+      if is_playhead and in_range then
+        brightness = bit_on and 15 or 6
+      end
+
+      g:led(x, y, brightness)
+    end
+
+    -- Row 7: decrement
+    local dec_brightness = 2
+    if is_playhead then dec_brightness = 6 end
+    g:led(x, 7, dec_brightness)
   end
 end
 
@@ -585,6 +633,8 @@ function M.grid_key(ctx, x, y, z)
 
   if page == "trigger" then
     M.trigger_key(ctx, x, y)
+  elseif page == "ratchet" then
+    M.ratchet_key(ctx, x, y)
   else
     M.value_key(ctx, x, y, page)
   end
@@ -604,6 +654,24 @@ function M.value_key(ctx, x, y, page)
   -- row 1 = value 7, row 7 = value 1 (all value pages including probability)
   local val = 8 - y
   track_mod.set_step(param, x, val)
+end
+
+-- Ratchet page key: increment/decrement count or toggle sub-gate bits
+function M.ratchet_key(ctx, x, y)
+  local track = ctx.tracks[ctx.active_track]
+  local param = track.params.ratchet
+
+  if y == 1 then
+    -- Increment subdivision count
+    track_mod.delta_ratchet_count(param, x, 1)
+  elseif y == 7 then
+    -- Decrement subdivision count
+    track_mod.delta_ratchet_count(param, x, -1)
+  elseif y >= 2 and y <= 6 then
+    -- Toggle sub-gate bit: y=2→bit4, y=3→bit3, y=4→bit2, y=5→bit1, y=6→bit0
+    local bit_idx = 6 - y
+    track_mod.toggle_ratchet_bit(param, x, bit_idx)
+  end
 end
 
 -- Loop editing: first press = start, second press = end

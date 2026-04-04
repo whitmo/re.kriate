@@ -719,6 +719,7 @@ describe("sequencer", function()
       track.params.trigger.steps[1] = 1
       track.params.trigger.pos = 1
       track.params.ratchet.steps[1] = 3
+      track.params.ratchet.bits[1] = 7  -- 0b111: all 3 sub-gates active
       track.params.ratchet.pos = 1
 
       sequencer.step_track(ctx, 1)
@@ -735,6 +736,7 @@ describe("sequencer", function()
       track.params.duration.steps[1] = 5  -- 1 beat
       track.params.duration.pos = 1
       track.params.ratchet.steps[1] = 4
+      track.params.ratchet.bits[1] = 15  -- 0b1111: all 4 sub-gates active
       track.params.ratchet.pos = 1
 
       sequencer.step_track(ctx, 1)
@@ -759,6 +761,7 @@ describe("sequencer", function()
       track.params.velocity.steps[1] = 6
       track.params.velocity.pos = 1
       track.params.ratchet.steps[1] = 2
+      track.params.ratchet.bits[1] = 3  -- 0b11: both sub-gates active
       track.params.ratchet.pos = 1
 
       sequencer.step_track(ctx, 1)

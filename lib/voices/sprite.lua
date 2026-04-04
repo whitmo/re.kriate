@@ -104,7 +104,7 @@ function M.new(track_num)
       local r, g, b = base_color[1], base_color[2], base_color[3]
       if ratchet_val > 1 then
         -- Blend toward white proportionally to ratchet intensity
-        local blend = (ratchet_val - 1) / 6  -- 0 at ratchet=1, ~1 at ratchet=7
+        local blend = (ratchet_val - 1) / 4  -- 0 at ratchet=1, 1 at ratchet=5
         r = math.floor(r + (255 - r) * blend)
         g = math.floor(g + (255 - g) * blend)
         b = math.floor(b + (255 - b) * blend)
