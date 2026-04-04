@@ -366,7 +366,7 @@ describe("grid_render", function()
 
   describe("draw", function()
 
-    it("calls screen.color and rect_fill for each cell (128 = 16x8)", function()
+    it("calls screen.color and rect_fill for edge + fill per cell (128 = 16x8)", function()
       local mock_grid = make_mock_grid()
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
@@ -375,8 +375,9 @@ describe("grid_render", function()
         if call.type == "color" then color_count = color_count + 1 end
         if call.type == "rect_fill" then rect_count = rect_count + 1 end
       end
-      assert.are.equal(128, color_count)
-      assert.are.equal(128, rect_count)
+      -- 2 per cell (edge + fill): 128 cells * 2 = 256
+      assert.are.equal(256, color_count)
+      assert.are.equal(256, rect_count)
     end)
 
     it("draws 64 cells for 64 size (8x8)", function()
@@ -388,7 +389,7 @@ describe("grid_render", function()
       for _, call in ipairs(mock_screen.calls) do
         if call.type == "rect_fill" then rect_count = rect_count + 1 end
       end
-      assert.are.equal(64, rect_count)
+      assert.are.equal(128, rect_count)  -- 64 cells * 2 (edge + fill)
     end)
 
     it("draws 256 cells for 256 size (16x16)", function()
@@ -400,17 +401,18 @@ describe("grid_render", function()
       for _, call in ipairs(mock_screen.calls) do
         if call.type == "rect_fill" then rect_count = rect_count + 1 end
       end
-      assert.are.equal(256, rect_count)
+      assert.are.equal(512, rect_count)  -- 256 cells * 2 (edge + fill)
     end)
 
-    it("brightness 15 at (3,2) uses theme bright color and correct position", function()
+    it("brightness 15 at (3,2) uses theme bright color at inset position", function()
       local mock_grid = make_mock_grid()
       mock_grid:led(3, 2, 15)
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
       local found = false
+      -- Fill is inset 1px from cell origin: (32+1, 16+1) = (33, 17)
       for i, call in ipairs(mock_screen.calls) do
-        if call.type == "move" and call.x == 32 and call.y == 16 then
+        if call.type == "move" and call.x == 33 and call.y == 17 then
           local color_call = mock_screen.calls[i - 1]
           assert.are.equal("color", color_call.type)
           assert.are.equal(255, color_call.r)
@@ -419,19 +421,36 @@ describe("grid_render", function()
           found = true
         end
       end
-      assert.is_true(found, "expected move to (32, 16) with yellow bright color")
+      assert.is_true(found, "expected fill move to (33, 17) with yellow bright color")
     end)
 
-    it("renders brightness 0 cells as theme dark color", function()
+    it("renders brightness 0 cells as theme dark color (fill after edge)", function()
       local mock_grid = make_mock_grid()
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
-      -- First color call should be the dark color
-      local first_color = mock_screen.calls[1]
-      assert.are.equal("color", first_color.type)
-      assert.are.equal(22, first_color.r)
-      assert.are.equal(22, first_color.g)
-      assert.are.equal(21, first_color.b)
+      -- First cell: calls[1]=edge color, [2]=edge move, [3]=edge rect,
+      --             calls[4]=fill color, [5]=fill move, [6]=fill rect
+      local fill_color = mock_screen.calls[4]
+      assert.are.equal("color", fill_color.type)
+      assert.are.equal(22, fill_color.r)
+      assert.are.equal(22, fill_color.g)
+      assert.are.equal(21, fill_color.b)
+    end)
+
+    it("renders edge border darker than theme dark color", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen)
+      -- First color call is the edge color
+      local edge = mock_screen.calls[1]
+      assert.are.equal("color", edge.type)
+      local er, eg, eb = grid_render.edge_rgb()
+      assert.are.equal(er, edge.r)
+      assert.are.equal(eg, edge.g)
+      assert.are.equal(eb, edge.b)
+      -- Edge must be darker than theme dark
+      assert.is_true(er < 22, "edge R should be darker than dark")
+      assert.is_true(eg < 22, "edge G should be darker than dark")
     end)
 
     it("draws lock dot indicators for locked keys", function()
@@ -727,9 +746,17 @@ describe("grid_render", function()
       mock_grid:all(0)
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
+      -- Every other color call (with a==255) is a fill; check those are dark
+      local color_idx = 0
+      local er = grid_render.edge_rgb()
       for _, call in ipairs(mock_screen.calls) do
         if call.type == "color" and call.a == 255 then
-          assert.are.equal(22, call.r, "expected R=22 (dark) after cleanup")
+          color_idx = color_idx + 1
+          if color_idx % 2 == 0 then  -- fill colors (even)
+            assert.are.equal(22, call.r, "expected R=22 (dark) after cleanup")
+          else  -- edge colors (odd)
+            assert.are.equal(er, call.r, "expected edge R after cleanup")
+          end
         end
       end
     end)
