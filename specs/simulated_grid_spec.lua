@@ -204,13 +204,13 @@ describe("simulated grid", function()
         rect_fill = function(w, h) calls[#calls + 1] = {type = "rect_fill", w = w, h = h} end,
       }
       grid_render.draw(g, mock_screen)
-      -- 128 cells drawn (color + move + rect_fill per cell = 384 calls)
+      -- 128 cells drawn, 2 color calls each (edge + fill) = 256
       local colors = 0
       for _, c in ipairs(calls) do if c.type == "color" then colors = colors + 1 end end
-      assert.are.equal(128, colors)
-      -- Cell (1,1) should have yellow theme bright color (brightness 15)
-      assert.are.equal(255, calls[1].r)
-      assert.are.equal(250, calls[1].g)
+      assert.are.equal(256, colors)
+      -- Cell (1,1): calls[1]=edge color, calls[4]=fill color (bright)
+      assert.are.equal(255, calls[4].r)
+      assert.are.equal(250, calls[4].g)
     end)
 
     -- T034: screen.click path — handle_click delegates to simulated provider key callback
@@ -353,7 +353,7 @@ describe("simulated grid", function()
         rect_fill = function(w, h) draw_calls[#draw_calls + 1] = "rect" end,
       }
       grid_render.draw(g, mock_screen)
-      assert.are.equal(384, #draw_calls)  -- 128 color + 128 move + 128 rect
+      assert.are.equal(768, #draw_calls)  -- 128 cells * 2 (edge+fill) * 3 calls each
       -- Click on cell (5,3) — pixel (64, 32)
       local key_event = nil
       g.key = function(x, y, z) key_event = {x = x, y = y, z = z} end

@@ -56,6 +56,9 @@ local cell_pitch = 16
 -- matching monome-rack's approach for screen-visible dim LEDs)
 local CURVE_K = -2.7
 
+-- Cell edge inset (pixels) — 1px border around each cell for definition
+local EDGE_INSET = 1
+
 -- Modifier keys (global — one keyboard shared across grids)
 local modifier_state = {ctrl = false, shift = false}
 
@@ -137,6 +140,23 @@ function M.get_modifier(name)
 end
 
 -- ========================================================================
+-- Edge color (darker than LED-off for visible cell framing)
+-- ========================================================================
+
+local function compute_edge_rgb()
+  local t = M.THEMES[config.theme] or M.THEMES.yellow
+  return math.max(0, math.floor(t.dark[1] * 0.4)),
+         math.max(0, math.floor(t.dark[2] * 0.4)),
+         math.max(0, math.floor(t.dark[3] * 0.4))
+end
+
+--- Get the current theme's cell edge color (for testing/introspection).
+--- @return number, number, number  R, G, B values (0-255)
+function M.edge_rgb()
+  return compute_edge_rgb()
+end
+
+-- ========================================================================
 -- Brightness mapping
 -- ========================================================================
 
@@ -195,14 +215,21 @@ end
 --- @param scr table  Screen object with color(), move(), rect_fill()
 function M.draw(grid, scr)
   local locks = locked_keys[grid]
+  local er, eg, eb = compute_edge_rgb()
+  local fill_size = cell_size - EDGE_INSET * 2
   for y = 1, grid_rows do
     for x = 1, grid_cols do
       local brightness = grid:get_led(x, y)
       local r, g, b = M.brightness_to_rgb(brightness)
-      scr.color(r, g, b, 255)
       local px, py = M.grid_to_pixel(x, y)
+      -- Cell edge border (dark frame around each cell)
+      scr.color(er, eg, eb, 255)
       scr.move(px, py)
       scr.rect_fill(cell_size, cell_size)
+      -- Cell fill (inset for edge visibility)
+      scr.color(r, g, b, 255)
+      scr.move(px + EDGE_INSET, py + EDGE_INSET)
+      scr.rect_fill(fill_size, fill_size)
       -- Lock dot indicator (lower-left corner of cell)
       if locks and locks[x .. ":" .. y] then
         local dot = math.max(2, math.floor(cell_size / 5))
