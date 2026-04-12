@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- Time modifier (F1) keyboard shortcut had no effect: seamstress delivers
+  function keys as tables (`{name = "F1"}`), but the keyboard handler
+  early-returned on non-string chars before reaching the F1/F2 branches.
+  F1 now toggles `time_held` and F2 switches to alt_track as intended. (re-di2)
+
 ## [2026-04-03]
 
 ### Added
@@ -26,7 +32,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### In Progress
 - Params menu back-navigation (re-35u)
-- Time modifier / clock divider (re-di2)
 - Probability modifier (re-2d4)
 - Ratchet page UX improvements (re-sfk)
 - screen_ui.redraw wiring into seamstress.lua render loop (re-5nt)

@@ -368,33 +368,54 @@ describe("keyboard", function()
   end)
 
   describe("ansible key emulation", function()
+    -- seamstress delivers F-keys as tables ({name = "F1"}), not strings.
+    -- The keyboard handler must accept the table form; string "f1" never
+    -- arrives from the real runtime.
+    local F1 = {name = "F1"}
+    local F2 = {name = "F2"}
 
-    it("f1 toggles time_held on", function()
+    it("F1 toggles time_held on", function()
       local ctx = make_ctx()
       ctx.time_held = false
-      keyboard.key(ctx, "f1", {}, false, 1)
+      keyboard.key(ctx, F1, {}, false, 1)
       assert.is_true(ctx.time_held)
     end)
 
-    it("f1 toggles time_held off", function()
+    it("F1 toggles time_held off", function()
       local ctx = make_ctx()
       ctx.time_held = true
-      keyboard.key(ctx, "f1", {}, false, 1)
+      keyboard.key(ctx, F1, {}, false, 1)
       assert.is_false(ctx.time_held)
     end)
 
-    it("f2 switches to alt_track page", function()
+    it("F1 marks grid dirty so the time page redraws", function()
+      local ctx = make_ctx()
+      ctx.grid_dirty = false
+      keyboard.key(ctx, F1, {}, false, 1)
+      assert.is_true(ctx.grid_dirty)
+    end)
+
+    it("F2 switches to alt_track page", function()
       local ctx = make_ctx()
       ctx.active_page = "trigger"
-      keyboard.key(ctx, "f2", {}, false, 1)
+      keyboard.key(ctx, F2, {}, false, 1)
       assert.are.equal("alt_track", ctx.active_page)
     end)
 
-    it("f2 from any page switches to alt_track", function()
+    it("F2 from any page switches to alt_track", function()
       local ctx = make_ctx()
       ctx.active_page = "note"
-      keyboard.key(ctx, "f2", {}, false, 1)
+      keyboard.key(ctx, F2, {}, false, 1)
       assert.are.equal("alt_track", ctx.active_page)
+    end)
+
+    it("unknown table-form keycodes are ignored", function()
+      local ctx = make_ctx()
+      ctx.time_held = false
+      ctx.active_page = "trigger"
+      keyboard.key(ctx, {name = "F5"}, {}, false, 1)
+      assert.is_false(ctx.time_held)
+      assert.are.equal("trigger", ctx.active_page)
     end)
 
   end)
