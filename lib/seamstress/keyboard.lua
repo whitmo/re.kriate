@@ -27,6 +27,21 @@ end
 function M.key(ctx, char, modifiers, is_repeat, state)
   if state ~= 1 then return end
   if is_repeat then return end
+
+  -- Function keys: seamstress keycodes.lua returns a table {name = "F1"} for
+  -- non-printable keys. Match on the name before the string-only guard below,
+  -- so Ansible KEY 1/2 emulation actually fires.
+  if type(char) == "table" then
+    if char.name == "F1" then
+      ctx.time_held = not ctx.time_held
+      ctx.grid_dirty = true
+    elseif char.name == "F2" then
+      ctx.active_page = "alt_track"
+      ctx.grid_dirty = true
+    end
+    return
+  end
+
   if type(char) ~= "string" then return end
 
   if char == " " then
@@ -93,12 +108,6 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     if not ctx.loop_held then
       ctx.loop_first_press = nil
     end
-  elseif char == "f1" then
-    -- Ansible KEY 1: toggle time modifier
-    ctx.time_held = not ctx.time_held
-  elseif char == "f2" then
-    -- Ansible KEY 2: config/alt-track page
-    ctx.active_page = "alt_track"
   elseif KEY_PAGE[char] then
     local target = KEY_PAGE[char]
     if ctx.active_page == target and grid_ui.EXTENDED_PAGES[target] then
