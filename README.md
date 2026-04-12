@@ -4,39 +4,29 @@ A kria-inspired polymetric sequencer for [norns](https://monome.org/docs/norns/)
 
 Based on [kria](https://monome.org/docs/ansible/kria/) from monome Ansible — each track has independent loop lengths per parameter, creating evolving polymetric patterns.
 
-For an interactive visual guide to the grid interface, see [`docs/grid-interface.html`](docs/grid-interface.html).
+For an interactive visual guide to the grid interface, see [`docs/html/grid-interface.html`](docs/html/grid-interface.html).
 
 ## Features
 
 - 4 tracks with independent clocks and per-track clock division
-- Per-parameter loop lengths (trigger, note, octave, duration, velocity)
-- Extended parameters: ratchet, alt note, glide
+- Per-parameter loop lengths (trigger, note, octave, duration, velocity, probability, ratchet, alt note, glide)
+- Per-parameter clock divider (Time modifier)
 - 5 direction modes: forward, reverse, pendulum, drunk, random
-- Per-track mute
-- Scale quantization (14 scales via musicutil)
-- Multiple voice backends: MIDI, OSC, SuperCollider drums, softcut sampler
+- Per-track mute and swing
+- Scale quantization — 14 built-in scales plus a custom mask editor
+- Trigger probability (1-7 → 0–100%) with ratchet gating
+- Ratchet: per-sub-gate bitmask display on its own grid page
+- Pattern bank with 16 slots, quantized cueing during playback, disk persistence
+- Meta-sequencer: ordered pattern sequence with per-step loop counts
+- Full session presets (tracks + patterns + meta-sequence + params) with checksum guard and autosave
+- MIDI clock sync — external slave, internal master clock output, Start/Stop/Continue transport
+- Multiple voice backends: MIDI, OSC, SuperCollider synth (sub/fm/wavetable), SuperCollider drums, softcut sampler, sprite (visual)
 - [nb](https://github.com/sixolet/nb) voice output on norns
-- Per-track swing and trigger clocking
-- Per-parameter clock division
-- Monome grid UI with trigger overview, per-parameter editing, and extended page toggle
+- Monome grid UI (16x8) with page-tray screen indicator, trigger/value pages, loop editing, hold modifiers
 - Push 2 grid support (Ableton Push 2 as 16x8 monome grid)
-- Dedicated probability and alt-track grid pages for performance controls
+- Help overlay (`?`), grid theme cycling (yellow/red/orange/white)
 - Remote control API (OSC transport)
 - Keyboard fallback controls (seamstress)
-- Musically useful default patterns out of the box
-- Pattern bank disk persistence API with checksum validation
-- Sprite visualization layer (seamstress)
-
-### Norns
-
-- [nb](https://github.com/sixolet/nb) voice output (engines, MIDI, crow)
-
-### Seamstress
-
-- Configurable voice per track (MIDI, OSC, SuperCollider drums, softcut sampler)
-- Keyboard controls (no encoders/keys needed)
-- Simulated grid display with mouse interaction
-- Sprite rendering -- visual feedback on the seamstress screen
 
 ## Requirements
 
@@ -49,9 +39,9 @@ For an interactive visual guide to the grid interface, see [`docs/grid-interface
 
 ### Seamstress
 
-- [seamstress](https://github.com/ryleelyman/seamstress) v1.4.x (v2 is not yet supported)
-- Monome grid (128 recommended)
-- A MIDI device on port 1 (configurable via params)
+- [seamstress](https://github.com/ryleelyman/seamstress) v1.4.7+ (v2 is not yet supported)
+- Monome grid (128 recommended) — or use the simulated grid window
+- A MIDI device for the default MIDI voice (optional; configurable per track)
 
 ## Install & Run
 
@@ -60,14 +50,14 @@ For an interactive visual guide to the grid interface, see [`docs/grid-interface
 From maiden (norns web REPL):
 
 ```
-;install https://github.com/whit/re.kriate
+;install https://github.com/whitmo/re.kriate
 ```
 
 Or manually clone into `~/dust/code/`:
 
 ```
 cd ~/dust/code
-git clone https://github.com/whit/re.kriate re_kriate
+git clone https://github.com/whitmo/re.kriate re_kriate
 ```
 
 Then select **re.kriate** from the norns script menu.
@@ -77,7 +67,7 @@ Then select **re.kriate** from the norns script menu.
 Clone the repo anywhere:
 
 ```
-git clone https://github.com/whit/re.kriate
+git clone https://github.com/whitmo/re.kriate
 cd re.kriate
 ```
 
@@ -87,7 +77,7 @@ Run with the `-s` flag:
 /opt/homebrew/opt/seamstress@1/bin/seamstress -s seamstress.lua
 ```
 
-Make sure a MIDI device is connected before launching. The script sends MIDI on channels 1-4 (one per track) by default, configurable in the params menu.
+The script sends MIDI on channels 1-4 (one per track) by default, configurable in the params menu. See [`docs/voice-quickstart.md`](docs/voice-quickstart.md) to switch a track to OSC, SuperCollider, or softcut.
 
 ## Controls
 
@@ -99,40 +89,51 @@ Row 8:    navigation
 
 Row 8 layout:
   1-4      track select
-  6        trigger page (double-tap: ratchet)
-  7        note page (double-tap: alt note)
-  8        octave page (double-tap: glide)
-  9        cycle: duration → velocity → probability
-  11       loop edit (hold)
+  5        KEY 1 — time modifier (hold: per-param clock division)
+  6        trigger page (press again: ratchet)
+  7        note page (press again: alt note)
+  8        octave page (press again: glide)
+  9        cycles: duration → velocity → probability
+  10       KEY 2 — config / alt-track page
+  11       loop modifier (hold)
   12       pattern mode (hold)
   13       mute toggle
-  14       scale page
-  15       alt-track page
+  14       probability modifier (hold)
+  15       scale page
+  16       meta (double-press: meta-pattern sequencer)
 ```
 
 **Trigger page:** rows 1-4 show all 4 tracks at once. Press to toggle steps.
 
-**Value pages** (note, octave, duration, velocity, ratchet, alt note, glide): rows 1-7 show the active track. Row 1 = highest value (7), row 7 = lowest (1). Press to set a step's value.
+**Value pages** (note, octave, duration, velocity, probability, alt note, glide): rows 1-7 show the active track. Row 1 = highest value (7), row 7 = lowest (1). Press to set a step's value.
 
-**Probability page:** nav `x=11` opens trigger probability editing for the active track. Rows 1-7 act like a value page, mapping top-to-bottom from high to low probability.
+**Ratchet page:** rows 1-7 show a per-step bitmask of sub-gates (which sub-divisions of the step fire). Toggle individual sub-gates by pressing.
 
-**Alt-track page:** nav `x=15` opens a per-track performance page. Each row is a track; columns `1-4` set direction, `5-11` set division, `12-15` set coarse swing, and `16` toggles mute.
+**Alt-track page** (nav `x=10` or `x=16`): per-track performance page. Each row is a track; columns `1-4` set direction, `5-11` set division, `13-15` set coarse swing, `16` toggles mute.
 
-**Extended pages:** double-tap a page button to toggle its extended parameter:
-- trigger → **ratchet** (number of note repeats within a step, 1-7)
-- note → **alt note** (secondary note offset combined with note degree)
+**Scale page** (nav `x=15`): select a built-in scale or edit the custom scale mask (toggle individual semitones within an octave).
+
+**Meta-pattern page** (double-press nav `x=16`): sequence pattern slots with per-step loop counts; playback walks through the meta-sequence, each step playing its slot for N track-1 loops.
+
+**Extended pages:** press the same nav button a second time to toggle its extended parameter:
+- trigger → **ratchet** (per-step sub-gate bitmask)
+- note → **alt note** (secondary note offset, additive with note degree)
 - octave → **glide** (portamento amount, 1 = none, 7 = max)
 
-**Loop editing:** hold grid key 12 on row 8, then press two step columns to set the loop start and end for the current page/track.
+**Loop editing (hold x=11):** hold the loop modifier, then press two step columns to set the loop start and end for the current page/track.
 
-**Right-click latch (seamstress simulated grid):** right-click nav `x=12` to latch/unlatch loop hold, or nav `x=14` to latch/unlatch pattern hold without keeping the mouse button down.
+**Probability overlay (hold x=14):** hold the probability modifier to see and edit per-step trigger probability without leaving the current page.
+
+**Pattern mode (hold x=12):** rows 1-2 become 16 pattern slots. Press a slot to load it. While the sequencer is playing, the load is *queued* and transitions at the next track-1 loop boundary (quantized cueing); cued slots render at brightness 13. When stopped, loads are immediate. Latch pattern hold by right-clicking the nav button (simulated grid).
+
+**Right-click latches (simulated grid):** right-click nav `x=11` to latch/unlatch loop hold, `x=12` for pattern hold, `x=14` for probability hold.
 
 ### Norns keys and encoders
 
 | Control | Action |
 |---------|--------|
 | E1 | Select track (1-4) |
-| E2 | Select page (cycles all 8 pages) |
+| E2 | Select page |
 | K2 | Play / stop |
 | K3 | Reset all playheads |
 
@@ -144,48 +145,61 @@ Row 8 layout:
 | R | Reset all playheads |
 | 1-4 | Select track |
 | Q / W / E / T / Y | Select page (trig / note / oct / dur / vel) |
-| Ctrl+P | Jump to probability page |
+| D | Cycle direction mode for active track |
+| F1 | Toggle time modifier (per-param division overlay) |
+| F2 | Jump to alt-track page |
+| L | Toggle loop hold |
+| Ctrl+P | Toggle probability overlay |
+| Ctrl+A | Jump to alt-track page |
 | Ctrl+B | List saved pattern banks |
-| Ctrl+S | Save current pattern bank by name |
-| Ctrl+L | Load current pattern bank by name |
+| Ctrl+S / Ctrl+L | Save / load current pattern bank by name |
 | Ctrl+Shift+D | Delete current pattern bank by name |
 | Ctrl+1-9 | Save pattern to slot |
 | Shift+1-9 | Load pattern from slot |
+| Ctrl+Shift+T | Cycle grid theme |
+| ? | Toggle help overlay |
 
 ### Pattern bank persistence
 
-Pattern slots now have a disk persistence module in `lib/pattern_persistence.lua`.
-It saves the full 16-slot bank with a checksum guard so corrupted files are rejected
-before `ctx` is mutated.
+Pattern banks are stored as `.krp` files under platform data dirs (norns `dust/data`, seamstress XDG data dir) with an Adler-32 checksum guard so corrupted files are rejected before `ctx` is mutated. Bank saves include the full 16-slot bank plus meta-sequencer state.
 
 ```lua
 local pp = require("lib/pattern_persistence")
 
 local ok, path_or_err = pp.save(ctx, "my-set")
-assert(ok, path_or_err)
-
-local loaded, err = pp.load(ctx, "my-set")
-assert(loaded, err)
-
-local banks = pp.list()
-assert.are.same({"my-set"}, banks)
+local loaded, err    = pp.load(ctx, "my-set")
+local banks          = pp.list()
 ```
 
-For a quick manual smoke test, use `lua scripts/pattern_persistence_demo.lua save demo`
-and `lua scripts/pattern_persistence_demo.lua load demo`, or run tests with
-`./scripts/busted.sh --no-auto-insulate specs/pattern_persistence_spec.lua`.
-On seamstress, the params menu exposes the same save/load/list/delete actions under
-the `pattern persistence` group, and keyboard shortcuts surface status messages on
-the screen.
+The params menu exposes save/load/list/delete actions under the **pattern persistence** group. On seamstress, keyboard shortcuts surface status messages on the screen.
+
+### Session presets
+
+`lib/preset.lua` snapshots a full session: all tracks, pattern bank, meta-sequence, and re.kriate-managed params (root_note, scale_type, osc host/port, clock source/output, active bank, per-track voice/channel/synthdef/sample/division/direction/swing). Presets are saved as `.krp` files with the same checksum scheme. Autosave is available via the `preset_autosave` param — on startup the `_autosave` preset is loaded; on cleanup it is rewritten.
+
+### MIDI clock sync
+
+`lib/clock_sync.lua` implements 24-PPQ MIDI clock sync (spec 010):
+
+- **Internal master** (default): re.kriate drives its own clock. Enable `clock_output` to send MIDI Clock + Start/Stop/Continue out to the configured MIDI port.
+- **External slave** (`clock_source = external MIDI`): the sequencer locks to incoming MIDI clock pulses, with BPM estimated over a rolling 24-pulse window. Start/Stop/Continue transport messages drive sequencer start/stop.
+
+The screen UI shows a clock status indicator when external clock is selected.
 
 ### Parameters
 
-- **root note** -- scale root (MIDI note, default 60/C4)
-- **scale** -- Major, Natural Minor, Dorian, Mixolydian, Lydian, Phrygian, Locrian, Harmonic Minor, Melodic Minor, Pentatonic Major, Pentatonic Minor, Blues, Whole Tone, Chromatic
-- **track N division** -- clock division per track (1/16 through 1/1)
-- **track N direction** -- playhead direction per track
-- **voice N** -- nb voice assignment per track (norns only)
-- **track N channel** -- MIDI channel per track (seamstress only)
+- **root note** — scale root (MIDI note, default 60 / C4)
+- **scale** — Major, Natural Minor, Dorian, Mixolydian, Lydian, Phrygian, Locrian, Harmonic Minor, Melodic Minor, Major Pentatonic, Minor Pentatonic, Blues Scale, Whole Tone, Chromatic, **Custom** (editable mask)
+- **track N division** — clock division per track (1/16 through 1/1)
+- **track N direction** — playhead direction per track
+- **track N swing** — 0-100%
+- **track N voice** — `midi`, `osc`, `sc_synth`, `sc_drums`, `softcut`, `none` (seamstress); nb voice on norns
+- **track N midi ch** — MIDI channel (seamstress only)
+- **track N sc synthdef** — `sub`, `fm`, `wavetable` (when voice = `sc_synth`)
+- **clock source** — `internal` or `external MIDI`
+- **clock output** — off / on
+- **pattern bank name / preset name** — active bank/preset for save/load
+- **preset autosave** — on/off
 
 ### Value ranges
 
@@ -196,7 +210,7 @@ the screen.
 | octave | 1-7 | octave offset (4 = center) |
 | duration | 1-7 | 1/16 beat to 4 beats |
 | velocity | 1-7 | 0.15 to 1.0 |
-| ratchet | 1-7 | note repeats per step (1 = normal) |
+| ratchet | 1-7 | number of sub-gates within the step (per-gate bitmask) |
 | alt note | 1-7 | degree offset added to note (1 = none) |
 | glide | 1-7 | portamento amount (1 = none) |
 | probability | 1-7 | trigger probability (1 = 0%, 7 = 100%) |
@@ -205,33 +219,37 @@ the screen.
 
 Each track has a direction mode that controls how all its parameters step through the loop:
 
-- **forward** -- left to right, wrap at end
-- **reverse** -- right to left, wrap at start
-- **pendulum** -- bounce back and forth
-- **drunk** -- random walk (+/-1 or stay)
-- **random** -- jump to any position in loop
+- **forward** — left to right, wrap at end
+- **reverse** — right to left, wrap at start
+- **pendulum** — bounce back and forth
+- **drunk** — random walk (+/-1 or stay)
+- **random** — jump to any position in loop
 
 ## Architecture
 
 ```
 re_kriate.lua                    norns entrypoint (thin global hooks)
-seamstress.lua                   seamstress entrypoint (MIDI voices, keyboard, sprites)
+seamstress.lua                   seamstress entrypoint (voices, keyboard, sprites)
 
-lib/app.lua                      init, params, grid, screen, key/enc
+lib/app.lua                      init, params, grid, screen, key/enc orchestration
 lib/sequencer.lua                clock-driven step advancement, voice output
 lib/track.lua                    data model (steps, loops, defaults)
 lib/grid_ui.lua                  grid display and input
-lib/scale.lua                    scale quantization via musicutil
-lib/pattern.lua                  pattern save/load slots
-lib/pattern_persistence.lua      pattern bank save/load/list/delete on disk
+lib/scale.lua                    scale quantization + custom mask
+lib/pattern.lua                  in-memory pattern save/load slots
+lib/pattern_persistence.lua      disk persistence (.krp, checksum-guarded)
+lib/preset.lua                   full session preset save/load + autosave
+lib/meta_pattern.lua             meta-sequencer (ordered pattern sequence)
 lib/direction.lua                playhead direction modes
-lib/grid_provider.lua            pluggable grid provider interface (monome, midigrid, virtual, simulated, push2, synthetic)
+lib/clock_sync.lua               MIDI clock sync (external slave, clock output)
+lib/grid_provider.lua            pluggable grid backend (monome, midigrid, virtual, simulated, push2, synthetic)
 lib/grid_push2.lua               Ableton Push 2 grid adapter
 lib/events.lua                   lightweight pub/sub event bus
 lib/log.lua                      leveled logging with crash-capture wrappers
 
 lib/voices/midi.lua              direct MIDI voice output
-lib/voices/osc.lua               OSC voice output
+lib/voices/osc.lua               OSC voice output (SuperCollider-shaped OSC)
+lib/voices/sc_synth.lua          SuperCollider melodic synth (sub/fm/wavetable)
 lib/voices/sc_drums.lua          SuperCollider drum voice
 lib/voices/softcut_zig.lua       softcut sampler voice
 lib/voices/softcut_runtime.lua   buffer management runtime for softcut
@@ -244,15 +262,28 @@ lib/seamstress/keyboard.lua      keyboard input handler
 lib/seamstress/screen_ui.lua     seamstress screen display
 lib/seamstress/grid_render.lua   simulated grid renderer
 lib/seamstress/sprite_render.lua sprite drawing
+lib/seamstress/help_overlay.lua  on-screen help overlay
 
 lib/remote/api.lua               transport-agnostic remote control API
 lib/remote/grid_api.lua          remote grid state and key injection
 lib/remote/osc.lua               OSC transport for remote API
 
-docs/grid-interface.html         interactive visual guide to the grid UI
+docs/html/grid-interface.html    interactive visual guide to the grid UI
+docs/html/voices.html            voice system deep dive
+docs/html/event-system-explainer.html   event bus architecture
+docs/html/polymetric-sequencing.html    polymetric tutorial
+docs/html/synthetic-grid-explainer.html synthetic grid explainer
 ```
 
 All state flows through a single `ctx` table. No custom globals.
+
+## Documentation
+
+- [`docs/voice-quickstart.md`](docs/voice-quickstart.md) — voice backends and demo scripts
+- [`docs/supercollider-setup.md`](docs/supercollider-setup.md) — SuperCollider voice setup
+- [`docs/html/`](docs/html) — visual guides (grid, voices, events, polymetry)
+- [`docs/archive/`](docs/archive) — historical snapshots and reports
+- [`CHANGELOG.md`](CHANGELOG.md) — release notes
 
 ## References
 
