@@ -246,7 +246,7 @@ describe("softcut voice integration", function()
     params:set("voice_1", 4)
     assert.is_not_nil(ctx.voices[1])
 
-    params:set("voice_1", 5) -- "none"
+    params:set("voice_1", 6) -- "none"
     assert.is_nil(ctx.voices[1])
     app.cleanup(ctx)
   end)
