@@ -255,6 +255,38 @@ local function ensure_ratchet_bits(track)
   end
 end
 
+-- Snapshot meta-sequencer state for persistence.
+-- Only durable fields are saved; runtime playback state (active, pos,
+-- loop_counter, cued_slot) is intentionally omitted so a loaded bank never
+-- resumes mid-playback.
+local function snapshot_meta(meta)
+  if type(meta) ~= "table" then return nil end
+  return {
+    steps = deep_copy(meta.steps),
+    length = meta.length,
+    selected_step = meta.selected_step,
+  }
+end
+
+-- Restore meta-sequencer state from a payload snapshot. Runtime fields are
+-- reset to safe defaults; existing ctx.meta is replaced in-place so external
+-- references remain valid.
+local function apply_meta(ctx, saved)
+  if not ctx or type(saved) ~= "table" then return end
+  local target = ctx.meta
+  if type(target) ~= "table" then
+    target = {}
+    ctx.meta = target
+  end
+  target.steps = deep_copy(saved.steps)
+  target.length = saved.length or 0
+  target.selected_step = saved.selected_step or 1
+  target.pos = 1
+  target.loop_counter = 0
+  target.active = false
+  target.cued_slot = nil
+end
+
 local function ensure_slots_migrated(slots)
   if not slots then return end
   for _, slot in pairs(slots) do
@@ -312,6 +344,11 @@ function pattern_persistence.save(ctx, name)
     slots = deep_copy(ctx.patterns),
   }
 
+  local meta_snapshot = snapshot_meta(ctx.meta)
+  if meta_snapshot then
+    payload.meta = meta_snapshot
+  end
+
   -- pick first populated slot as default loaded slot
   for i = 1, #payload.slots do
     if payload.slots[i].populated then
@@ -357,6 +394,12 @@ function pattern_persistence.load(ctx, name)
   local slot_num = data.saved_slot or 1
   if slots[slot_num] and slots[slot_num].populated and slots[slot_num].tracks then
     ctx.tracks = deep_copy(slots[slot_num].tracks)
+  end
+
+  -- restore meta-sequencer state when present. Banks saved before this field
+  -- existed simply leave ctx.meta untouched so in-memory chains survive load.
+  if type(data.meta) == "table" then
+    apply_meta(ctx, data.meta)
   end
 
   return true
