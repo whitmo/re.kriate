@@ -12,6 +12,7 @@ local direction = require("lib/direction")
 local grid_provider = require("lib/grid_provider")
 local events = require("lib/events")
 local log = require("lib/log")
+local clock_sync = require("lib/clock_sync")
 
 local M = {}
 
@@ -42,6 +43,9 @@ local VOICE_TYPES = {"midi", "osc", "sc_drums", "softcut", "sc_synth", "none"}
 local SC_SYNTHDEFS = {"sub", "fm", "wavetable"}
 local DEFAULT_PATTERN_BANK = "default"
 local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
+
+local CLOCK_SOURCE_OPTIONS = {"internal", "external MIDI"}
+local CLOCK_OUTPUT_OPTIONS = {"off", "on"}
 
 --- Convert a MIDI note number to a human-readable note name (C0 = MIDI 0)
 local function note_name(midi_num)
@@ -193,6 +197,69 @@ local function add_pattern_persistence_params(ctx)
   end)
 end
 
+--- Attach a MIDI input callback that routes clock/transport bytes into
+--- ctx.clock_sync and drives sequencer start/stop/reset via transport messages.
+--- The callback chains onto any existing midi_in_dev.event handler so this does
+--- not stomp user-installed handlers.
+local function attach_midi_input(ctx)
+  local dev = ctx.clock_sync and ctx.clock_sync.midi_in_dev
+  if not dev then return end
+  local sequencer = require("lib/sequencer")
+  local prev_event = dev.event
+  dev.event = log.wrap(function(data)
+    local events_fired = clock_sync.process_midi(ctx.clock_sync, data, os.clock())
+    for _, ev in ipairs(events_fired) do
+      if ctx.clock_sync.source == clock_sync.SOURCE_EXT_MIDI then
+        if ev == "start" then
+          sequencer.reset(ctx)
+          sequencer.start(ctx)
+        elseif ev == "continue" then
+          sequencer.start(ctx)
+        elseif ev == "stop" then
+          sequencer.stop(ctx)
+        end
+      end
+    end
+    if prev_event then prev_event(data) end
+  end, "clock_sync.midi_event")
+end
+
+--- Apply the current clock source to the platform. On norns there is a global
+--- "clock_source" param (1=internal, 2=midi). If it is absent (e.g. seamstress
+--- or test harness) this is a no-op.
+local function apply_platform_clock_source(ctx)
+  if not params or not params.lookup or not params.set then return end
+  local sys_id = "clock_source"
+  if not params.lookup[sys_id] then return end
+  local platform_value = (ctx.clock_sync.source == clock_sync.SOURCE_EXT_MIDI) and 2 or 1
+  if params:get(sys_id) ~= platform_value then
+    params:set(sys_id, platform_value)
+  end
+end
+
+local function add_clock_sync_params(ctx)
+  if not params or not params.add_group then return end
+  params:add_group("clock_sync", "clock sync", 2)
+  params:add_option("clock_source_mode", "clock source", CLOCK_SOURCE_OPTIONS, 1)
+  params:add_option("clock_output", "clock output", CLOCK_OUTPUT_OPTIONS, 1)
+
+  params:set_action("clock_source_mode", function(val)
+    local sequencer = require("lib/sequencer")
+    local desired = (val == 2) and clock_sync.SOURCE_EXT_MIDI or clock_sync.SOURCE_INTERNAL
+    if ctx.clock_sync.source == desired then return end
+    -- FR-009: switching while playing must stop and silence all voices first.
+    if ctx.playing then
+      sequencer.stop(ctx)
+    end
+    clock_sync.set_source(ctx.clock_sync, desired)
+    apply_platform_clock_source(ctx)
+  end)
+
+  params:set_action("clock_output", function(val)
+    clock_sync.set_output_enabled(ctx.clock_sync, val == 2)
+  end)
+end
+
 function M.init(config)
   config = config or {}
 
@@ -217,6 +284,15 @@ function M.init(config)
     meta = meta_pattern.new(),
     midi_dev = config.midi_dev,
   }
+
+  -- Clock sync state: MIDI clock input/output + transport (spec 010).
+  -- Input/output default to the shared midi_dev; consumers can override later.
+  ctx.clock_sync = clock_sync.new({
+    midi_in_dev = config.clock_midi_in_dev or config.midi_dev,
+    midi_out_dev = config.clock_midi_out_dev or config.midi_dev,
+    midi_in_port = config.clock_midi_in_port or 1,
+    midi_out_port = config.clock_midi_out_port or 1,
+  })
 
   -- params: global settings
   params:add_separator("re_kriate", "re.kriate")
@@ -305,6 +381,7 @@ function M.init(config)
     end)
   end
 
+  add_clock_sync_params(ctx)
   add_pattern_persistence_params(ctx)
 
   -- Build initial voices from params (unless config provided voices)
@@ -342,6 +419,8 @@ function M.init(config)
     end
   end, "grid_metro.event")
   ctx.grid_metro:start()
+
+  attach_midi_input(ctx)
 
   return ctx
 end
@@ -424,6 +503,16 @@ function M.redraw(ctx)
   screen.text("track " .. ctx.active_track .. " | " .. ctx.active_page)
   screen.move(5, 40)
   screen.text(ctx.playing and "playing" or "stopped")
+
+  -- clock sync status line (spec 010 FR-010)
+  if ctx.clock_sync then
+    local internal_bpm = nil
+    if params and params.get and params.lookup and params.lookup["clock_tempo"] then
+      internal_bpm = params:get("clock_tempo")
+    end
+    screen.move(5, 52)
+    screen.text(clock_sync.display(ctx.clock_sync, internal_bpm, os.clock()))
+  end
 
   -- page indicator tray along bottom
   local tray_y = 62

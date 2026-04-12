@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- MIDI clock sync (spec 010): external clock source, clock output at 24 PPQ, Start/Stop/Continue transport messages, clock status display (re-ot4)
+
 ### Fixed
 - Time modifier (F1) keyboard shortcut had no effect: seamstress delivers
   function keys as tables (`{name = "F1"}`), but the keyboard handler

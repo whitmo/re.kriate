@@ -6,6 +6,7 @@ local scale_mod = require("lib/scale")
 local direction_mod = require("lib/direction")
 local meta_pattern = require("lib/meta_pattern")
 local log = require("lib/log")
+local clock_sync = require("lib/clock_sync")
 
 local M = {}
 local function roll(ctx)
@@ -67,6 +68,19 @@ function M.start(ctx)
   if ctx.playing then return end
   ctx.playing = true
   if ctx.events then ctx.events:emit("sequencer:start", {}) end
+  -- MIDI clock output: send Start before first pulse (FR-006) and spawn
+  -- a 24 PPQ pulse emitter coroutine.
+  if ctx.clock_sync then
+    clock_sync.send_start(ctx.clock_sync)
+    if ctx.clock_sync.output_enabled then
+      ctx.clock_out_id = clock.run(log.wrap(function()
+        while ctx.playing and ctx.clock_sync and ctx.clock_sync.output_enabled do
+          clock.sync(1 / clock_sync.PPQ)
+          clock_sync.send_pulse(ctx.clock_sync)
+        end
+      end, "clock_out"))
+    end
+  end
   -- one clock coroutine per track
   ctx.clock_ids = {}
   for t = 1, track_mod.NUM_TRACKS do
@@ -80,6 +94,14 @@ function M.stop(ctx)
   if not ctx.playing then return end
   ctx.playing = false
   if ctx.events then ctx.events:emit("sequencer:stop", {}) end
+  -- MIDI clock output: stop pulse emitter and send Stop message (FR-007)
+  if ctx.clock_out_id then
+    clock.cancel(ctx.clock_out_id)
+    ctx.clock_out_id = nil
+  end
+  if ctx.clock_sync then
+    clock_sync.send_stop(ctx.clock_sync)
+  end
   if ctx.clock_ids then
     for _, id in ipairs(ctx.clock_ids) do
       clock.cancel(id)
