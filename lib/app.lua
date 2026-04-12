@@ -7,6 +7,7 @@ local sequencer = require("lib/sequencer")
 local grid_ui = require("lib/grid_ui")
 local pattern = require("lib/pattern")
 local pattern_persistence = require("lib/pattern_persistence")
+local preset_persistence = require("lib/preset")
 local meta_pattern = require("lib/meta_pattern")
 local direction = require("lib/direction")
 local grid_provider = require("lib/grid_provider")
@@ -54,6 +55,16 @@ local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 
 local CLOCK_SOURCE_OPTIONS = {"internal", "external MIDI"}
 local CLOCK_OUTPUT_OPTIONS = {"off", "on"}
+
+local DEFAULT_PRESET_NAME = "default"
+local PRESET_MESSAGE_KEY = "preset" .. "_message"
+
+local function preset_autosave_enabled()
+  if not params or not params.lookup or not params.lookup["preset_autosave"] then
+    return false
+  end
+  return params:get("preset_autosave") == 2
+end
 
 --- Convert a MIDI note number to a human-readable note name (C0 = MIDI 0)
 local function note_name(midi_num)
@@ -202,6 +213,77 @@ local function add_pattern_persistence_params(ctx)
     end
     M.delete_pattern_bank(ctx)
     reset_action_param("pattern_bank_delete")
+  end)
+end
+
+local function preset_name(name)
+  if name and name ~= "" then
+    return name
+  end
+  if params and params.get and params.lookup and params.lookup["preset_name"] then
+    local param_name = params:get("preset_name")
+    if param_name and param_name ~= "" then
+      return param_name
+    end
+  end
+  return DEFAULT_PRESET_NAME
+end
+
+local function set_preset_status(ctx, text)
+  if not ctx then return end
+  ctx[PRESET_MESSAGE_KEY] = {text = text, time = os.clock()}
+end
+
+local function format_preset_list(names)
+  if #names == 0 then
+    return "presets: none"
+  end
+  return "presets: " .. table.concat(names, ", ")
+end
+
+local function add_preset_persistence_params(ctx)
+  if not params or not params.add_text or not params.add_option then
+    return
+  end
+
+  params:add_group("preset_persistence", "preset persistence", 6)
+  params:add_text("preset_name", "preset name", DEFAULT_PRESET_NAME)
+  params:add_option("preset_autosave", "autosave on exit", {"off", "on"}, 2)
+  params:add_option("preset_save", "save preset", {"-", "save"}, 1)
+  params:add_option("preset_load", "load preset", {"-", "load"}, 1)
+  params:add_option("preset_list", "list presets", {"-", "list"}, 1)
+  params:add_option("preset_delete", "delete preset", {"-", "delete"}, 1)
+
+  local resetting_param = false
+  local function reset_action_param(id)
+    if resetting_param then return end
+    resetting_param = true
+    set_param_if_needed(id, 1)
+    resetting_param = false
+  end
+
+  params:set_action("preset_save", function(value)
+    if resetting_param or value ~= 2 then return end
+    M.save_preset(ctx)
+    reset_action_param("preset_save")
+  end)
+
+  params:set_action("preset_load", function(value)
+    if resetting_param or value ~= 2 then return end
+    M.load_preset(ctx)
+    reset_action_param("preset_load")
+  end)
+
+  params:set_action("preset_list", function(value)
+    if resetting_param or value ~= 2 then return end
+    M.list_presets(ctx)
+    reset_action_param("preset_list")
+  end)
+
+  params:set_action("preset_delete", function(value)
+    if resetting_param or value ~= 2 then return end
+    M.delete_preset(ctx)
+    reset_action_param("preset_delete")
   end)
 end
 
@@ -395,6 +477,7 @@ function M.init(config)
 
   add_clock_sync_params(ctx)
   add_pattern_persistence_params(ctx)
+  add_preset_persistence_params(ctx)
 
   -- Build initial voices from params (unless config provided voices)
   if not use_config_voices and ctx.midi_dev then
@@ -439,6 +522,17 @@ function M.init(config)
 
   attach_midi_input(ctx)
 
+  -- Autorestore last session if an autosave exists and autosave is enabled
+  -- (FR-009). Silent no-op if no autosave present or autosave disabled.
+  if preset_autosave_enabled() and preset_persistence.exists(preset_persistence.AUTOSAVE_NAME) then
+    local ok, err = preset_persistence.load_autosave(ctx)
+    if not ok then
+      log.warn("preset autoload skipped: " .. tostring(err))
+    else
+      log.info("preset autoload restored previous session")
+    end
+  end
+
   return ctx
 end
 
@@ -482,6 +576,60 @@ function M.list_pattern_banks(ctx)
   log.info(message)
   set_pattern_status(ctx, message)
   return names
+end
+
+function M.save_preset(ctx, name)
+  local ok, path_or_err = preset_persistence.save(ctx, preset_name(name))
+  if ok then
+    local message = "saved preset"
+    log.info(message)
+    set_preset_status(ctx, message)
+    return ok, path_or_err
+  end
+  local message = "preset save failed: " .. tostring(path_or_err)
+  log.warn(message)
+  set_preset_status(ctx, message)
+  return nil, path_or_err
+end
+
+function M.load_preset(ctx, name)
+  -- Stop playback first so the load doesn't race clock coroutines (FR-010).
+  if ctx and ctx.playing then
+    sequencer.stop(ctx)
+  end
+  local ok, err = preset_persistence.load(ctx, preset_name(name))
+  if ok then
+    local message = "loaded preset"
+    log.info(message)
+    set_preset_status(ctx, message)
+    return true
+  end
+  local message = "preset load failed: " .. tostring(err)
+  log.warn(message)
+  set_preset_status(ctx, message)
+  return nil, err
+end
+
+function M.list_presets(ctx)
+  local names = preset_persistence.list()
+  local message = format_preset_list(names)
+  log.info(message)
+  set_preset_status(ctx, message)
+  return names
+end
+
+function M.delete_preset(ctx, name)
+  local ok, err = preset_persistence.delete(preset_name(name))
+  if ok then
+    local message = "deleted preset"
+    log.info(message)
+    set_preset_status(ctx, message)
+    return true
+  end
+  local message = "preset delete failed: " .. tostring(err)
+  log.warn(message)
+  set_preset_status(ctx, message)
+  return nil, err
 end
 
 function M.delete_pattern_bank(ctx, name)
@@ -593,6 +741,14 @@ end
 
 function M.cleanup(ctx)
   sequencer.stop(ctx)
+  -- Autosave session state if enabled (FR-009). Gated on a param so tests
+  -- and headless harnesses that never register the param stay hermetic.
+  if ctx and preset_autosave_enabled() then
+    local ok, err = preset_persistence.save_autosave(ctx)
+    if not ok then
+      log.warn("preset autosave failed: " .. tostring(err))
+    end
+  end
   if ctx.voices then
     for _, voice in ipairs(ctx.voices) do
       voice:all_notes_off()
