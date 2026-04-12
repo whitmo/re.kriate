@@ -371,6 +371,7 @@ function M.init(config)
     events = events.new(),
     pattern_held = false,
     pattern_slot = 1,
+    cued_pattern_slot = nil,
     meta = meta_pattern.new(),
     midi_dev = config.midi_dev,
     custom_intervals = {},
