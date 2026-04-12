@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - MIDI clock sync (spec 010): external clock source, clock output at 24 PPQ, Start/Stop/Continue transport messages, clock status display (re-ot4)
+- Hardware kria parity: pattern cueing with quantized transitions. During
+  playback, pressing a pattern slot (pattern-held) queues the transition for
+  the next track-1 loop boundary instead of jumping mid-loop. Pressing the
+  current or already-cued slot cancels the cue; pressing a different slot
+  overwrites the pending cue. Cued slot renders at brightness 13 on the grid.
+  When stopped, pattern loads remain immediate. Meta-pattern, when active,
+  still owns transitions. (re-f9i)
 
 ### Fixed
 - Time modifier (F1) keyboard shortcut had no effect: seamstress delivers

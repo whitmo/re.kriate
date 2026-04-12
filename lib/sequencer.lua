@@ -5,6 +5,7 @@ local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
 local direction_mod = require("lib/direction")
 local meta_pattern = require("lib/meta_pattern")
+local pattern_mod = require("lib/pattern")
 local log = require("lib/log")
 local clock_sync = require("lib/clock_sync")
 
@@ -277,10 +278,14 @@ function M.step_track(ctx, track_num)
     return
   end
 
-  -- Meta-pattern: detect trigger loop wrap on track 1
-  if track_num == 1 and ctx.meta and ctx.meta.active then
-    if trig_param.pos == trig_param.loop_start and old_trig_pos ~= trig_param.loop_start then
+  -- Pattern transitions on track-1 trigger loop wrap (quantized boundary).
+  -- Meta-pattern, when active, owns transitions (including its own cueing).
+  -- Otherwise, apply any direct pattern cue queued by the grid pattern UI.
+  if track_num == 1 and trig_param.pos == trig_param.loop_start and old_trig_pos ~= trig_param.loop_start then
+    if ctx.meta and ctx.meta.active then
       meta_pattern.on_loop_complete(ctx.meta, ctx)
+    elseif ctx.cued_pattern_slot then
+      pattern_mod.apply_cue(ctx)
     end
   end
 

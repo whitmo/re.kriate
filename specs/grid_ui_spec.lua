@@ -13,6 +13,8 @@ rawset(_G, "clock", {
 
 local track_mod = require("lib/track")
 local grid_ui = require("lib/grid_ui")
+local pattern = require("lib/pattern")
+local events = require("lib/events")
 
 -- Mock grid that records led() calls (used by make_ctx and extended page tests)
 local function mock_grid()
@@ -2013,6 +2015,87 @@ describe("grid_ui", function()
       ctx.prob_held = false
       grid_ui.redraw(ctx)
       assert.are.equal(3, g:get_led(14, 8))
+    end)
+
+  end)
+
+  -- ========================================================================
+  -- Pattern cueing (quantized transitions) — hardware kria parity (re-f9i)
+  -- ========================================================================
+
+  describe("pattern_key cueing", function()
+
+    local function make_pattern_ctx()
+      local ctx, g = make_ctx()
+      ctx.patterns = pattern.new_slots()
+      ctx.pattern_slot = 1
+      ctx.events = events.new()
+      -- Save distinct state to slots 1 and 2 so load has something to restore
+      ctx.tracks[1].division = 1
+      pattern.save(ctx, 1)
+      ctx.tracks[1].division = 2
+      pattern.save(ctx, 2)
+      pattern.load(ctx, 1)
+      ctx.pattern_slot = 1
+      return ctx, g
+    end
+
+    it("loads immediately when stopped", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = false
+      grid_ui.pattern_key(ctx, 2, 1)  -- slot 2
+      assert.are.equal(2, ctx.pattern_slot)
+      assert.are.equal(2, ctx.tracks[1].division)
+      assert.is_nil(ctx.cued_pattern_slot)
+    end)
+
+    it("cues a quantized transition when playing", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- slot 2
+      -- current slot unchanged; transition is pending
+      assert.are.equal(1, ctx.pattern_slot)
+      assert.are.equal(1, ctx.tracks[1].division)
+      assert.are.equal(2, ctx.cued_pattern_slot)
+    end)
+
+    it("pressing the currently-playing slot cancels a pending cue", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      assert.are.equal(2, ctx.cued_pattern_slot)
+      grid_ui.pattern_key(ctx, 1, 1)  -- press current slot 1
+      assert.is_nil(ctx.cued_pattern_slot)
+      assert.are.equal(1, ctx.pattern_slot)
+    end)
+
+    it("pressing the already-cued slot cancels the cue", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      grid_ui.pattern_key(ctx, 2, 1)  -- press slot 2 again
+      assert.is_nil(ctx.cued_pattern_slot)
+      assert.are.equal(1, ctx.pattern_slot)
+    end)
+
+    it("a second cue overwrites the pending slot", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      grid_ui.pattern_key(ctx, 4, 1)  -- cue slot 4 instead
+      assert.are.equal(4, ctx.cued_pattern_slot)
+    end)
+
+    it("draw_pattern_slots highlights the cued slot distinctly", function()
+      local ctx, g = make_pattern_ctx()
+      ctx.pattern_held = true
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      grid_ui.draw_pattern_slots(ctx, g)
+      -- slot 2 is at col 2 row 1, cued brightness = 13
+      assert.are.equal(13, led_at(g, 2, 1))
+      -- slot 1 is at col 1 row 1, current+populated = 15
+      assert.are.equal(15, led_at(g, 1, 1))
     end)
 
   end)

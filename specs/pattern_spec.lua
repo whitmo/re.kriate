@@ -13,12 +13,35 @@ rawset(_G, "clock", {
 
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
+local events = require("lib/events")
 
 local function make_ctx()
   return {
     tracks = track_mod.new_tracks(),
     patterns = pattern.new_slots(),
   }
+end
+
+local function make_cue_ctx()
+  local ctx = {
+    tracks = track_mod.new_tracks(),
+    patterns = pattern.new_slots(),
+    pattern_slot = 1,
+    events = events.new(),
+  }
+  -- Populate slots 1 and 2 with distinct state
+  ctx.tracks[1].params.trigger.steps[1] = 1
+  ctx.tracks[1].division = 1
+  pattern.save(ctx, 1)
+
+  ctx.tracks[1].params.trigger.steps[1] = 0
+  ctx.tracks[1].params.trigger.steps[2] = 1
+  ctx.tracks[1].division = 2
+  pattern.save(ctx, 2)
+
+  pattern.load(ctx, 1)
+  ctx.pattern_slot = 1
+  return ctx
 end
 
 describe("pattern", function()
@@ -378,6 +401,123 @@ describe("pattern", function()
       -- Tracks should be unchanged
       assert.are.equal(42, ctx.tracks[1].division)
       assert.are.equal(7, ctx.tracks[2].params.note.steps[5])
+    end)
+
+  end)
+
+  describe("cueing (quantized transitions)", function()
+
+    it("cue sets ctx.cued_pattern_slot", function()
+      local ctx = make_cue_ctx()
+      pattern.cue(ctx, 2)
+      assert.are.equal(2, ctx.cued_pattern_slot)
+    end)
+
+    it("cue emits pattern:cue event", function()
+      local ctx = make_cue_ctx()
+      local cued
+      ctx.events:on("pattern:cue", function(data) cued = data.slot end)
+      pattern.cue(ctx, 3)
+      assert.are.equal(3, cued)
+    end)
+
+    it("cue rejects out-of-range slots", function()
+      local ctx = make_cue_ctx()
+      pattern.cue(ctx, 0)
+      assert.is_nil(ctx.cued_pattern_slot)
+      pattern.cue(ctx, 17)
+      assert.is_nil(ctx.cued_pattern_slot)
+      pattern.cue(ctx, nil)
+      assert.is_nil(ctx.cued_pattern_slot)
+    end)
+
+    it("cancel_cue clears pending slot and emits event", function()
+      local ctx = make_cue_ctx()
+      pattern.cue(ctx, 2)
+      local cancelled
+      ctx.events:on("pattern:cue_cancel", function(data) cancelled = data.slot end)
+      pattern.cancel_cue(ctx)
+      assert.is_nil(ctx.cued_pattern_slot)
+      assert.are.equal(2, cancelled)
+    end)
+
+    it("cancel_cue is a no-op when no cue pending", function()
+      local ctx = make_cue_ctx()
+      local fired = false
+      ctx.events:on("pattern:cue_cancel", function() fired = true end)
+      pattern.cancel_cue(ctx)
+      assert.is_false(fired)
+    end)
+
+    it("apply_cue loads the cued pattern and updates pattern_slot", function()
+      local ctx = make_cue_ctx()
+      pattern.cue(ctx, 2)
+      local switched = pattern.apply_cue(ctx)
+      assert.is_true(switched)
+      assert.are.equal(2, ctx.pattern_slot)
+      assert.is_nil(ctx.cued_pattern_slot)
+      -- pattern 2 had division=2
+      assert.are.equal(2, ctx.tracks[1].division)
+    end)
+
+    it("apply_cue resets all param playheads to loop_start", function()
+      local ctx = make_cue_ctx()
+      -- Move playheads away from loop_start
+      ctx.tracks[1].params.trigger.pos = 5
+      ctx.tracks[1].params.note.pos = 7
+      ctx.tracks[2].params.velocity.pos = 3
+      ctx.tracks[1].params.trigger.tick = 99
+
+      pattern.cue(ctx, 2)
+      pattern.apply_cue(ctx)
+
+      for _, track in ipairs(ctx.tracks) do
+        for _, name in ipairs(track_mod.PARAM_NAMES) do
+          local p = track.params[name]
+          assert.are.equal(p.loop_start, p.pos, "param " .. name .. " pos reset")
+          assert.are.equal(0, p.tick, "param " .. name .. " tick reset")
+        end
+      end
+    end)
+
+    it("apply_cue emits pattern:load and pattern:cue_applied events", function()
+      local ctx = make_cue_ctx()
+      local loaded, applied
+      ctx.events:on("pattern:load", function(data) loaded = data.slot end)
+      ctx.events:on("pattern:cue_applied", function(data) applied = data.slot end)
+
+      pattern.cue(ctx, 2)
+      pattern.apply_cue(ctx)
+
+      assert.are.equal(2, loaded)
+      assert.are.equal(2, applied)
+    end)
+
+    it("apply_cue returns false when no cue pending", function()
+      local ctx = make_cue_ctx()
+      assert.is_false(pattern.apply_cue(ctx))
+    end)
+
+    it("apply_cue silently drops cues pointing at empty slots", function()
+      local ctx = make_cue_ctx()
+      -- slot 5 was never saved
+      pattern.cue(ctx, 5)
+      local loaded = false
+      ctx.events:on("pattern:load", function() loaded = true end)
+      local switched = pattern.apply_cue(ctx)
+      assert.is_false(switched)
+      assert.is_nil(ctx.cued_pattern_slot)
+      assert.is_false(loaded)
+      -- pattern 1 state preserved
+      assert.are.equal(1, ctx.pattern_slot)
+      assert.are.equal(1, ctx.tracks[1].division)
+    end)
+
+    it("successive cues overwrite prior pending slot", function()
+      local ctx = make_cue_ctx()
+      pattern.cue(ctx, 2)
+      pattern.cue(ctx, 3)
+      assert.are.equal(3, ctx.cued_pattern_slot)
     end)
 
   end)

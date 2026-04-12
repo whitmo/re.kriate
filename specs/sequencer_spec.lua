@@ -1266,4 +1266,93 @@ describe("sequencer", function()
 
   end)
 
+  -- ========================================================================
+  -- Pattern cueing (quantized transitions) — hardware kria parity (re-f9i)
+  -- ========================================================================
+
+  describe("pattern cueing loop-wrap integration", function()
+    local pattern = require("lib/pattern")
+    local events = require("lib/events")
+
+    local function make_cue_ctx()
+      local ctx, buffer = make_ctx()
+      ctx.patterns = pattern.new_slots()
+      ctx.pattern_slot = 1
+      ctx.events = events.new()
+
+      -- Populate slot 1: trigger on step 1, division 1
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      ctx.tracks[1].division = 1
+      pattern.save(ctx, 1)
+
+      -- Populate slot 2: trigger on step 2, division 2 (distinct)
+      ctx.tracks[1].params.trigger.steps[1] = 0
+      ctx.tracks[1].params.trigger.steps[2] = 1
+      ctx.tracks[1].division = 2
+      pattern.save(ctx, 2)
+
+      pattern.load(ctx, 1)
+      ctx.pattern_slot = 1
+      -- Short loop so wrap happens quickly
+      track_mod.set_loop(ctx.tracks[1].params.trigger, 1, 2)
+      ctx.tracks[1].params.trigger.pos = 1
+      return ctx, buffer
+    end
+
+    it("cue persists across mid-loop steps", function()
+      local ctx = make_cue_ctx()
+      pattern.cue(ctx, 2)
+      -- Step from pos=1 to pos=2 (no wrap yet)
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(2, ctx.tracks[1].params.trigger.pos)
+      assert.are.equal(2, ctx.cued_pattern_slot)
+      assert.are.equal(1, ctx.pattern_slot)
+    end)
+
+    it("loads cued pattern when track 1 trigger wraps to loop_start", function()
+      local ctx = make_cue_ctx()
+      pattern.cue(ctx, 2)
+      -- pos=1 -> pos=2 (no wrap)
+      sequencer.step_track(ctx, 1)
+      -- pos=2 -> pos=1 (wrap — should apply cue)
+      sequencer.step_track(ctx, 1)
+      assert.are.equal(2, ctx.pattern_slot)
+      assert.are.equal(2, ctx.tracks[1].division)
+      assert.is_nil(ctx.cued_pattern_slot)
+    end)
+
+    it("does not apply cue when meta-pattern is active (meta owns transitions)", function()
+      local meta_pattern = require("lib/meta_pattern")
+      local ctx = make_cue_ctx()
+      ctx.meta = meta_pattern.new()
+      meta_pattern.set_step(ctx.meta, 1, 1, 1)
+      meta_pattern.set_step(ctx.meta, 2, 2, 1)
+      meta_pattern.start(ctx.meta, ctx)
+      -- re-apply short loop after start (which reset playheads)
+      track_mod.set_loop(ctx.tracks[1].params.trigger, 1, 2)
+      ctx.tracks[1].params.trigger.pos = 1
+
+      ctx.cued_pattern_slot = 2  -- direct cue should be ignored while meta active
+      sequencer.step_track(ctx, 1)  -- pos 1 -> 2
+      sequencer.step_track(ctx, 1)  -- pos 2 -> 1 (wrap)
+
+      -- Meta-pattern advanced to step 2 (slot 2); direct cue still hanging
+      assert.is_true(ctx.meta.active)
+      assert.are.equal(2, ctx.cued_pattern_slot)
+    end)
+
+    it("does not apply cue on non-track-1 wraps", function()
+      local ctx = make_cue_ctx()
+      track_mod.set_loop(ctx.tracks[2].params.trigger, 1, 2)
+      ctx.tracks[2].params.trigger.pos = 1
+      pattern.cue(ctx, 2)
+      sequencer.step_track(ctx, 2)  -- track 2 pos 1->2
+      sequencer.step_track(ctx, 2)  -- track 2 wrap
+      -- cue should still be pending — only track 1 wrap consumes it
+      assert.are.equal(2, ctx.cued_pattern_slot)
+      assert.are.equal(1, ctx.pattern_slot)
+    end)
+
+  end)
+
 end)

@@ -319,8 +319,12 @@ function M.draw_pattern_slots(ctx, g)
     local row = ((slot - 1) < 8) and 1 or 2
     local populated = pattern.is_populated(ctx.patterns, slot)
     local is_current = (slot == ctx.pattern_slot)
+    local is_cued = (slot == ctx.cued_pattern_slot)
     local brightness = 2
-    if populated and is_current then
+    if is_cued then
+      -- cued: distinct mid-bright level so it stands out from current/populated
+      brightness = 13
+    elseif populated and is_current then
       brightness = 15
     elseif populated then
       brightness = 10
@@ -706,13 +710,27 @@ function M.loop_key(ctx, x, page)
 end
 
 -- Pattern slot selection: rows 1-2, cols 1-8 = 16 slots
+-- When playing: queue a quantized transition (applied at next track-1 loop
+-- boundary). Pressing the current or already-cued slot cancels the cue.
+-- When stopped: load immediately so patterns can be auditioned.
 function M.pattern_key(ctx, x, y)
   if x < 1 or x > 8 or y < 1 or y > 2 then return end
   local slot = (y - 1) * 8 + x
-  ctx.pattern_slot = slot
-  pattern.load(ctx, slot)
-  if ctx.events then
-    ctx.events:emit("pattern:load", {slot=slot})
+
+  if not ctx.playing then
+    ctx.pattern_slot = slot
+    pattern.load(ctx, slot)
+    if ctx.events then
+      ctx.events:emit("pattern:load", {slot=slot})
+    end
+    return
+  end
+
+  -- Playing: cue quantized transition
+  if slot == ctx.pattern_slot or slot == ctx.cued_pattern_slot then
+    pattern.cancel_cue(ctx)
+  else
+    pattern.cue(ctx, slot)
   end
 end
 
