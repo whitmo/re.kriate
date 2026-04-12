@@ -15,6 +15,30 @@ function M.build_scale(root, scale_type)
   return notes
 end
 
+-- Build a scale from a 12-element root-relative chromatic mask.
+-- mask[1] corresponds to the root (0 semitones), mask[12] to the major-seventh
+-- (11 semitones). Generates up to 8 octaves starting from root-36 so to_midi's
+-- centered indexing keeps working for custom scales.
+function M.build_custom_scale(root, mask)
+  local start = math.max(0, math.min(127, root - 36))
+  local notes = {}
+  for oct = 0, 7 do
+    for semi = 0, 11 do
+      if mask and mask[semi + 1] then
+        local note = start + oct * 12 + semi
+        if note <= 127 then
+          table.insert(notes, note)
+        end
+      end
+    end
+  end
+  if #notes == 0 then
+    -- Empty mask: fall back to just the root so to_midi always returns a note.
+    table.insert(notes, start)
+  end
+  return notes
+end
+
 -- Convert track step values to a MIDI note
 -- degree: 1-7 (scale degree)
 -- octave: 1-7 (4 = center, maps to octave offset 0)

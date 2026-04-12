@@ -35,6 +35,14 @@ local SCALE_NAMES = {
   "Lydian", "Phrygian", "Locrian", "Harmonic Minor",
   "Melodic Minor", "Major Pentatonic", "Minor Pentatonic",
   "Blues Scale", "Whole Tone", "Chromatic",
+  "Custom",
+}
+
+-- Default custom-scale mask: major intervals (1,3,5,6,8,10,12 semitones set).
+-- Gives a musical starting point when the user first selects the Custom scale.
+local DEFAULT_CUSTOM_INTERVALS = {
+  true, false, true, false, true, true, false,
+  true, false, true, false, true,
 }
 
 local NOTE_NAMES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
@@ -283,7 +291,11 @@ function M.init(config)
     pattern_slot = 1,
     meta = meta_pattern.new(),
     midi_dev = config.midi_dev,
+    custom_intervals = {},
   }
+  for i = 1, 12 do
+    ctx.custom_intervals[i] = DEFAULT_CUSTOM_INTERVALS[i]
+  end
 
   -- Clock sync state: MIDI clock input/output + transport (spec 010).
   -- Input/output default to the shared midi_dev; consumers can override later.
@@ -400,6 +412,11 @@ function M.init(config)
   end)
   ctx.events:on("scale:type", function(data)
     params:set("scale_type", data.scale_type)
+    -- Custom scale: mask may have changed even when scale_type already == 15,
+    -- so force a rebuild to keep ctx.scale_notes in sync with ctx.custom_intervals.
+    if SCALE_NAMES[data.scale_type] == "Custom" then
+      M.rebuild_scale(ctx)
+    end
   end)
 
   -- grid (pluggable: config.grid_provider selects backend)
@@ -488,7 +505,12 @@ function M.rebuild_scale(ctx)
   local scale_type = SCALE_NAMES[scale_idx]
   ctx.root_note = root
   ctx.scale_type = scale_idx
-  local notes = scale_mod.build_scale(root, scale_type)
+  local notes
+  if scale_type == "Custom" then
+    notes = scale_mod.build_custom_scale(root, ctx.custom_intervals)
+  else
+    notes = scale_mod.build_scale(root, scale_type)
+  end
   if notes then ctx.scale_notes = notes end
 end
 

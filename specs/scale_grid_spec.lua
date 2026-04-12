@@ -57,6 +57,7 @@ local function make_ctx(opts)
     root_note = opts.root_note or 60,  -- C5 (middle C)
     scale_type = opts.scale_type or 1,  -- Major
     scale_notes = opts.scale_notes or {},
+    custom_intervals = opts.custom_intervals,
     events = events.new(),
     pattern_held = false,
     pattern_slot = 1,
@@ -169,6 +170,38 @@ describe("scale grid page", function()
         assert.are.equal(0, led_at(g, x, 5))
       end
     end)
+
+    it("shows custom mask on row 5 when scale_type is 15 (Custom)", function()
+      local mask = {
+        true, false, true, false, true, true, false,
+        true, false, true, false, true,
+      }
+      local ctx = make_ctx({scale_type = 15, custom_intervals = mask})
+      local g = spy_grid()
+      grid_ui.draw_scale_page(ctx, g)
+      -- ON semitones are bright, OFF are dim (not 0).
+      assert.are.equal(15, led_at(g, 1, 5))
+      assert.are.equal(2,  led_at(g, 2, 5))
+      assert.are.equal(15, led_at(g, 3, 5))
+      assert.are.equal(2,  led_at(g, 4, 5))
+      assert.are.equal(15, led_at(g, 5, 5))
+      assert.are.equal(15, led_at(g, 6, 5))
+      assert.are.equal(2,  led_at(g, 7, 5))
+      assert.are.equal(15, led_at(g, 8, 5))
+      assert.are.equal(15, led_at(g, 12, 5))
+    end)
+
+    it("row 3-4 stay dim in custom mode (Custom only reachable via row 5)", function()
+      local mask = {true}
+      for i = 2, 12 do mask[i] = false end
+      local ctx = make_ctx({scale_type = 15, custom_intervals = mask})
+      local g = spy_grid()
+      grid_ui.draw_scale_page(ctx, g)
+      for x = 1, 7 do
+        assert.are.equal(3, led_at(g, x, 3))
+        assert.are.equal(3, led_at(g, x, 4))
+      end
+    end)
   end)
 
   -- ==========================================================================
@@ -276,6 +309,72 @@ describe("scale grid page", function()
       -- Should not error
       grid_ui.scale_key(ctx, 5, 1)
       assert.are.equal(64, ctx.root_note) -- E5
+    end)
+
+    it("row 5 toggles a semitone in the custom mask", function()
+      local mask = {true}
+      for i = 2, 12 do mask[i] = false end
+      local ctx = make_ctx({scale_type = 1, custom_intervals = mask})
+      grid_ui.scale_key(ctx, 3, 5) -- toggle semitone 2 (minor third)
+      assert.is_true(ctx.custom_intervals[3])
+      grid_ui.scale_key(ctx, 3, 5) -- toggle off again
+      assert.is_false(ctx.custom_intervals[3] == true)
+    end)
+
+    it("row 5 switches scale_type to 15 (Custom)", function()
+      local ctx = make_ctx({scale_type = 1})
+      grid_ui.scale_key(ctx, 5, 5)
+      assert.are.equal(15, ctx.scale_type)
+    end)
+
+    it("row 5 emits scale:type event with scale_type=15", function()
+      local ctx = make_ctx({scale_type = 1})
+      local received = nil
+      ctx.events:on("scale:type", function(data) received = data end)
+      grid_ui.scale_key(ctx, 4, 5)
+      assert.is_not_nil(received)
+      assert.are.equal(15, received.scale_type)
+    end)
+
+    it("row 5 initializes custom_intervals if missing (root always set)", function()
+      local ctx = make_ctx({scale_type = 1})
+      ctx.custom_intervals = nil
+      grid_ui.scale_key(ctx, 5, 5)
+      assert.is_not_nil(ctx.custom_intervals)
+      assert.are.equal(12, #ctx.custom_intervals)
+      assert.is_true(ctx.custom_intervals[1] == true, "root semitone should default to true")
+      assert.is_true(ctx.custom_intervals[5] == true, "toggled semitone should be on")
+    end)
+
+    it("selecting a preset on row 3 preserves the custom mask", function()
+      local mask = {
+        true, false, true, false, true, true, false,
+        true, false, true, false, true,
+      }
+      local ctx = make_ctx({scale_type = 15, custom_intervals = mask})
+      grid_ui.scale_key(ctx, 2, 3) -- switch to preset 2 (Natural Minor)
+      assert.are.equal(2, ctx.scale_type)
+      -- The custom mask is preserved for later reuse.
+      assert.are.same(mask, ctx.custom_intervals)
+    end)
+
+    it("row 5 ignores x outside 1..12", function()
+      local ctx = make_ctx({scale_type = 1})
+      local original_type = ctx.scale_type
+      grid_ui.scale_key(ctx, 13, 5)
+      assert.are.equal(original_type, ctx.scale_type)
+      grid_ui.scale_key(ctx, 0, 5)
+      assert.are.equal(original_type, ctx.scale_type)
+    end)
+
+    it("row 5 works without events bus", function()
+      local mask = {true}
+      for i = 2, 12 do mask[i] = false end
+      local ctx = make_ctx({scale_type = 1, custom_intervals = mask})
+      ctx.events = nil
+      grid_ui.scale_key(ctx, 3, 5)
+      assert.is_true(ctx.custom_intervals[3])
+      assert.are.equal(15, ctx.scale_type)
     end)
   end)
 
