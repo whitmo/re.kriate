@@ -38,7 +38,8 @@ local SCALE_NAMES = {
 
 local NOTE_NAMES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
-local VOICE_TYPES = {"midi", "osc", "sc_drums", "softcut", "none"}
+local VOICE_TYPES = {"midi", "osc", "sc_drums", "softcut", "sc_synth", "none"}
+local SC_SYNTHDEFS = {"sub", "fm", "wavetable"}
 local DEFAULT_PATTERN_BANK = "default"
 local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 
@@ -70,6 +71,16 @@ local function build_voice(ctx, t)
     local host = params:get("osc_host")
     local port = params:get("osc_port")
     ctx.voices[t] = sc_drums.new(t, host, port)
+  elseif voice_type == "sc_synth" then
+    local sc_synth = require("lib/voices/sc_synth")
+    local host = params:get("osc_host")
+    local port = params:get("osc_port")
+    local synthdef_idx = params:get("sc_synthdef_" .. t)
+    local synthdef = SC_SYNTHDEFS[synthdef_idx] or "sub"
+    local voice = sc_synth.new(t, host, port, synthdef)
+    -- Announce the selected SynthDef to the SC side so it has fresh state.
+    voice:set_synthdef(synthdef)
+    ctx.voices[t] = voice
   elseif voice_type == "softcut" then
     if not ctx.softcut_runtime then
       local softcut_runtime = require("lib/voices/softcut_runtime")
@@ -224,7 +235,7 @@ function M.init(config)
   -- params: per-track groups
   local div_names = {"1/16", "1/12", "1/8", "1/6", "1/4", "1/2", "1/1"}
   for t = 1, track_mod.NUM_TRACKS do
-    params:add_group("track_" .. t, "track " .. t, 9)
+    params:add_group("track_" .. t, "track " .. t, 10)
 
     params:add_option("voice_" .. t, "voice", VOICE_TYPES, 1)
     if not use_config_voices then
@@ -239,6 +250,17 @@ function M.init(config)
         -- Only rebuild if current voice type is midi
         local voice_idx = params:get("voice_" .. t)
         if VOICE_TYPES[voice_idx] == "midi" then
+          build_voice(ctx, t)
+        end
+      end)
+    end
+
+    -- sc_synth SynthDef selector (used when voice = "sc_synth")
+    params:add_option("sc_synthdef_" .. t, "sc synthdef", SC_SYNTHDEFS, 1)
+    if not use_config_voices then
+      params:set_action("sc_synthdef_" .. t, function()
+        local voice_idx = params:get("voice_" .. t)
+        if VOICE_TYPES[voice_idx] == "sc_synth" then
           build_voice(ctx, t)
         end
       end)

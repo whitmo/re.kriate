@@ -89,6 +89,47 @@ The test script sends all 3 message types (note, portamento, all_notes_off) acro
 - **Terminal**: shows which messages were sent
 - **SC post window**: shows received messages
 
+## sc_synth Voice (multi-SynthDef)
+
+`examples/supercollider/rekriate_synths.scd` hosts three melodic SynthDefs — subtractive (`\rekriate_sub`), 2-op FM (`\rekriate_fm`), and a wavetable-style blend (`\rekriate_wt`) — driven by the `sc_synth` voice backend (`lib/voices/sc_synth.lua`). It is the richer counterpart to the single-SynthDef `rekriate_sub.scd` example above, and is the target for tracks configured with voice type `sc_synth`.
+
+### Running rekriate_synths.scd
+
+1. Boot the SC server (**Cmd+B** / **Ctrl+B**).
+2. Evaluate the outer parentheses of `rekriate_synths.scd`.
+3. The post window should print:
+   ```
+   re.kriate sc_synth listener ready on port 57120
+     4 tracks, 24 OSC responders active, SynthDefs: sub / fm / wavetable
+   ```
+
+### Configuring re.kriate for sc_synth
+
+For each track you want routed to the multi-SynthDef listener:
+
+- **track N voice** → `sc_synth`
+- **track N sc synthdef** → `sub`, `fm`, or `wavetable`
+- **osc host** / **osc port** → same machine running SuperCollider (default `127.0.0.1:57120`)
+
+Changing `sc synthdef` while the track is live announces the new SynthDef to SuperCollider — subsequent notes use it.
+
+### OSC paths
+
+`sc_synth` uses the `/rekriate/synth/{track}/…` namespace (distinct from the
+generic `osc` voice's `/rekriate/track/{n}/note` and from `sc_drums`'s
+`/drum` messages), so all three backends can coexist on a single SC session.
+
+| Path | Args | Behavior |
+|------|------|----------|
+| `/rekriate/synth/{n}/play` | midi, vel, dur | Timed note, self-frees after `dur` |
+| `/rekriate/synth/{n}/note_on` | midi, vel | Sustained note (gate=1) |
+| `/rekriate/synth/{n}/note_off` | midi | Releases the matching gated note |
+| `/rekriate/synth/{n}/all_notes_off` | — | Frees all timed + gated nodes on the track |
+| `/rekriate/synth/{n}/portamento` | time | Lag-time for frequency glide |
+| `/rekriate/synth/{n}/synthdef` | name | Selects `sub` / `fm` / `wavetable` |
+
+All three SynthDefs accept a common argument surface (`freq, amp, dur, cutoff, porta, gate, timed`) plus SynthDef-specific controls (`ratio`/`modIndex` on FM, `shape` on wavetable). `timed=1` runs a `Env.perc` that self-frees after `dur`; `timed=0` runs an `Env.asr` that releases when `gate` falls.
+
 ## Troubleshooting
 
 ### No sound
