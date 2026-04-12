@@ -380,7 +380,10 @@ end
 -- Row 2: x=1-10 octave 0-9
 -- Row 3: x=1-7 scale types 1-7
 -- Row 4: x=1-7 scale types 8-14
--- Row 5: x=1-12 scale note visualization (which chromatic notes are in scale)
+-- Row 5: x=1-12 interactive custom-scale mask editor. When scale_type == 15
+--        (Custom), LEDs reflect ctx.custom_intervals and row-5 presses toggle
+--        semitones. Otherwise shows which chromatic notes are in the active
+--        preset scale (read-only visualization).
 function M.draw_scale_page(ctx, g)
   local root = ctx.root_note or 60
   local pitch_class = root % 12  -- 0-11
@@ -411,8 +414,14 @@ function M.draw_scale_page(ctx, g)
     g:led(x, 4, selected and 15 or 3)
   end
 
-  -- Row 5: scale note visualization
-  if ctx.scale_notes and #ctx.scale_notes > 0 then
+  -- Row 5: custom mask editor (when custom) or preset visualization
+  if scale_idx == 15 then
+    local mask = ctx.custom_intervals
+    for x = 1, 12 do
+      local on = mask and mask[x]
+      g:led(x, 5, on and 15 or 2)
+    end
+  elseif ctx.scale_notes and #ctx.scale_notes > 0 then
     local in_scale = {}
     for _, note in ipairs(ctx.scale_notes) do
       in_scale[note % 12] = true
@@ -781,6 +790,20 @@ function M.scale_key(ctx, x, y)
   elseif y == 4 and x >= 1 and x <= 7 then
     -- Scale types 8-14
     ctx.scale_type = x + 7
+    if ctx.events then
+      ctx.events:emit("scale:type", {scale_type = ctx.scale_type})
+    end
+  elseif y == 5 and x >= 1 and x <= 12 then
+    -- Row 5 toggles a semitone in the custom mask and switches to
+    -- scale_type=15 (Custom). Preset masks in rows 3-4 are preserved and
+    -- resume when the user selects a preset again.
+    if not ctx.custom_intervals then
+      ctx.custom_intervals = {}
+      for i = 1, 12 do ctx.custom_intervals[i] = false end
+      ctx.custom_intervals[1] = true  -- ensure root is present
+    end
+    ctx.custom_intervals[x] = not ctx.custom_intervals[x]
+    ctx.scale_type = 15
     if ctx.events then
       ctx.events:emit("scale:type", {scale_type = ctx.scale_type})
     end
