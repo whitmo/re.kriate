@@ -1,11 +1,12 @@
 # Voice Quickstart
 
-re.kriate supports 5 voice backends. Each track can use a different backend, set via the `voice` param in the norns/seamstress params menu.
+re.kriate supports 6 voice backends. Each track can use a different backend, set via the `voice` param in the norns/seamstress params menu.
 
 | Voice | Backend | Output | Module |
 |-------|---------|--------|--------|
 | `midi` | Hardware/software MIDI | note_on/note_off + CC | `lib/voices/midi.lua` |
-| `osc` | OSC over UDP | SuperCollider synth | `lib/voices/osc.lua` |
+| `osc` | OSC over UDP | SuperCollider synth (generic) | `lib/voices/osc.lua` |
+| `sc_synth` | OSC over UDP | SuperCollider melodic synth (sub/fm/wavetable) | `lib/voices/sc_synth.lua` |
 | `sc_drums` | OSC over UDP | SuperCollider drums | `lib/voices/sc_drums.lua` |
 | `softcut` | norns softcut DSP | Sample playback | `lib/voices/softcut_zig.lua` |
 | sprite | Visual events | Screen rendering | `lib/voices/sprite.lua` |
@@ -18,6 +19,7 @@ Sprite is additive — it fires alongside the audio voice, never replaces it.
 |-------|----------|
 | midi | MIDI device (hardware synth, DAW, virtual port) |
 | osc | SuperCollider 3.x with `sc/rekriate-voice.scd` |
+| sc_synth | SuperCollider 3.x with `examples/supercollider/rekriate_synths.scd` |
 | sc_drums | SuperCollider 3.x with `examples/supercollider/rekriate_drums.scd` |
 | softcut | norns hardware (softcut is a norns-native DSP engine) |
 | sprite | seamstress or norns screen |
@@ -122,6 +124,42 @@ voice:set_target(host, port)     -- change OSC destination at runtime
 - **voice** → `osc`
 - **osc host** → target IP (default `127.0.0.1`)
 - **osc port** → target port (default `57120`)
+
+## SC Synth Voice
+
+**Module:** `lib/voices/sc_synth.lua`
+
+Melodic SuperCollider voice with three selectable synthdefs (subtractive, FM, wavetable). OSC paths are `/rekriate/synth/{n}/...` (distinct from the generic OSC voice).
+
+### Setup
+
+```lua
+local sc_synth = require("lib/voices/sc_synth")
+local voice = sc_synth.new(1, "127.0.0.1", 57120, "sub")  -- track 1, "sub" | "fm" | "wavetable"
+```
+
+### SuperCollider Setup
+
+1. Open SuperCollider, boot server (Cmd+B)
+2. Open and evaluate `examples/supercollider/rekriate_synths.scd`
+3. Look for the ready message in the post window
+
+### OSC Messages
+
+| Path | Args |
+|------|------|
+| `/rekriate/synth/{n}/play` | midi_note, velocity, duration |
+| `/rekriate/synth/{n}/note_on` | midi_note, velocity |
+| `/rekriate/synth/{n}/note_off` | midi_note |
+| `/rekriate/synth/{n}/all_notes_off` | — |
+| `/rekriate/synth/{n}/portamento` | time |
+| `/rekriate/synth/{n}/synthdef` | name (`sub`/`fm`/`wavetable`) |
+
+### Params (per track)
+
+- **voice** → `sc_synth`
+- **sc synthdef** → `sub`, `fm`, `wavetable`
+- **osc host / osc port** → OSC destination
 
 ## SC Drums Voice
 
@@ -283,7 +321,7 @@ Each of the 4 tracks can use a different voice backend. Common configurations:
 |-------|---------|---------|---------|---------|
 | All MIDI | midi | midi | midi | midi |
 | MIDI + drums | midi | midi | sc_drums | sc_drums |
-| Full SC | osc | osc | sc_drums | sc_drums |
-| Sampler + synth | softcut | softcut | osc | osc |
+| Full SC | sc_synth | sc_synth | sc_drums | sc_drums |
+| Sampler + synth | softcut | softcut | sc_synth | sc_synth |
 
 Set each track's voice in the params menu. Voice changes take effect immediately — no restart needed.

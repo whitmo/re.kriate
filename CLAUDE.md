@@ -102,16 +102,20 @@ Kria is a multi-track step sequencer where each track has independent loop lengt
 - seamstress v1.4.7 (desktop development runtime)
 - norns runtime (screen, params, metro, grid, clock, util) + nb (voice framework)
 - busted (test framework), musicutil (scale utilities)
-- SuperCollider 3.x (optional, for SC drum voice)
-- Pattern bank files stored as `.krp` under platform data dirs with checksum validation
+- SuperCollider 3.x (optional, for `sc_synth` melodic + `sc_drums` percussion voices)
+- MIDI clock sync at 24 PPQ (external slave / internal master with clock output)
+- Pattern banks and full-session presets stored as `.krp` under platform data dirs with Adler-32 checksum validation
 
-## Recent Changes (PRs #67-76)
-- Probability parameter with per-param gating and ratchet interaction (#67)
-- SuperCollider drum voice backend (#69)
-- Push 2 grid adapter with Lua 5.3-compatible bit helpers (#71)
-- Sprite X position follows playhead step (#72)
-- Probability page stores 1-7 values matching PROBABILITY_MAP (#73)
-- Loop editing visual feedback (#74)
-- Control row layout redesign (#75)
-- Softcut voice wired into app.lua with buffer management runtime (#76)
-- Disk-backed pattern-bank persistence with checksum validation (013-pattern-persistence)
+## Recent Changes (through #108)
+- Meta-sequencer state persisted in `.krp` pattern banks (#108)
+- Pattern cueing with quantized transitions at track-1 loop boundary (#107)
+- Full-session preset persistence (tracks + patterns + meta + params) with autosave (#106)
+- Custom scale mask editor on the scale page (#105)
+- MIDI clock sync — external slave, clock output at 24 PPQ, Start/Stop/Continue (spec 010, #104)
+- SuperCollider melodic synth voice with sub / fm / wavetable synthdefs (#103)
+- Ratchet page UX rewrite: per-sub-gate bitmask with dedicated grid display
+- Help overlay (`?`), grid theme cycling (Ctrl+Shift+T), page-indicator screen tray
+- Loop boundary indicators on simulated grid; cell edge borders; dim notes outside loop
+- Probability modifier key (hold x=14) as an overlay across pages
+- Time modifier (F1) per-parameter clock division overlay
+- Disk-backed pattern-bank persistence with Adler-32 checksum validation
