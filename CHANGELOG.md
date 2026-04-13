@@ -14,6 +14,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   `/rekriate/mixer/track/{1-4}/{level,pan,mute}` and
   `/rekriate/mixer/master/level`. Mixing state persists regardless of voice
   lifecycle. (re-u9w)
+- Novation Launchpad Pro MK3 grid provider (`lib/grid_launchpad_pro.lua`):
+  presents the 8x8 RGB pad grid as a 16x8 monome-style grid via page switching
+  on the top-row Left/Right arrows. Enters Programmer mode on init, sends a
+  single batched RGB sysex per refresh, and restores Live mode on cleanup.
+  Registered as the `launchpad_pro` provider alongside `monome`, `push2`,
+  `midigrid`, `virtual`, `simulated`, and `synthetic`. (re-yp0)
+- Grid selection params ("grid" group): pick the grid backend at runtime via
+  the params menu; provider swap cleans up the old grid and reconnects. MIDI
+  port for push2 / launchpad_pro / midigrid is configurable via
+  `grid_midi_device`. (re-yp0)
 - MIDI clock sync (spec 010): external clock source, clock output at 24 PPQ, Start/Stop/Continue transport messages, clock status display (re-ot4)
 - Hardware kria parity: pattern cueing with quantized transitions. During
   playback, pressing a pattern slot (pattern-held) queues the transition for

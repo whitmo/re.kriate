@@ -269,6 +269,17 @@ M.register("push2", function(opts)
 end)
 
 ------------------------------------------------------------------------
+-- Built-in provider: launchpad_pro (Novation Launchpad Pro MK3 as 16x8 grid)
+------------------------------------------------------------------------
+
+M.register("launchpad_pro", function(opts)
+  local lp_pro = require("lib/grid_launchpad_pro")
+  local g = lp_pro.new(opts)
+  g:init_hardware()
+  return g
+end)
+
+------------------------------------------------------------------------
 -- Built-in provider: synthetic (testing grid with dump & key simulation)
 ------------------------------------------------------------------------
 -- Extends "virtual" with:
