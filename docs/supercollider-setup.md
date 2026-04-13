@@ -46,13 +46,20 @@ If SuperCollider is running on a laptop on the same network:
 re.kriate (norns/seamstress)
     │
     │  OSC messages (UDP)
-    │  /rekriate/track/{1-4}/note     midi_note velocity duration
-    │  /rekriate/track/{1-4}/all_notes_off
-    │  /rekriate/track/{1-4}/portamento  time
+    │  Note control:
+    │    /rekriate/track/{1-4}/note           midi_note velocity duration
+    │    /rekriate/track/{1-4}/all_notes_off
+    │    /rekriate/track/{1-4}/portamento     time
+    │  Mixer (sc/rekriate-voice.scd only):
+    │    /rekriate/mixer/track/{1-4}/level    0..2
+    │    /rekriate/mixer/track/{1-4}/pan      -1..1
+    │    /rekriate/mixer/track/{1-4}/mute     0|1
+    │    /rekriate/mixer/master/level         0..2
     │
     └──► SuperCollider (sclang, port 57120)
               │
-              │  Synth(\rekriate_sub, ...)
+              │  voice synths → per-track bus → track strip (level/pan/mute)
+              │                → master bus → master strip (level) → out 0
               │
               └──► scsynth (audio server)
                         │

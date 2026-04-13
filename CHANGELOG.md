@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- SC engine mixer bus architecture: voices in `sc/rekriate-voice.scd` now
+  route through per-track mono buses into persistent mixer-strip synths
+  (level/pan/mute) and a master strip (master level), instead of applying
+  pan/amp on ephemeral voice synths. Adds OSC responders
+  `/rekriate/mixer/track/{1-4}/{level,pan,mute}` and
+  `/rekriate/mixer/master/level`. Mixing state persists regardless of voice
+  lifecycle. (re-u9w)
 - MIDI clock sync (spec 010): external clock source, clock output at 24 PPQ, Start/Stop/Continue transport messages, clock status display (re-ot4)
 - Hardware kria parity: pattern cueing with quantized transitions. During
   playback, pressing a pattern slot (pattern-held) queues the transition for
