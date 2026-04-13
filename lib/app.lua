@@ -56,6 +56,10 @@ local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 local CLOCK_SOURCE_OPTIONS = {"internal", "external MIDI"}
 local CLOCK_OUTPUT_OPTIONS = {"off", "on"}
 
+-- Grid provider selector options (user-facing labels → registry names)
+local GRID_PROVIDER_OPTIONS = {"monome", "midigrid", "push2", "launchpad pro", "virtual"}
+local GRID_PROVIDER_REGISTRY = {"monome", "midigrid", "push2", "launchpad_pro", "virtual"}
+
 local DEFAULT_PRESET_NAME = "default"
 local PRESET_MESSAGE_KEY = "preset" .. "_message"
 
@@ -350,6 +354,60 @@ local function add_clock_sync_params(ctx)
   end)
 end
 
+--- Connect (or reconnect) the grid based on config + provider selection.
+--- Cleanly tears down any existing grid before swapping in a new one.
+local function connect_grid(ctx, provider_name, opts)
+  if ctx.g and ctx.g.cleanup then
+    pcall(function() ctx.g:cleanup() end)
+  end
+  ctx.g = grid_provider.connect(provider_name, opts or {})
+  ctx.g.key = log.wrap(function(x, y, z)
+    grid_ui.key(ctx, x, y, z)
+    ctx.grid_dirty = true
+  end, "grid.key")
+  ctx.grid_dirty = true
+end
+
+--- Translate the user-facing grid_provider option index to a registry name.
+local function grid_option_to_name(idx)
+  return GRID_PROVIDER_REGISTRY[idx] or "monome"
+end
+
+local function add_grid_params(ctx, config)
+  if not params or not params.add_group then return end
+  params:add_group("grid", "grid", 2)
+
+  -- Default param to whatever the script booted with (preserves existing behavior).
+  local default_idx = 1
+  local boot_name = config.grid_provider or "monome"
+  for i, name in ipairs(GRID_PROVIDER_REGISTRY) do
+    if name == boot_name then default_idx = i break end
+  end
+  params:add_option("grid_provider", "grid provider", GRID_PROVIDER_OPTIONS, default_idx)
+  params:add_number("grid_midi_device", "grid midi device", 1, 16,
+    (config.grid_opts and config.grid_opts.device) or 1)
+
+  -- Reconnect on provider change; uses current grid_midi_device value for midi grids.
+  params:set_action("grid_provider", function(val)
+    local name = grid_option_to_name(val)
+    if ctx.g and ctx._grid_provider_name == name then return end
+    local opts = {}
+    if name == "push2" or name == "launchpad_pro" or name == "midigrid" then
+      opts.device = params:get("grid_midi_device")
+    elseif config.grid_opts then
+      -- Preserve original opts (dims/mirror) for monome/virtual-like providers
+      for k, v in pairs(config.grid_opts) do opts[k] = v end
+    end
+    local ok, err = pcall(connect_grid, ctx, name, opts)
+    if ok then
+      ctx._grid_provider_name = name
+      log.info("grid reconnected: " .. name)
+    else
+      log.warn("grid reconnect failed (" .. name .. "): " .. tostring(err))
+    end
+  end)
+end
+
 function M.init(config)
   config = config or {}
 
@@ -479,6 +537,7 @@ function M.init(config)
   add_clock_sync_params(ctx)
   add_pattern_persistence_params(ctx)
   add_preset_persistence_params(ctx)
+  add_grid_params(ctx, config)
 
   -- Build initial voices from params (unless config provided voices)
   if not use_config_voices and ctx.midi_dev then
@@ -503,12 +562,10 @@ function M.init(config)
     end
   end)
 
-  -- grid (pluggable: config.grid_provider selects backend)
-  ctx.g = grid_provider.connect(config.grid_provider, config.grid_opts)
-  ctx.g.key = log.wrap(function(x, y, z)
-    grid_ui.key(ctx, x, y, z)
-    ctx.grid_dirty = true
-  end, "grid.key")
+  -- grid (pluggable: config.grid_provider selects backend; runtime switching via
+  -- the "grid provider" param — see add_grid_params / connect_grid).
+  ctx._grid_provider_name = config.grid_provider or "monome"
+  connect_grid(ctx, ctx._grid_provider_name, config.grid_opts)
 
   -- grid redraw metro
   ctx.grid_metro = metro.init()

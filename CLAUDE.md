@@ -106,7 +106,8 @@ Kria is a multi-track step sequencer where each track has independent loop lengt
 - MIDI clock sync at 24 PPQ (external slave / internal master with clock output)
 - Pattern banks and full-session presets stored as `.krp` under platform data dirs with Adler-32 checksum validation
 
-## Recent Changes (through #108)
+## Recent Changes (through #109)
+- Multi-grid support: Launchpad Pro MK3 provider with page switching, grid selection params for runtime backend swap (re-yp0)
 - Meta-sequencer state persisted in `.krp` pattern banks (#108)
 - Pattern cueing with quantized transitions at track-1 loop boundary (#107)
 - Full-session preset persistence (tracks + patterns + meta + params) with autosave (#106)
