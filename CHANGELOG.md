@@ -15,6 +15,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   `help.transport()` or `help.debug()` prints a per-topic reference so the
   surface is discoverable from inside seamstress with no external docs.
   (re-107)
+- Startup banner (`lib/startup_info.lua`): prints `=== re.kriate ===` with git
+  commit / branch / release and per-platform connection status at init. Reads
+  git metadata directly from `.git` (worktree-aware: follows `gitdir:` pointers
+  and falls back to `packed-refs`); reads release marker from the first
+  `## [...]` heading in `CHANGELOG.md`, pairing `Unreleased` with the last
+  shipped date when present. Wired into both entrypoints: `seamstress.lua`
+  surfaces the configured SC target (host/port from `osc_host` / `osc_port`)
+  plus softcut mode; `re_kriate.lua` shows softcut mode only (SC status on
+  norns is per-voice). (re-4fs)
 - SC ↔ seamstress bidirectional OSC handshake (`lib/sc_bridge.lua`): ping/pong
   protocol on `/rekriate/ping` → `/rekriate/pong {version, features...}`. Each
   companion .scd (voice, synths, drums, sub) replies with its own feature list;
