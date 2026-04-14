@@ -16,9 +16,9 @@ local M = {}
 -- ========================================================================
 
 M.SIZES = {
-  [64]  = {cols = 8,  rows = 8,  cell_size = 20, cell_pitch = 24},
-  [128] = {cols = 16, rows = 8,  cell_size = 14, cell_pitch = 16},
-  [256] = {cols = 16, rows = 16, cell_size = 10, cell_pitch = 12},
+  [64]  = {cols = 8,  rows = 8,  cell_size = 22, cell_pitch = 24},
+  [128] = {cols = 16, rows = 8,  cell_size = 15, cell_pitch = 16},
+  [256] = {cols = 16, rows = 16, cell_size = 11, cell_pitch = 12},
 }
 
 -- ========================================================================
