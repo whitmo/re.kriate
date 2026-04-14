@@ -63,9 +63,6 @@ function M.redraw(ctx)
   elseif ctx.time_held then
     -- time modifier: show per-param clock division selector
     M.draw_time_page(ctx, g)
-  elseif ctx.loop_held and ctx.active_page ~= "alt_track" then
-    -- loop modifier: show loop boundaries for editing
-    M.draw_loop_page(ctx, g)
   elseif ctx.prob_held then
     -- probability modifier: show per-step probability overlay
     M.draw_value_page(ctx, g, "probability")
@@ -88,6 +85,14 @@ function M.redraw(ctx)
       -- All other pages (including extended: alt_note, glide) use value display
       M.draw_value_page(ctx, g, page)
     end
+  end
+
+  -- Loop modifier overlay: keeps the current page visible (it is a modifier,
+  -- not a dedicated page) and adds a highlight for the first-press column.
+  -- In-loop vs out-of-loop brightness is already encoded in each page's draw
+  -- routine, so all we need here is a first-press anchor marker.
+  if ctx.loop_held and ctx.active_page ~= "alt_track" then
+    M.draw_loop_overlay(ctx, g)
   end
 
   M.draw_nav(ctx, g)
@@ -444,46 +449,29 @@ function M.draw_pattern_slots(ctx, g)
   end
 end
 
--- Loop editing display: shows loop boundaries for current page
--- Trigger page: rows 1-4 = tracks, columns show trigger loop region
--- Value pages: columns show loop region for active param (full height)
-function M.draw_loop_page(ctx, g)
+-- Loop modifier overlay: drawn on top of the current page when LOOP is held.
+-- Highlights the first-press anchor column so the player can see where the
+-- gesture started. Does NOT replace the page's own rendering -- the caller
+-- has already drawn the page, which encodes in-loop/out-of-loop brightness
+-- on its own.
+--   * On trigger/tracks page: first-press is anchored to a specific track row
+--     (`loop_first_y`) because each row is an independent track. The highlight
+--     is drawn only on that row.
+--   * On value pages (incl. extended ratchet/alt_note/glide): the gesture
+--     targets the active track's current parameter; the highlight spans all
+--     seven value rows of the first-press column.
+function M.draw_loop_overlay(ctx, g)
+  if not ctx.loop_first_press then return end
   local page = ctx.active_page
-
+  local x = ctx.loop_first_press
   if page == "trigger" then
-    for t = 1, track_mod.NUM_TRACKS do
-      local param = ctx.tracks[t].params.trigger
-      local is_active = (t == ctx.active_track)
-      for x = 1, track_mod.NUM_STEPS do
-        local in_loop = x >= param.loop_start and x <= param.loop_end
-        local brightness = 0
-        if is_active and ctx.loop_first_press and x == ctx.loop_first_press then
-          brightness = 15
-        elseif in_loop then
-          brightness = is_active and 10 or 4
-        elseif is_active then
-          brightness = 2
-        end
-        g:led(x, t, brightness)
-      end
+    local row = ctx.loop_first_y
+    if row and row >= 1 and row <= track_mod.NUM_TRACKS then
+      g:led(x, row, 15)
     end
   else
-    local track = ctx.tracks[ctx.active_track]
-    local param = track.params[page]
-    if not param then return end
-    for x = 1, track_mod.NUM_STEPS do
-      local in_loop = x >= param.loop_start and x <= param.loop_end
-      local brightness
-      if ctx.loop_first_press and x == ctx.loop_first_press then
-        brightness = 15
-      elseif in_loop then
-        brightness = 10
-      else
-        brightness = 2
-      end
-      for y = 1, 7 do
-        g:led(x, y, brightness)
-      end
+    for y = 1, 7 do
+      g:led(x, y, 15)
     end
   end
 end
@@ -660,6 +648,7 @@ function M.nav_key(ctx, x, z)
     ctx.loop_held = z == 1
     if z == 0 then
       ctx.loop_first_press = nil
+      ctx.loop_first_y = nil
     end
   end
   -- pattern mode hold (x=12)
@@ -749,7 +738,7 @@ function M.grid_key(ctx, x, y, z)
 
   -- loop editing mode
   if ctx.loop_held then
-    M.loop_key(ctx, x, page)
+    M.loop_key(ctx, x, y, page)
     return
   end
 
@@ -836,25 +825,47 @@ function M.ratchet_key(ctx, x, y)
   end
 end
 
--- Loop editing: first press = start, second press = end
-function M.loop_key(ctx, x, page)
-  local track = ctx.tracks[ctx.active_track]
-  -- on trigger page, use active_track's trigger param
-  -- on other pages, use that page's param
+-- Loop editing: first press = start, second press = end.
+-- Loop is a modifier on the CURRENT page, not its own page. It edits the loop
+-- of whatever parameter the current page exposes.
+--   * Trigger/tracks page: each row 1-4 is an independent track, so the row
+--     the gesture started on determines which track's trigger loop is edited.
+--     The second press must also land on that row to complete the gesture --
+--     a press on a different row re-anchors to the new row. This matches
+--     original kria's per-track trigger loops.
+--   * All other pages (note, octave, duration, velocity, probability, mixer
+--     in spirit, plus extended alt_note/glide/ratchet): the gesture edits
+--     the active track's loop for that page's parameter, and `y` is ignored.
+function M.loop_key(ctx, x, y, page)
   local param
   if page == "trigger" then
-    param = track.params.trigger
+    if not y or y < 1 or y > track_mod.NUM_TRACKS then return end
+    if ctx.loop_first_press and ctx.loop_first_y and ctx.loop_first_y ~= y then
+      -- Second press landed on a different track row than the anchor --
+      -- reset the gesture to the new row so the user doesn't set a loop
+      -- on a track they didn't intend.
+      ctx.loop_first_press = x
+      ctx.loop_first_y = y
+      return
+    end
+    param = ctx.tracks[y].params.trigger
   else
-    param = track.params[page]
+    local track = ctx.tracks[ctx.active_track]
+    param = track and track.params[page]
+    if not param then return end
   end
 
   if not ctx.loop_first_press then
     ctx.loop_first_press = x
+    if page == "trigger" then
+      ctx.loop_first_y = y
+    end
   else
     local s = math.min(ctx.loop_first_press, x)
     local e = math.max(ctx.loop_first_press, x)
     track_mod.set_loop(param, s, e)
     ctx.loop_first_press = nil
+    ctx.loop_first_y = nil
   end
 end
 

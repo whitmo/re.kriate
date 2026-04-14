@@ -107,6 +107,7 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     ctx.loop_held = not ctx.loop_held
     if not ctx.loop_held then
       ctx.loop_first_press = nil
+      ctx.loop_first_y = nil
     end
   elseif KEY_PAGE[char] then
     local target = KEY_PAGE[char]
