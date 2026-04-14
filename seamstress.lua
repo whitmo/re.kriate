@@ -53,9 +53,9 @@ function init()
     protocol = "mext", -- mext (varibright), series, 40h
   })
 
-  -- Size window to match configured grid + tray
+  -- Size window to match configured grid + side panel (tray moved to right).
   if screen.set_size then
-    screen.set_size(grid_render.screen_width(), grid_render.screen_height() + screen_ui.TRAY_HEIGHT)
+    screen.set_size(grid_render.screen_width() + screen_ui.TRAY_WIDTH, grid_render.screen_height())
   end
 
   -- Sprite voices (additive visual output, one per track)
@@ -164,7 +164,7 @@ function init()
         if ctx.help_visible then
           screen.set_size(help_overlay.WIDTH, help_overlay.HEIGHT)
         else
-          screen.set_size(grid_render.screen_width(), grid_render.screen_height() + screen_ui.TRAY_HEIGHT)
+          screen.set_size(grid_render.screen_width() + screen_ui.TRAY_WIDTH, grid_render.screen_height())
         end
       end
       return
@@ -175,7 +175,7 @@ function init()
       if ctx.help_visible then
         ctx.help_visible = false
         if screen.set_size then
-          screen.set_size(grid_render.screen_width(), grid_render.screen_height() + screen_ui.TRAY_HEIGHT)
+          screen.set_size(grid_render.screen_width() + screen_ui.TRAY_WIDTH, grid_render.screen_height())
         end
         return
       end
@@ -199,6 +199,12 @@ function init()
 
   -- Mouse input → simulated grid (gesture mode determined by modifier state)
   screen.click = log.wrap(function(x, y, state, button)
+    if button == 1 or button == 2 then
+      local gx, gy = grid_render.pixel_to_grid(x, y)
+      if gx then
+        ctx.last_key = { x = gx, y = gy, z = state, time = os.clock() }
+      end
+    end
     grid_render.handle_click(ctx.g, x, y, state, button)
   end, "grid_click")
 
@@ -224,10 +230,13 @@ function redraw()
     screen.refresh()
     return
   end
-  -- Black canvas background
+  -- Black canvas background (grid + right-side info panel)
+  local grid_w = grid_render.screen_width()
+  local grid_h = grid_render.screen_height()
+  local panel_w = screen_ui.TRAY_WIDTH
   screen.color(0, 0, 0, 255)
   screen.move(1, 1)
-  screen.rect_fill(grid_render.screen_width(), grid_render.screen_height() + screen_ui.TRAY_HEIGHT)
+  screen.rect_fill(grid_w + panel_w, grid_h)
   -- Simulated grid (with loop boundary indicators for active param)
   local loop_opts = nil
   if ctx.tracks and ctx.active_track and ctx.active_page then
@@ -237,10 +246,10 @@ function redraw()
     end
   end
   grid_render.draw(ctx.g, screen, loop_opts)
-  -- Sprites on top
+  -- Sprites on top of the grid region
   sprite_render.draw(ctx)
-  -- Page indicator tray below grid
-  screen_ui.draw_tray(ctx, grid_render.screen_height())
+  -- Dynamic info panel to the right of the grid
+  screen_ui.draw_side_panel(ctx, grid_w, panel_w, grid_h)
   screen.refresh()
 end
 

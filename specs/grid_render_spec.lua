@@ -831,18 +831,20 @@ describe("grid_render", function()
       local mock_grid = make_mock_grid()
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen, {loop_start = 3, loop_end = 8})
-      -- Right boundary: (8-1)*16 + 14 = 126
+      -- Right boundary: (loop_end - 1) * cell_pitch + cell_size
+      local cfg = grid_render.get_config()
+      local expected_x = (8 - 1) * cfg.cell_pitch + cfg.cell_size
       local found_end = false
       for i, call in ipairs(mock_screen.calls) do
         if call.type == "color" and call.r == 100 and call.g == 100 then
           local next_move = mock_screen.calls[i + 1]
-          if next_move and next_move.type == "move" and next_move.x == 126 then
+          if next_move and next_move.type == "move" and next_move.x == expected_x then
             found_end = true
             break
           end
         end
       end
-      assert.is_true(found_end, "expected move to x=126 for loop_end=8")
+      assert.is_true(found_end, "expected move to x=" .. expected_x .. " for loop_end=8")
     end)
 
     it("does not draw indicators when opts is nil", function()

@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- Simulated grid aesthetics (`lib/seamstress/grid_render.lua`,
+  `lib/seamstress/screen_ui.lua`, `seamstress.lua`): tighter cell spacing
+  (1px gaps at sizes 128/256, 2px at 64) for richer LED presence. The
+  bottom page-label tray moves to a vertical info panel on the right of
+  the grid with full page names ("trigger", "probability", etc.) rather
+  than two-letter abbreviations, transport state, per-track step counters
+  with an active-track marker, a dynamic "last press" readout fed by
+  mouse clicks, pattern slot indicators, and save/load messages. Legacy
+  `screen_ui.redraw` is preserved for the existing test surface. (re-1mo)
+
 ### Added
 - Seamstress console `help()` object (`lib/seamstress/help_console.lua`):
   installed into the Lua console at init as a callable namespace exposing
