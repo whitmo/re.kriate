@@ -16,6 +16,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   with an active-track marker, a dynamic "last press" readout fed by
   mouse clicks, pattern slot indicators, and save/load messages. Legacy
   `screen_ui.redraw` is preserved for the existing test surface. (re-1mo)
+- Loop modifier is now a true modifier on the current page instead of a
+  dedicated page view, matching the original kria form factor. Holding LOOP
+  (grid col 11 / keyboard `L`) leaves the current page's rendering in place
+  and overlays only the first-press anchor highlight; the in-loop brightness
+  differences already encoded by each page's render carry the rest of the
+  signal. On the trigger/tracks page the gesture follows the row it started
+  on, so pressing two columns on row N sets track N's trigger loop (per-row
+  independent tracks) -- pressing on a different row re-anchors the gesture
+  so the user doesn't accidentally commit a loop to the wrong track. Value
+  pages (note, octave, duration, velocity, probability, and extended
+  ratchet/alt_note/glide) continue to edit the active track's loop for the
+  current parameter. (re-lz0)
 
 ### Added
 - Seamstress console `help()` object (`lib/seamstress/help_console.lua`):

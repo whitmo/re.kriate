@@ -86,6 +86,7 @@ local function make_ctx(opts)
     loop_held = opts.loop_held or false,
     time_held = opts.time_held or false,
     loop_first_press = nil,
+    loop_first_y = nil,
     grid_dirty = true,
     g = g,
     voices = {},
@@ -732,13 +733,15 @@ describe("grid_ui", function()
       assert.is_true(ctx.loop_held)
     end)
 
-    it("clears loop_held and loop_first_press on release of x=11", function()
+    it("clears loop_held and loop anchors on release of x=11", function()
       local ctx = make_ctx()
       ctx.loop_held = true
       ctx.loop_first_press = 5
+      ctx.loop_first_y = 2
       grid_ui.nav_key(ctx, 11, 0)
       assert.is_false(ctx.loop_held)
       assert.is_nil(ctx.loop_first_press)
+      assert.is_nil(ctx.loop_first_y)
     end)
 
     it("sets pattern_held on press of x=12", function()
@@ -1184,48 +1187,73 @@ describe("grid_ui", function()
 
   describe("loop_key", function()
 
-    it("first press sets loop_first_press", function()
+    it("first press sets loop_first_press (value page)", function()
       local ctx = make_ctx()
       ctx.active_track = 1
       ctx.loop_first_press = nil
-      grid_ui.loop_key(ctx, 5, "trigger")
+      grid_ui.loop_key(ctx, 5, 3, "note")
       assert.are.equal(ctx.loop_first_press, 5)
     end)
 
-    it("second press sets loop boundaries and clears loop_first_press", function()
+    it("second press sets loop boundaries and clears anchors (value page)", function()
       local ctx = make_ctx()
       ctx.active_track = 1
       ctx.loop_first_press = 3
-      grid_ui.loop_key(ctx, 8, "trigger")
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_start, 3)
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_end, 8)
+      grid_ui.loop_key(ctx, 8, 2, "note")
+      assert.are.equal(ctx.tracks[1].params.note.loop_start, 3)
+      assert.are.equal(ctx.tracks[1].params.note.loop_end, 8)
       assert.is_nil(ctx.loop_first_press)
+      assert.is_nil(ctx.loop_first_y)
     end)
 
     it("orders boundaries correctly regardless of press order", function()
       local ctx = make_ctx()
       ctx.active_track = 1
       ctx.loop_first_press = 10
-      grid_ui.loop_key(ctx, 4, "trigger")
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_start, 4)
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_end, 10)
+      grid_ui.loop_key(ctx, 4, 3, "note")
+      assert.are.equal(ctx.tracks[1].params.note.loop_start, 4)
+      assert.are.equal(ctx.tracks[1].params.note.loop_end, 10)
     end)
 
-    it("uses trigger param on trigger page", function()
+    it("trigger page: row determines track (first press records loop_first_y)", function()
       local ctx = make_ctx()
-      ctx.active_track = 2
-      ctx.loop_first_press = 2
-      grid_ui.loop_key(ctx, 6, "trigger")
-      assert.are.equal(ctx.tracks[2].params.trigger.loop_start, 2)
-      assert.are.equal(ctx.tracks[2].params.trigger.loop_end, 6)
+      ctx.loop_first_press = nil
+      grid_ui.loop_key(ctx, 2, 2, "trigger")
+      assert.are.equal(2, ctx.loop_first_press)
+      assert.are.equal(2, ctx.loop_first_y)
     end)
 
-    it("uses page-specific param on value pages", function()
+    it("trigger page: second press on same row sets that track's loop", function()
+      local ctx = make_ctx()
+      -- active_track intentionally differs from the row being pressed
+      ctx.active_track = 1
+      grid_ui.loop_key(ctx, 2, 3, "trigger")  -- first press, row 3 = track 3
+      grid_ui.loop_key(ctx, 6, 3, "trigger")  -- second press, same row
+      assert.are.equal(2, ctx.tracks[3].params.trigger.loop_start)
+      assert.are.equal(6, ctx.tracks[3].params.trigger.loop_end)
+      -- other tracks unaffected
+      assert.are.equal(1, ctx.tracks[1].params.trigger.loop_start)
+    end)
+
+    it("trigger page: second press on different row re-anchors gesture", function()
+      local ctx = make_ctx()
+      grid_ui.loop_key(ctx, 2, 1, "trigger")  -- anchor row 1
+      grid_ui.loop_key(ctx, 9, 3, "trigger")  -- different row → re-anchor
+      -- No loop was committed on either track
+      assert.are.equal(1, ctx.tracks[1].params.trigger.loop_start)
+      assert.are.equal(1, ctx.tracks[3].params.trigger.loop_start)
+      -- New anchor is the second press
+      assert.are.equal(9, ctx.loop_first_press)
+      assert.are.equal(3, ctx.loop_first_y)
+    end)
+
+    it("uses page-specific param on value pages (active track)", function()
       local ctx = make_ctx()
       ctx.active_track = 1
       for _, page in ipairs({"note", "octave", "duration", "velocity"}) do
         ctx.loop_first_press = 3
-        grid_ui.loop_key(ctx, 7, page)
+        ctx.loop_first_y = nil
+        grid_ui.loop_key(ctx, 7, 4, page)
         assert.are.equal(ctx.tracks[1].params[page].loop_start, 3,
           page .. " loop_start should be 3")
         assert.are.equal(ctx.tracks[1].params[page].loop_end, 7,
@@ -1233,13 +1261,12 @@ describe("grid_ui", function()
       end
     end)
 
-    it("sets single-step loop when both presses are same column", function()
+    it("sets single-step loop when both presses are same column on trigger page", function()
       local ctx = make_ctx()
-      ctx.active_track = 1
-      ctx.loop_first_press = 5
-      grid_ui.loop_key(ctx, 5, "trigger")
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_start, 5)
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_end, 5)
+      grid_ui.loop_key(ctx, 5, 2, "trigger")
+      grid_ui.loop_key(ctx, 5, 2, "trigger")
+      assert.are.equal(ctx.tracks[2].params.trigger.loop_start, 5)
+      assert.are.equal(ctx.tracks[2].params.trigger.loop_end, 5)
     end)
 
   end)
@@ -1810,110 +1837,54 @@ describe("grid_ui", function()
   -- Loop page display tests
   -- ========================================================================
 
-  describe("draw_loop_page", function()
+  -- Loop modifier is an OVERLAY on the current page (not its own page).
+  -- The page renders normally; the overlay only adds the first-press anchor
+  -- highlight when the gesture is mid-flight.
+  describe("draw_loop_overlay", function()
 
     describe("trigger page", function()
 
-      it("shows active track loop region at brightness 10", function()
+      it("highlights first_press only on the anchor row (loop_first_y)", function()
         local g = spy_grid()
-        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
-        ctx.tracks[1].params.trigger.loop_start = 3
-        ctx.tracks[1].params.trigger.loop_end = 8
-
-        grid_ui.draw_loop_page(ctx, g)
-
-        -- In-loop columns on active track row
-        assert.are.equal(10, led_at(g, 3, 1))
-        assert.are.equal(10, led_at(g, 8, 1))
-        assert.are.equal(10, led_at(g, 5, 1))
-      end)
-
-      it("shows out-of-loop columns on active track at brightness 2", function()
-        local g = spy_grid()
-        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
-        ctx.tracks[1].params.trigger.loop_start = 3
-        ctx.tracks[1].params.trigger.loop_end = 8
-
-        grid_ui.draw_loop_page(ctx, g)
-
-        assert.are.equal(2, led_at(g, 1, 1))
-        assert.are.equal(2, led_at(g, 2, 1))
-        assert.are.equal(2, led_at(g, 9, 1))
-        assert.are.equal(2, led_at(g, 16, 1))
-      end)
-
-      it("shows inactive track loop region at brightness 4", function()
-        local g = spy_grid()
-        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
-        ctx.tracks[2].params.trigger.loop_start = 1
-        ctx.tracks[2].params.trigger.loop_end = 4
-
-        grid_ui.draw_loop_page(ctx, g)
-
-        assert.are.equal(4, led_at(g, 1, 2))
-        assert.are.equal(4, led_at(g, 4, 2))
-        -- Out-of-loop on inactive track: 0
-        assert.are.equal(0, led_at(g, 5, 2))
-      end)
-
-      it("highlights loop_first_press at brightness 15 on active track", function()
-        local g = spy_grid()
-        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
+        local ctx = make_ctx({ active_page = "trigger", loop_held = true })
         ctx.loop_first_press = 5
+        ctx.loop_first_y = 2
 
-        grid_ui.draw_loop_page(ctx, g)
+        grid_ui.draw_loop_overlay(ctx, g)
 
-        assert.are.equal(15, led_at(g, 5, 1))
+        assert.are.equal(15, led_at(g, 5, 2))
+        -- Other rows at the first-press column should NOT be highlighted
+        -- by the overlay (they remain whatever the page drew -- here, 0
+        -- because we called the overlay alone without a base render).
+        assert.are_not.equal(15, led_at(g, 5, 1))
+        assert.are_not.equal(15, led_at(g, 5, 3))
+        assert.are_not.equal(15, led_at(g, 5, 4))
       end)
 
-      it("does not highlight loop_first_press on inactive track", function()
+      it("is a no-op when loop_first_press is not set", function()
         local g = spy_grid()
-        local ctx = make_ctx({ active_page = "trigger", active_track = 1, loop_held = true })
-        ctx.loop_first_press = 5
+        local ctx = make_ctx({ active_page = "trigger", loop_held = true })
 
-        grid_ui.draw_loop_page(ctx, g)
+        grid_ui.draw_loop_overlay(ctx, g)
 
-        -- Track 2 at column 5 should not be 15
-        assert.are_not.equal(15, led_at(g, 5, 2))
+        -- Nothing got drawn by the overlay
+        for y = 1, 4 do
+          for x = 1, 16 do
+            assert.are_not.equal(15, led_at(g, x, y))
+          end
+        end
       end)
 
     end)
 
     describe("value pages", function()
 
-      it("shows loop region at brightness 10 across all rows", function()
+      it("highlights first_press column across all seven value rows", function()
         local g = spy_grid()
-        local ctx = make_ctx({ active_page = "note", active_track = 1, loop_held = true })
-        ctx.tracks[1].params.note.loop_start = 2
-        ctx.tracks[1].params.note.loop_end = 6
-
-        grid_ui.draw_loop_page(ctx, g)
-
-        for y = 1, 7 do
-          assert.are.equal(10, led_at(g, 3, y), "in-loop col 3, row " .. y)
-        end
-      end)
-
-      it("shows out-of-loop columns at brightness 2", function()
-        local g = spy_grid()
-        local ctx = make_ctx({ active_page = "note", active_track = 1, loop_held = true })
-        ctx.tracks[1].params.note.loop_start = 2
-        ctx.tracks[1].params.note.loop_end = 6
-
-        grid_ui.draw_loop_page(ctx, g)
-
-        for y = 1, 7 do
-          assert.are.equal(2, led_at(g, 1, y), "out-of-loop col 1, row " .. y)
-          assert.are.equal(2, led_at(g, 10, y), "out-of-loop col 10, row " .. y)
-        end
-      end)
-
-      it("highlights loop_first_press at brightness 15", function()
-        local g = spy_grid()
-        local ctx = make_ctx({ active_page = "note", active_track = 1, loop_held = true })
+        local ctx = make_ctx({ active_page = "note", loop_held = true })
         ctx.loop_first_press = 7
 
-        grid_ui.draw_loop_page(ctx, g)
+        grid_ui.draw_loop_overlay(ctx, g)
 
         for y = 1, 7 do
           assert.are.equal(15, led_at(g, 7, y), "first press col 7, row " .. y)
@@ -1922,55 +1893,70 @@ describe("grid_ui", function()
 
       it("works on extended pages (ratchet)", function()
         local g = spy_grid()
-        local ctx = make_ctx({ active_page = "ratchet", active_track = 1, loop_held = true })
-        ctx.tracks[1].params.ratchet.loop_start = 4
-        ctx.tracks[1].params.ratchet.loop_end = 10
+        local ctx = make_ctx({ active_page = "ratchet", loop_held = true })
+        ctx.loop_first_press = 4
 
-        grid_ui.draw_loop_page(ctx, g)
+        grid_ui.draw_loop_overlay(ctx, g)
 
-        assert.are.equal(10, led_at(g, 5, 4), "in-loop on ratchet")
-        assert.are.equal(2, led_at(g, 2, 4), "out-of-loop on ratchet")
+        for y = 1, 7 do
+          assert.are.equal(15, led_at(g, 4, y))
+        end
       end)
 
     end)
 
     describe("redraw integration", function()
 
-      it("routes to loop page when loop_held on trigger page", function()
+      it("keeps the trigger page visible when loop_held", function()
         local ctx, g = make_ctx({ active_page = "trigger", loop_held = true })
+        -- Put a trigger on each track so we can see the normal page render
+        ctx.tracks[1].params.trigger.steps[2] = 1
         ctx.tracks[1].params.trigger.loop_start = 1
         ctx.tracks[1].params.trigger.loop_end = 4
 
         grid_ui.redraw(ctx)
 
-        -- Active track (1) in-loop should be 10
-        assert.are.equal(10, g:get_led(1, 1))
-        assert.are.equal(10, g:get_led(4, 1))
-        -- Out-of-loop on active track should be 2
-        assert.are.equal(2, g:get_led(5, 1))
+        -- Normal trigger rendering still applies: step 2 on track 1 is a
+        -- trigger in the loop region (brightness 8). This is the same value
+        -- as when the loop modifier is NOT held.
+        assert.are.equal(8, g:get_led(2, 1))
       end)
 
-      it("routes to loop page when loop_held on value page", function()
+      it("keeps the value page visible when loop_held on note page", function()
         local ctx, g = make_ctx({ active_page = "note", loop_held = true })
+        ctx.tracks[1].params.note.steps[3] = 5
         ctx.tracks[1].params.note.loop_start = 1
         ctx.tracks[1].params.note.loop_end = 8
 
         grid_ui.redraw(ctx)
 
-        -- In-loop column, all rows should be 10
-        assert.are.equal(10, g:get_led(5, 4))
-        -- Out-of-loop should be 2
-        assert.are.equal(2, g:get_led(10, 4))
+        -- Value 5 on step 3 shows the value dot at row 3 (8-5=3) at
+        -- brightness 10 (in-loop) -- same as a non-loop-held render.
+        assert.are.equal(10, g:get_led(3, 3))
       end)
 
-      it("does not route to loop page on alt_track", function()
-        local ctx, g = make_ctx({ active_page = "alt_track", loop_held = true })
+      it("overlays first_press on top of the underlying page", function()
+        local ctx, g = make_ctx({ active_page = "note", loop_held = true })
+        ctx.loop_first_press = 6
 
         grid_ui.redraw(ctx)
 
-        -- Alt-track page should still show direction buttons, not loop display
-        -- Track 1 direction is "forward" (ALT_DIRECTIONS[1])
-        assert.is_true(g:get_led(1, 1) > 0, "alt_track should render normally")
+        -- Overlay wins at the first-press column: all 7 value rows at 15.
+        for y = 1, 7 do
+          assert.are.equal(15, g:get_led(6, y),
+            "overlay should paint first_press at col 6, row " .. y)
+        end
+      end)
+
+      it("does not overlay on alt_track even when loop_held", function()
+        local ctx, g = make_ctx({ active_page = "alt_track", loop_held = true })
+        ctx.loop_first_press = 3
+
+        grid_ui.redraw(ctx)
+
+        -- alt_track excluded from the loop overlay: col 3 should not be
+        -- forced to 15 by the overlay.
+        assert.are_not.equal(15, g:get_led(3, 2))
       end)
 
     end)

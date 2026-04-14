@@ -370,6 +370,7 @@ function M.init(config)
     loop_held = false,
     time_held = false,
     loop_first_press = nil,
+    loop_first_y = nil,
     grid_dirty = true,
     scale_notes = {},
     voices = config.voices or {},
