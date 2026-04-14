@@ -7,6 +7,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- SC mixer engine (`sc/rekriate-mixer.scd`): standalone mixer layered on
+  top of the voice engine. Allocates 4 mono channel buses + stereo aux
+  send/return; groups execute voices → channels → aux → master.
+  SynthDefs: `\rekriate_channel_strip` (filter HP/LP, insert reverb,
+  insert delay, compressor, level, pan, mute, aux send) per channel;
+  `\rekriate_aux` (global reverb + delay); `\rekriate_mixer_master`
+  (aux-return sum + tanh soft-clip limiter via `ReplaceOut`). OSC
+  responders on `/rekriate/mixer/channel/{1-4}/…`, `/rekriate/mixer/aux/…`,
+  `/rekriate/mixer/master/…` for every strip parameter. Per-channel/aux/
+  master peak metering at 30 Hz via `SendReply`, forwarded to a
+  configurable NetAddr (`/rekriate/mixer/meter/target host port`). When
+  the voice engine is loaded, the mixer patches `~rekriate[\playNote]` to
+  spawn voices into the mixer's voices group with `\out` set to the
+  channel bus, and tears down the simple trackstrip/master synths + their
+  `/rekriate/mixer/track/...` responders so the new chain is
+  authoritative. (re-4qz)
 - SC engine mixer bus architecture: voices in `sc/rekriate-voice.scd` now
   route through per-track mono buses into persistent mixer-strip synths
   (level/pan/mute) and a master strip (master level), instead of applying
