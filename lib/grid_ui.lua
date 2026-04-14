@@ -240,6 +240,23 @@ function M.draw_alt_track_page(ctx, g)
   end
 end
 
+-- Value-page row-to-param mapping shared by draw_time_page and time_key so a
+-- press on row N edits the same param that row N visually represents.
+-- Row 1 = active param (the page's own param). Rows 2-7 = other PARAM_NAMES
+-- in order, skipping the active one. Returns nil when row has no mapping.
+local function value_page_row_to_param(active_name, row)
+  if row == 1 then return active_name end
+  local next_row = 2
+  for _, name in ipairs(track_mod.PARAM_NAMES) do
+    if name ~= active_name then
+      if next_row == row then return name end
+      next_row = next_row + 1
+      if next_row > 7 then return nil end
+    end
+  end
+  return nil
+end
+
 -- Time page: per-parameter clock division selector
 -- On trigger page: rows 1-4 = tracks, columns 1-7 = division values for trigger param
 -- On value pages: rows 1-4 = core params visible as labels, columns 1-7 = division value
@@ -282,29 +299,23 @@ function M.draw_time_page(ctx, g)
     -- Value page: show active param's clock_div prominently on row 1,
     -- plus other params dimly below for context
     local track = ctx.tracks[ctx.active_track]
-    local active_param = track.params[param_name]
-    if active_param then
-      -- Row 1: active param
-      for x = 1, 7 do
-        local brightness = 3
-        if x == active_param.clock_div then
-          brightness = 15
-        end
-        g:led(x, 1, brightness)
-      end
-      -- Rows 2-7: other core params for context (skip active)
-      local row = 2
-      for _, name in ipairs(track_mod.PARAM_NAMES) do
-        if name ~= param_name and row <= 7 then
+    if track.params[param_name] then
+      for row = 1, 7 do
+        local name = value_page_row_to_param(param_name, row)
+        if name then
           local p = track.params[name]
-          for x = 1, 7 do
-            local brightness = 1
-            if x == p.clock_div then
-              brightness = 6
+          if p then
+            local is_active_row = (row == 1)
+            for x = 1, 7 do
+              local brightness
+              if is_active_row then
+                brightness = (x == p.clock_div) and 15 or 3
+              else
+                brightness = (x == p.clock_div) and 6 or 1
+              end
+              g:led(x, row, brightness)
             end
-            g:led(x, row, brightness)
           end
-          row = row + 1
         end
       end
     end
@@ -970,12 +981,17 @@ function M.time_key(ctx, x, y)
       end
     end
   else
-    -- On value pages: any press sets the active param's clock_div
-    local track = ctx.tracks[ctx.active_track]
-    local p = track.params[param_name]
-    if p then
-      p.clock_div = x
-      p.tick = 0
+    -- On value pages: each row targets the param shown there (row 1 = active
+    -- param, rows 2-7 = other params, same order as draw_time_page). Press
+    -- sets that row's param clock_div to x.
+    local name = value_page_row_to_param(param_name, y)
+    if name then
+      local track = ctx.tracks[ctx.active_track]
+      local p = track.params[name]
+      if p then
+        p.clock_div = x
+        p.tick = 0
+      end
     end
   end
 end

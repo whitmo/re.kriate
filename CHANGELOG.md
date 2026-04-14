@@ -50,6 +50,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   still owns transitions. (re-f9i)
 
 ### Fixed
+- Time modifier on value pages (note/octave/duration/velocity/etc.) now edits
+  the param actually displayed on each row. Previously every press set the
+  active param's `clock_div` regardless of which row was pressed, so the
+  non-active params shown on rows 2-7 looked interactive but weren't — the
+  button you pressed didn't move the cursor on that row. Row 1 still edits
+  the active param; rows 2-7 edit the same other-param list the overlay
+  draws. (re-0sy)
 - Time modifier (F1) keyboard shortcut had no effect: seamstress delivers
   function keys as tables (`{name = "F1"}`), but the keyboard handler
   early-returned on non-string chars before reaching the F1/F2 branches.
