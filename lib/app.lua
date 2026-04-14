@@ -14,6 +14,7 @@ local grid_provider = require("lib/grid_provider")
 local events = require("lib/events")
 local log = require("lib/log")
 local clock_sync = require("lib/clock_sync")
+local mixer = require("lib/mixer")
 
 local M = {}
 
@@ -26,6 +27,7 @@ local PAGE_TRAY = {
   {pages = {"duration"},              labels = {"du"}},
   {pages = {"velocity"},              labels = {"ve"}},
   {pages = {"probability"},           labels = {"pr"}},
+  {pages = {"mixer"},                 labels = {"mx"}},
   {pages = {"alt_track"},             labels = {"at"}},
   {pages = {"meta_pattern"},          labels = {"mp"}},
   {pages = {"scale"},                 labels = {"sc"}},
@@ -125,6 +127,10 @@ local function build_voice(ctx, t)
     ctx.voices[t] = softcut_zig.new(t, ctx.softcut_runtime, config)
   else
     ctx.voices[t] = nil
+  end
+  -- Re-apply mixer state to the freshly built voice (level/pan per track).
+  if ctx.voices[t] then
+    mixer.apply_to_voice(ctx, t)
   end
 end
 
@@ -433,6 +439,7 @@ function M.init(config)
     meta = meta_pattern.new(),
     midi_dev = config.midi_dev,
     custom_intervals = {},
+    mixer = mixer.new(),
   }
   for i = 1, 12 do
     ctx.custom_intervals[i] = DEFAULT_CUSTOM_INTERVALS[i]
@@ -531,6 +538,26 @@ function M.init(config)
     params:add_number("swing_" .. t, "track " .. t .. " swing", 0, 100, 0)
     params:set_action("swing_" .. t, function(val)
       ctx.tracks[t].swing = val
+    end)
+  end
+
+  -- params: mixer (level, pan, mute per track).
+  -- Level is stored as percent (0-100) and pan as percent (-100..+100) to
+  -- keep the param UI friendly on norns; ctx.mixer holds the float source
+  -- of truth (0.0-1.0 / -1.0..+1.0) that is pushed to voice backends.
+  params:add_group("mixer", "mixer", track_mod.NUM_TRACKS * 3)
+  for t = 1, track_mod.NUM_TRACKS do
+    params:add_number("level_" .. t, "track " .. t .. " level", 0, 100, 100)
+    params:set_action("level_" .. t, function(val)
+      mixer.set_level(ctx, t, (val or 0) / 100)
+    end)
+    params:add_number("pan_" .. t, "track " .. t .. " pan", -100, 100, 0)
+    params:set_action("pan_" .. t, function(val)
+      mixer.set_pan(ctx, t, (val or 0) / 100)
+    end)
+    params:add_option("mute_" .. t, "track " .. t .. " mute", {"off", "on"}, 1)
+    params:set_action("mute_" .. t, function(val)
+      mixer.set_mute(ctx, t, val == 2)
     end)
   end
 

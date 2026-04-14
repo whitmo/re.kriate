@@ -42,6 +42,22 @@ function M.new(track_num, host, port)
     set_target = function(self, new_host, new_port)
       self.target = {new_host, new_port}
     end,
+
+    set_level = function(self, val)
+      local v = val or 0
+      if v < 0 then v = 0 end
+      if v > 1 then v = 1 end
+      osc.send(self.target,
+        "/rekriate/track/" .. self.track_num .. "/level", {v})
+    end,
+
+    set_pan = function(self, val)
+      local v = val or 0
+      if v < -1 then v = -1 end
+      if v > 1 then v = 1 end
+      osc.send(self.target,
+        "/rekriate/track/" .. self.track_num .. "/pan", {v})
+    end,
   }
 end
 

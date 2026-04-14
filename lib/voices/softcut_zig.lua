@@ -145,6 +145,26 @@ function M.new(voice_id, runtime, config)
     if self.runtime.play then self.runtime.play(self.voice_id, false) end
   end
 
+  function self:set_level(val)
+    local v = val or 0
+    if v < 0 then v = 0 end
+    if v > 1 then v = 1 end
+    self.config.level = v
+    if self.runtime.level then
+      self.runtime.level(self.voice_id, v)
+    end
+  end
+
+  function self:set_pan(val)
+    local v = val or 0
+    if v < -1 then v = -1 end
+    if v > 1 then v = 1 end
+    self.config.pan = v
+    if self.runtime.pan then
+      self.runtime.pan(self.voice_id, v)
+    end
+  end
+
   function self:set_portamento(val)
     self.portamento_override = val or 0
     self.config.rate_slew = self.portamento_override

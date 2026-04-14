@@ -8,6 +8,7 @@
 local track_mod = require("lib/track")
 local sequencer = require("lib/sequencer")
 local direction_mod = require("lib/direction")
+local mixer = require("lib/mixer")
 
 local M = {}
 
@@ -337,6 +338,57 @@ handlers["/scale/notes"] = function(ctx)
 end
 
 ------------------------------------------------------------------------
+-- Mixer: per-track level, pan, and mute.
+-- /mixer/level <track> [<value>]  — set or query (value in [0, 1]).
+-- /mixer/pan   <track> [<value>]  — set or query (value in [-1, 1]).
+-- /mixer/mute  <track> [<0|1>]    — toggle, set, or query.
+-- /mixer/get   — full mixer snapshot (level[], pan[], mute[]).
+------------------------------------------------------------------------
+
+handlers["/mixer/level"] = function(ctx, args)
+  local t, err = check_track(args)
+  if not t then return nil, err end
+  if args[2] == nil then
+    return mixer.get_level(ctx, t)
+  end
+  local v = tonumber(args[2])
+  if not v then return nil, "invalid level value" end
+  mixer.set_level(ctx, t, v)
+  ctx.grid_dirty = true
+  return true
+end
+
+handlers["/mixer/pan"] = function(ctx, args)
+  local t, err = check_track(args)
+  if not t then return nil, err end
+  if args[2] == nil then
+    return mixer.get_pan(ctx, t)
+  end
+  local v = tonumber(args[2])
+  if not v then return nil, "invalid pan value" end
+  mixer.set_pan(ctx, t, v)
+  ctx.grid_dirty = true
+  return true
+end
+
+handlers["/mixer/mute"] = function(ctx, args)
+  local t, err = check_track(args)
+  if not t then return nil, err end
+  if args[2] == nil then
+    -- toggle
+    mixer.toggle_mute(ctx, t)
+  else
+    mixer.set_mute(ctx, t, tonumber(args[2]) == 1)
+  end
+  ctx.grid_dirty = true
+  return true
+end
+
+handlers["/mixer/get"] = function(ctx)
+  return mixer.snapshot(ctx)
+end
+
+------------------------------------------------------------------------
 -- Full state snapshot (for remote UIs)
 ------------------------------------------------------------------------
 
@@ -368,6 +420,7 @@ handlers["/state/snapshot"] = function(ctx)
     active_track = ctx.active_track,
     active_page = ctx.active_page,
     tracks = tracks,
+    mixer = mixer.snapshot(ctx),
   }
 end
 
