@@ -294,6 +294,122 @@ describe("per-parameter probability gating", function()
   end)
 end)
 
+describe("per-param probability fail outcomes", function()
+  it("alt_note fail emits 1 (shift/not) regardless of step value", function()
+    local ctx = make_ctx()
+    ctx.rng = function() return 0.9 end  -- always fail
+    ctx.tracks[1].params.probability.steps[1] = 4  -- 50%
+    ctx.tracks[1].params.alt_note.steps[1] = 5    -- user set shift
+    local emitted
+    ctx.events = { emit = function(_, e, d) if e == "sequencer:step" then emitted = d.vals end end }
+    sequencer.step_track(ctx, 1)
+    assert.are.equal(1, emitted.alt_note, "alt_note should emit null (1) on prob fail")
+  end)
+
+  it("octave fail emits 4 (shift/not, center)", function()
+    local ctx = make_ctx()
+    ctx.rng = function() return 0.9 end
+    ctx.tracks[1].params.probability.steps[1] = 4
+    ctx.tracks[1].params.octave.steps[1] = 6  -- user raised octave
+    local emitted
+    ctx.events = { emit = function(_, e, d) if e == "sequencer:step" then emitted = d.vals end end }
+    sequencer.step_track(ctx, 1)
+    assert.are.equal(4, emitted.octave, "octave should emit center (4) on prob fail")
+  end)
+
+  it("glide fail emits 1 (slide/not)", function()
+    local ctx = make_ctx()
+    ctx.rng = function() return 0.9 end
+    ctx.tracks[1].params.probability.steps[1] = 4
+    ctx.tracks[1].params.glide.steps[1] = 5
+    local emitted
+    ctx.events = { emit = function(_, e, d) if e == "sequencer:step" then emitted = d.vals end end }
+    sequencer.step_track(ctx, 1)
+    assert.are.equal(1, emitted.glide, "glide should emit 1 (no slide) on prob fail")
+  end)
+
+  it("ratchet fail emits 1 with bits=1 (play/not, single note)", function()
+    local ctx = make_ctx()
+    ctx.rng = function() return 0.9 end
+    ctx.tracks[1].params.probability.steps[1] = 4
+    ctx.tracks[1].params.ratchet.steps[1] = 4
+    ctx.tracks[1].params.ratchet.bits[1] = 15
+    local emitted
+    ctx.events = { emit = function(_, e, d) if e == "sequencer:step" then emitted = d.vals end end }
+    sequencer.step_track(ctx, 1)
+    assert.are.equal(1, emitted.ratchet, "ratchet should emit 1 on prob fail")
+    assert.are.equal(1, emitted.ratchet_bits, "ratchet_bits should emit 1 on prob fail")
+  end)
+
+  it("note/velocity/duration fail emits peek (new/last)", function()
+    local ctx = make_ctx()
+    ctx.rng = function() return 0.9 end
+    ctx.tracks[1].params.probability.steps[1] = 4
+    ctx.tracks[1].params.note.pos = 1
+    ctx.tracks[1].params.note.steps[1] = 6
+    ctx.tracks[1].params.velocity.pos = 1
+    ctx.tracks[1].params.velocity.steps[1] = 7
+    ctx.tracks[1].params.duration.pos = 1
+    ctx.tracks[1].params.duration.steps[1] = 5
+    local emitted
+    ctx.events = { emit = function(_, e, d) if e == "sequencer:step" then emitted = d.vals end end }
+    sequencer.step_track(ctx, 1)
+    assert.are.equal(6, emitted.note, "note should peek held value on prob fail")
+    assert.are.equal(7, emitted.velocity, "velocity should peek held value on prob fail")
+    assert.are.equal(5, emitted.duration, "duration should peek held value on prob fail")
+  end)
+
+  it("null-value pass: user-set values emitted when prob passes", function()
+    local ctx = make_ctx()
+    ctx.rng = function() return 0.1 end  -- always pass
+    ctx.tracks[1].params.probability.steps[1] = 4  -- 50%
+    ctx.tracks[1].params.alt_note.steps[1] = 5
+    ctx.tracks[1].params.octave.steps[1] = 6
+    ctx.tracks[1].params.glide.steps[1] = 3
+    ctx.tracks[1].params.ratchet.steps[1] = 3
+    ctx.tracks[1].params.ratchet.bits[1] = 7
+    local emitted
+    ctx.events = { emit = function(_, e, d) if e == "sequencer:step" then emitted = d.vals end end }
+    sequencer.step_track(ctx, 1)
+    assert.are.equal(5, emitted.alt_note)
+    assert.are.equal(6, emitted.octave)
+    assert.are.equal(3, emitted.glide)
+    assert.are.equal(3, emitted.ratchet)
+    assert.are.equal(7, emitted.ratchet_bits)
+  end)
+
+  it("trigger play/not: prob fail suppresses firing (vals.trigger=0)", function()
+    local ctx = make_ctx()
+    -- fail trigger roll, pass everything else
+    local call = 0
+    ctx.rng = function()
+      call = call + 1
+      if call == 1 then return 0.9 end  -- trigger roll fails (first call)
+      return 0.1                         -- subsequent per-param rolls pass
+    end
+    ctx.tracks[1].params.probability.steps[1] = 4  -- 50%
+    ctx.tracks[1].params.trigger.steps[1] = 1
+    local played = false
+    ctx.voices[1].play_note = function() played = true end
+    local emitted
+    ctx.events = { emit = function(_, e, d) if e == "sequencer:step" then emitted = d.vals end end }
+    sequencer.step_track(ctx, 1)
+    assert.are.equal(0, emitted.trigger, "vals.trigger should be 0 after prob fail")
+    assert.is_false(played, "no audio should fire when trigger probability fails")
+  end)
+
+  it("trigger advances position even when prob gate suppresses firing", function()
+    local ctx = make_ctx()
+    ctx.rng = function() return 0.9 end
+    ctx.tracks[1].params.probability.steps[1] = 4  -- 50%
+    ctx.tracks[1].params.trigger.steps[1] = 1
+    local start_pos = ctx.tracks[1].params.trigger.pos
+    sequencer.step_track(ctx, 1)
+    assert.are_not.equal(start_pos, ctx.tracks[1].params.trigger.pos,
+      "trigger position should advance regardless of firing outcome")
+  end)
+end)
+
 describe("trigger probability", function()
 
   describe("basic probability behavior", function()
@@ -402,7 +518,7 @@ describe("trigger probability", function()
       assert.are.equal(0, #notes, "prob=0% + ratchet=4 should produce 0 notes")
     end)
 
-    it("no partial ratchets: either all subdivisions or none", function()
+    it("ratchet play/not: each subdivision burst is all-or-none (no partial bursts)", function()
       math.randomseed(123)
       local ctx, _ = make_app()
       local track = ctx.tracks[1]
@@ -426,15 +542,16 @@ describe("trigger probability", function()
         fired_counts[#notes] = (fired_counts[#notes] or 0) + 1
       end
 
-      -- Only valid counts: 0 (probability failed) or 3 (probability passed, full ratchet)
+      -- Valid counts: 0 (trigger suppressed), 1 (ratchet suppressed -> single note), 3 (full burst)
+      -- 2 would indicate partial bitmask firing, which should never happen for bits=0b111
       for count, occurrences in pairs(fired_counts) do
-        assert.is_true(count == 0 or count == 3,
-          "got " .. count .. " notes " .. occurrences .. " times; only 0 or 3 are valid (no partial ratchets)")
+        assert.is_true(count == 0 or count == 1 or count == 3,
+          "got " .. count .. " notes " .. occurrences .. " times; only 0, 1, or 3 are valid")
       end
 
-      -- Sanity: both outcomes should occur with 50% probability over 500 iterations
-      assert.is_not_nil(fired_counts[0], "probability should suppress some steps")
-      assert.is_not_nil(fired_counts[3], "probability should allow some steps through")
+      -- Sanity: trigger suppression and full-burst outcomes both occur
+      assert.is_not_nil(fired_counts[0], "trigger suppression should occur")
+      assert.is_not_nil(fired_counts[3], "full ratchet burst should occur")
     end)
 
     it("muted track skips probability check entirely", function()

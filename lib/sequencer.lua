@@ -65,6 +65,28 @@ end
 -- Number of scale degrees in a heptatonic scale
 local SCALE_DEGREES = 7
 
+-- Per-param probability fail-outcomes. On probability fail, each param emits:
+--   "last" (new/last): hold current step (peek)
+--   "null" (shift/not, play/not, slide/not): emit a no-effect value
+-- Trigger uses "play/not" directly (vals.trigger set to 0 on fail).
+M.PROB_FAIL_BEHAVIOR = {
+  note     = "last",  -- pitch: new/last
+  velocity = "last",  -- velocity: new/last
+  duration = "last",  -- duration: new/last
+  alt_note = "null",  -- alt_pitch: shift/not
+  octave   = "null",  -- octave: shift/not
+  glide    = "null",  -- glide: slide/not
+  ratchet  = "null",  -- ratchet: play/not
+}
+
+-- No-effect values for "null" fail behavior.
+M.PROB_NULL_VALUES = {
+  alt_note = 1,  -- no pitch offset
+  octave   = 4,  -- center octave (no shift)
+  glide    = 1,  -- no portamento
+  ratchet  = 1,  -- single note (no subdivisions)
+}
+
 function M.start(ctx)
   if ctx.playing then return end
   ctx.playing = true
@@ -173,19 +195,34 @@ function M.step_track(ctx, track_num)
   end
   vals.probability = prob_val
 
+  -- trigger probability gate (play/not): roll once for firing decision.
+  -- Trigger position has already advanced; only the firing outcome is gated.
+  local prob_pct = track_mod.PROBABILITY_MAP[prob_val] or 100
+  if vals.trigger == 1 and prob_pct < 100 then
+    if prob_pct <= 0 or roll(ctx) > prob_pct then
+      vals.trigger = 0
+    end
+  end
+
   -- Save ratchet position before advancement (used for ratchet_bits lookup)
   local ratchet_read_pos = track.params.ratchet and track.params.ratchet.pos
 
-  -- advance remaining params with trigger clocking + per-param probability gating
-  local prob_pct = track_mod.PROBABILITY_MAP[prob_val] or 100
+  -- advance remaining params with trigger clocking + per-param probability outcomes.
+  -- "last" params hold their position and peek on fail (new/last).
+  -- "null" params hold position but emit a defined no-effect value on fail (shift/not, play/not).
+  local ratchet_prob_failed = false
   for _, name in ipairs(track_mod.PARAM_NAMES) do
     if name ~= "trigger" and name ~= "probability" then
       local p = track.params[name]
+      local behavior = M.PROB_FAIL_BEHAVIOR[name] or "last"
       if trig_gates then
         vals[name] = track_mod.peek(p)
       elseif track_mod.should_advance(p) then
         if roll(ctx) <= prob_pct then
           vals[name] = direction_mod.advance(p, dir)
+        elseif behavior == "null" then
+          vals[name] = M.PROB_NULL_VALUES[name]
+          if name == "ratchet" then ratchet_prob_failed = true end
         else
           vals[name] = track_mod.peek(p)
         end
@@ -195,9 +232,12 @@ function M.step_track(ctx, track_num)
     end
   end
 
-  -- Read ratchet_bits from the saved position (before advancement)
+  -- Read ratchet_bits from the saved position (before advancement).
+  -- On ratchet prob fail, force single-note so the whole step plays flat (play/not).
   local ratchet_param = track.params.ratchet
-  if ratchet_param and ratchet_param.bits and ratchet_read_pos then
+  if ratchet_prob_failed then
+    vals.ratchet_bits = 1
+  elseif ratchet_param and ratchet_param.bits and ratchet_read_pos then
     vals.ratchet_bits = ratchet_param.bits[ratchet_read_pos]
   end
 
@@ -215,16 +255,6 @@ function M.step_track(ctx, track_num)
       M.play_sprite(ctx, track_num, vals, duration, {muted = true, step = trig_param.pos, loop_len = trig_param.loop_end})
       ctx.grid_dirty = true
       return
-    end
-
-    -- probability check: evaluated once per step, before ratchet
-    -- if probability fails, the entire step (including ratchet) is suppressed
-    local prob_pct = track_mod.PROBABILITY_MAP[vals.probability] or 100
-    if prob_pct < 100 then
-      if prob_pct <= 0 or math.random(100) > prob_pct then
-        ctx.grid_dirty = true
-        return
-      end
     end
 
     -- alt_note: additive pitch combination
