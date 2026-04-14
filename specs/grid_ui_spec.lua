@@ -588,12 +588,12 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 5, 8), 12)
     end)
 
-    it("KEY 1 is off when not time_held (x=5)", function()
+    it("KEY 1 is dim (3) when not time_held (x=5)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.time_held = false
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 5, 8), 0)
+      assert.are.equal(led_at(g, 5, 8), 3)
     end)
 
     it("highlights KEY 2 when on alt_track page (x=10)", function()
@@ -1718,34 +1718,32 @@ describe("grid_ui", function()
     end)
 
     describe("time_key on value pages", function()
-      it("sets note clock_div on note page", function()
+      it("sets note clock_div on note page for pressed track row", function()
         local ctx = make_ctx({ active_page = "note", time_held = true })
         grid_ui.grid_key(ctx, 4, 1, 1)
         assert.are.equal(4, ctx.tracks[1].params.note.clock_div)
       end)
 
-      it("sets velocity clock_div on velocity page", function()
+      it("sets velocity clock_div on velocity page for pressed track row", function()
         local ctx = make_ctx({ active_page = "velocity", time_held = true })
         grid_ui.grid_key(ctx, 2, 1, 1)
         assert.are.equal(2, ctx.tracks[1].params.velocity.clock_div)
       end)
 
-      it("row 2+ edits the non-active param shown on that row", function()
-        -- On note page, row order is: 1=note, 2=trigger, 3=octave, 4=duration,
-        -- 5=velocity, 6=ratchet, 7=alt_note (active skipped).
+      it("row y=3 targets track 3's param on value page", function()
         local ctx = make_ctx({ active_page = "note", time_held = true })
         grid_ui.grid_key(ctx, 5, 3, 1)
-        assert.are.equal(5, ctx.tracks[1].params.octave.clock_div)
-        -- Active param (note) is untouched when pressing a different row.
+        assert.are.equal(5, ctx.tracks[3].params.note.clock_div)
+        -- other tracks untouched
         assert.are.equal(1, ctx.tracks[1].params.note.clock_div)
       end)
 
-      it("row mapping tracks the active page", function()
-        -- On velocity page, row 2 is trigger (first non-velocity entry).
+      it("edits only the page's parameter (not siblings)", function()
         local ctx = make_ctx({ active_page = "velocity", time_held = true })
-        grid_ui.grid_key(ctx, 4, 2, 1)
-        assert.are.equal(4, ctx.tracks[1].params.trigger.clock_div)
-        assert.are.equal(1, ctx.tracks[1].params.velocity.clock_div)
+        grid_ui.grid_key(ctx, 4, 1, 1)
+        assert.are.equal(4, ctx.tracks[1].params.velocity.clock_div)
+        assert.are.equal(1, ctx.tracks[1].params.trigger.clock_div)
+        assert.are.equal(1, ctx.tracks[1].params.note.clock_div)
       end)
 
       it("sets duration clock_div on duration page", function()
@@ -1754,19 +1752,26 @@ describe("grid_ui", function()
         assert.are.equal(5, ctx.tracks[1].params.duration.clock_div)
       end)
 
-      it("respects active_track", function()
+      it("row y selects track regardless of active_track", function()
         local ctx = make_ctx({ active_page = "note", active_track = 3, time_held = true })
         grid_ui.grid_key(ctx, 6, 1, 1)
-        assert.are.equal(6, ctx.tracks[3].params.note.clock_div)
-        -- other tracks unchanged
-        assert.are.equal(1, ctx.tracks[1].params.note.clock_div)
+        -- y=1 means track 1, not the active_track
+        assert.are.equal(6, ctx.tracks[1].params.note.clock_div)
+        assert.are.equal(1, ctx.tracks[3].params.note.clock_div)
+      end)
+
+      it("ignores rows beyond NUM_TRACKS", function()
+        local ctx = make_ctx({ active_page = "note", time_held = true })
+        grid_ui.grid_key(ctx, 3, 5, 1)
+        for t = 1, 4 do
+          assert.are.equal(1, ctx.tracks[t].params.note.clock_div)
+        end
       end)
 
       it("handles extended pages (ratchet -> trigger)", function()
         local ctx = make_ctx({ active_page = "ratchet", time_held = true })
-        grid_ui.grid_key(ctx, 3, 1, 1)
-        -- ratchet is extended page for trigger, so it sets trigger's clock_div
-        assert.are.equal(3, ctx.tracks[1].params.trigger.clock_div)
+        grid_ui.grid_key(ctx, 3, 2, 1)
+        assert.are.equal(3, ctx.tracks[2].params.trigger.clock_div)
       end)
 
       it("handles extended pages (alt_note -> note)", function()
@@ -1777,8 +1782,8 @@ describe("grid_ui", function()
 
       it("handles extended pages (glide -> octave)", function()
         local ctx = make_ctx({ active_page = "glide", time_held = true })
-        grid_ui.grid_key(ctx, 2, 1, 1)
-        assert.are.equal(2, ctx.tracks[1].params.octave.clock_div)
+        grid_ui.grid_key(ctx, 2, 4, 1)
+        assert.are.equal(2, ctx.tracks[4].params.octave.clock_div)
       end)
     end)
 
@@ -1809,25 +1814,24 @@ describe("grid_ui", function()
         assert.are.equal(2, g:get_led(1, 2))  -- inactive track, non-selected
       end)
 
-      it("shows active param clock_div prominently on value page", function()
+      it("shows active track's clock_div bright on value page", function()
         local ctx, g = make_ctx({ active_page = "note", time_held = true })
         ctx.tracks[1].params.note.clock_div = 4
         grid_ui.redraw(ctx)
-        -- Row 1 column 4 should be bright (15)
+        -- Active track (row 1), selected column: 15
         assert.are.equal(15, g:get_led(4, 1))
-        -- Non-selected columns on row 1 should be 3
+        -- Active track, unselected column: dim 3
         assert.are.equal(3, g:get_led(1, 1))
       end)
 
-      it("shows other params dimly on rows 2+ on value page", function()
+      it("shows other tracks' clock_divs on rows 2-4 on value page", function()
         local ctx, g = make_ctx({ active_page = "note", time_held = true })
-        ctx.tracks[1].params.trigger.clock_div = 2
+        ctx.tracks[2].params.note.clock_div = 5
         grid_ui.redraw(ctx)
-        -- trigger is first param != note, so it shows on row 2
-        -- Its clock_div is 2, so column 2 row 2 should be 6
-        assert.are.equal(6, g:get_led(2, 2))
-        -- Other columns on row 2 should be 1
-        assert.are.equal(1, g:get_led(1, 2))
+        -- Inactive track, selected column: 10
+        assert.are.equal(10, g:get_led(5, 2))
+        -- Inactive track, unselected column: 2
+        assert.are.equal(2, g:get_led(1, 2))
       end)
     end)
 

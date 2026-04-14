@@ -343,49 +343,18 @@ function M.draw_alt_track_page(ctx, g)
   end
 end
 
--- Value-page row-to-param mapping shared by draw_time_page and time_key so a
--- press on row N edits the same param that row N visually represents.
--- Row 1 = active param (the page's own param). Rows 2-7 = other PARAM_NAMES
--- in order, skipping the active one. Returns nil when row has no mapping.
-local function value_page_row_to_param(active_name, row)
-  if row == 1 then return active_name end
-  local next_row = 2
-  for _, name in ipairs(track_mod.PARAM_NAMES) do
-    if name ~= active_name then
-      if next_row == row then return name end
-      next_row = next_row + 1
-      if next_row > 7 then return nil end
-    end
-  end
-  return nil
-end
-
--- Time page: per-parameter clock division selector
--- On trigger page: rows 1-4 = tracks, columns 1-7 = division values for trigger param
--- On value pages: rows 1-4 = core params visible as labels, columns 1-7 = division value
--- Active page's param is highlighted on row 1; other params shown dimly below
+-- Time page: per-parameter clock division selector (kria KEY 1 semantics).
+-- Standard layout: rows 1-4 = tracks, columns 1-7 = clock division values,
+-- applied to the currently active page's parameter. The active track row is
+-- drawn brighter so the user can tell which row their encoder selection
+-- targets; all 4 tracks remain editable by pressing any row directly.
+-- Alt-track page keeps its own "row = param for active track" layout since
+-- it's a config view, not a value page.
 function M.draw_time_page(ctx, g)
   local page = ctx.active_page
-  -- Resolve extended page to primary for param lookup
   local param_name = M.EXTENDED_REVERSE[page] or page
 
-  if page == "trigger" then
-    -- Trigger page: show each track's trigger clock_div
-    for t = 1, track_mod.NUM_TRACKS do
-      local p = ctx.tracks[t].params.trigger
-      local is_active = (t == ctx.active_track)
-      for x = 1, 7 do
-        local brightness = 2
-        if x == p.clock_div then
-          brightness = is_active and 15 or 10
-        elseif is_active then
-          brightness = 3
-        end
-        g:led(x, t, brightness)
-      end
-    end
-  elseif page == "alt_track" then
-    -- Alt-track page: show all params for active track, one param per row
+  if page == "alt_track" then
     local track = ctx.tracks[ctx.active_track]
     for row, name in ipairs(track_mod.PARAM_NAMES) do
       if row > 7 then break end
@@ -398,28 +367,22 @@ function M.draw_time_page(ctx, g)
         g:led(x, row, brightness)
       end
     end
-  else
-    -- Value page: show active param's clock_div prominently on row 1,
-    -- plus other params dimly below for context
-    local track = ctx.tracks[ctx.active_track]
-    if track.params[param_name] then
-      for row = 1, 7 do
-        local name = value_page_row_to_param(param_name, row)
-        if name then
-          local p = track.params[name]
-          if p then
-            local is_active_row = (row == 1)
-            for x = 1, 7 do
-              local brightness
-              if is_active_row then
-                brightness = (x == p.clock_div) and 15 or 3
-              else
-                brightness = (x == p.clock_div) and 6 or 1
-              end
-              g:led(x, row, brightness)
-            end
-          end
+    return
+  end
+
+  -- Trigger + all value pages: row = track, col = clock_div for the page's param.
+  for t = 1, track_mod.NUM_TRACKS do
+    local p = ctx.tracks[t].params[param_name]
+    if p then
+      local is_active = (t == ctx.active_track)
+      for x = 1, 7 do
+        local brightness = 2
+        if x == p.clock_div then
+          brightness = is_active and 15 or 10
+        elseif is_active then
+          brightness = 3
         end
+        g:led(x, t, brightness)
       end
     end
   end
@@ -541,7 +504,7 @@ function M.draw_nav(ctx, g)
     g:led(i, y, i == ctx.active_track and 12 or 3)
   end
   -- x=5: KEY 1 (time modifier)
-  g:led(NAV_KEY1, y, ctx.time_held and 12 or 0)
+  g:led(NAV_KEY1, y, ctx.time_held and 12 or 3)
   -- page select x=6-9 (highlight correct button even when on extended page)
   local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
   local on_extended = M.EXTENDED_REVERSE[ctx.active_page] ~= nil
@@ -1106,21 +1069,14 @@ function M.meta_pattern_key(ctx, x, y)
   end
 end
 
--- Time modifier key: set per-param clock division
--- x=1-7 sets clock_div value; y selects target depending on page
+-- Time modifier key: set clock division for the active page's parameter.
+-- y=1-4 selects the track, x=1-7 selects the divisor. On alt_track the
+-- row maps to a param for the active track (config view).
 function M.time_key(ctx, x, y)
   if x < 1 or x > 7 then return end
   local page = ctx.active_page
-  local param_name = M.EXTENDED_REVERSE[page] or page
 
-  if page == "trigger" then
-    -- On trigger page: y=1-4 selects track, sets trigger param clock_div
-    if y >= 1 and y <= track_mod.NUM_TRACKS then
-      ctx.tracks[y].params.trigger.clock_div = x
-      ctx.tracks[y].params.trigger.tick = 0
-    end
-  elseif page == "alt_track" then
-    -- On alt_track page: y=1-7 maps to param names
+  if page == "alt_track" then
     if y >= 1 and y <= #track_mod.PARAM_NAMES and y <= 7 then
       local name = track_mod.PARAM_NAMES[y]
       local p = ctx.tracks[ctx.active_track].params[name]
@@ -1129,18 +1085,15 @@ function M.time_key(ctx, x, y)
         p.tick = 0
       end
     end
-  else
-    -- On value pages: each row targets the param shown there (row 1 = active
-    -- param, rows 2-7 = other params, same order as draw_time_page). Press
-    -- sets that row's param clock_div to x.
-    local name = value_page_row_to_param(param_name, y)
-    if name then
-      local track = ctx.tracks[ctx.active_track]
-      local p = track.params[name]
-      if p then
-        p.clock_div = x
-        p.tick = 0
-      end
+    return
+  end
+
+  local param_name = M.EXTENDED_REVERSE[page] or page
+  if y >= 1 and y <= track_mod.NUM_TRACKS then
+    local p = ctx.tracks[y].params[param_name]
+    if p then
+      p.clock_div = x
+      p.tick = 0
     end
   end
 end

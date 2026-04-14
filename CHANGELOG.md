@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- Clock divider modifier (time / KEY 1, grid col 5): now follows kria's
+  standard row=track, col=divisor layout on every page. Holding the time
+  modifier on a value page (note/octave/duration/velocity/probability/
+  extended ratchet/alt_note/glide) shows each track's clock division for
+  the current parameter on its own row, with the active track row drawn
+  brightest. Pressing (x, y) sets track y's clock_div for the page's
+  parameter to x, making all four tracks editable from any value page
+  instead of conflating tracks and parameters on a single row. Trigger
+  and alt_track page behavior is unchanged. The time modifier nav LED
+  is now dimly lit (brightness 3) when unheld so users can see the key
+  exists. (re-563)
+
 ### Changed
 - Simulated grid aesthetics (`lib/seamstress/grid_render.lua`,
   `lib/seamstress/screen_ui.lua`, `seamstress.lua`): tighter cell spacing
