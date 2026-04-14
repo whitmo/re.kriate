@@ -1697,8 +1697,26 @@ describe("grid_ui", function()
 
       it("sets velocity clock_div on velocity page", function()
         local ctx = make_ctx({ active_page = "velocity", time_held = true })
-        grid_ui.grid_key(ctx, 2, 3, 1)
+        grid_ui.grid_key(ctx, 2, 1, 1)
         assert.are.equal(2, ctx.tracks[1].params.velocity.clock_div)
+      end)
+
+      it("row 2+ edits the non-active param shown on that row", function()
+        -- On note page, row order is: 1=note, 2=trigger, 3=octave, 4=duration,
+        -- 5=velocity, 6=ratchet, 7=alt_note (active skipped).
+        local ctx = make_ctx({ active_page = "note", time_held = true })
+        grid_ui.grid_key(ctx, 5, 3, 1)
+        assert.are.equal(5, ctx.tracks[1].params.octave.clock_div)
+        -- Active param (note) is untouched when pressing a different row.
+        assert.are.equal(1, ctx.tracks[1].params.note.clock_div)
+      end)
+
+      it("row mapping tracks the active page", function()
+        -- On velocity page, row 2 is trigger (first non-velocity entry).
+        local ctx = make_ctx({ active_page = "velocity", time_held = true })
+        grid_ui.grid_key(ctx, 4, 2, 1)
+        assert.are.equal(4, ctx.tracks[1].params.trigger.clock_div)
+        assert.are.equal(1, ctx.tracks[1].params.velocity.clock_div)
       end)
 
       it("sets duration clock_div on duration page", function()
