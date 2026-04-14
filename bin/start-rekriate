@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# bin/start-rekriate — one-shot: launch SuperCollider + seamstress together.
+#
+# Runs bin/start-sc in the background (writes .runtime/sc.pid + sc.log), waits
+# briefly for the SC server to boot, then launches seamstress with
+# seamstress.lua. Cleans up the SC process on exit.
+#
+# Usage:
+#   bin/start-rekriate
+#
+# Notes:
+#   - Softcut only runs on norns; seamstress mode uses OSC voices routed to SC.
+#   - Use bin/start-sc directly if you want the SC window in the foreground.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${REPO_ROOT}"
+
+# Resolve seamstress binary (macOS Homebrew tap uses seamstress@1 cellar).
+SEAMSTRESS=""
+for candidate in \
+    "/opt/homebrew/opt/seamstress@1/bin/seamstress" \
+    "/usr/local/opt/seamstress@1/bin/seamstress" \
+    "$(command -v seamstress 2>/dev/null || true)"
+do
+    if [[ -n "${candidate}" && -x "${candidate}" ]]; then
+        SEAMSTRESS="${candidate}"
+        break
+    fi
+done
+
+if [[ -z "${SEAMSTRESS}" ]]; then
+    echo "start-rekriate: seamstress not found." >&2
+    echo "  install with: brew install monome/seamstress/seamstress@1" >&2
+    exit 1
+fi
+
+# Boot SC in the background (writes .runtime/sc.pid).
+"${REPO_ROOT}/bin/start-sc" --daemon
+
+SC_PID_FILE="${REPO_ROOT}/.runtime/sc.pid"
+SC_PID="$(cat "${SC_PID_FILE}" 2>/dev/null || true)"
+
+cleanup() {
+    if [[ -n "${SC_PID}" ]] && kill -0 "${SC_PID}" 2>/dev/null; then
+        echo ""
+        echo "start-rekriate: stopping SuperCollider (pid=${SC_PID})"
+        kill "${SC_PID}" 2>/dev/null || true
+    fi
+    rm -f "${SC_PID_FILE}"
+}
+trap cleanup EXIT INT TERM
+
+# Give SC a moment to boot its server + register OSC responders before we
+# start hitting it with pings.
+echo "start-rekriate: waiting 3s for SC to warm up…"
+sleep 3
+
+echo "start-rekriate: launching seamstress"
+exec "${SEAMSTRESS}" -s "${REPO_ROOT}/seamstress.lua"

@@ -213,6 +213,22 @@ s.waitForBoot({
         );
     });
 
+    // ─── Handshake ────────────────────────────────────
+    // Reply to /rekriate/ping with /rekriate/pong {version, features...}.
+
+    ~responders.add(
+        OSCFunc({ |msg, time, addr|
+            var replyHost = msg[1].asString;
+            var replyPort = msg[2].asInteger;
+            var target = NetAddr(replyHost, replyPort);
+            target.sendMsg("/rekriate/pong", "sc_synth-1",
+                "sc_synth", "sub", "fm", "wavetable");
+            "[synth] handshake: ping from %:% → pong(sc_synth)".format(
+                replyHost, replyPort
+            ).postln;
+        }, "/rekriate/ping")
+    );
+
     // ─── Ready ───────────────────────────────────────
 
     "".postln;

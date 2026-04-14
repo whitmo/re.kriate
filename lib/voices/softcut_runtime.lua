@@ -2,12 +2,48 @@
 -- Buffer management runtime for softcut_zig voice backend.
 -- Models 6 voice slots across 2 mono buffers (~5 min each).
 -- Provides the runtime interface that softcut_zig.lua expects via injection.
+--
+-- Platform note
+-- -------------
+-- Softcut is a norns-native DSP engine — it does not exist in seamstress. This
+-- runtime tracks voice state (region, rate, loop points, sample load status)
+-- in pure Lua so it works identically on both platforms, but on seamstress
+-- nothing downstream actually plays audio. The runtime reports its mode via
+-- M.detect_mode() and runtime.mode so scripts and the UI can surface the
+-- difference clearly at init.
+--
+--   mode = "norns" — real softcut engine available (_G.softcut is set)
+--   mode = "dry"   — state-only; no audio output (seamstress / busted tests)
 
 local M = {}
 
 M.NUM_VOICES = 6
 M.NUM_BUFFERS = 2
 M.BUFFER_DUR = 350 -- ~5.8 min at 48kHz
+
+--- Detect the active softcut mode. Returns "norns" when the global softcut
+--- table is available with its expected API, otherwise "dry".
+function M.detect_mode()
+  if rawget(_G, "softcut") and type(_G.softcut) == "table"
+      and type(_G.softcut.enable) == "function" then
+    return "norns"
+  end
+  return "dry"
+end
+
+--- One-line human-readable status string for logs / screen tray.
+function M.status_string(mode)
+  mode = mode or M.detect_mode()
+  if mode == "norns" then
+    return "softcut: norns native (audio enabled)"
+  end
+  return "softcut: dry-mode (no audio — norns only)"
+end
+
+--- Print the status banner. Safe to call at init on any platform.
+function M.announce(mode)
+  print(M.status_string(mode))
+end
 
 local function new_voice_state(buf, region_start, region_end)
   return {
@@ -48,6 +84,7 @@ function M.new(opts)
     buffer_dur = buffer_dur,
     region_dur = region_dur,
     warnings = {},
+    mode = opts.mode or M.detect_mode(),
   }
 
   for i = 1, num_voices do
@@ -163,6 +200,14 @@ function M.new(opts)
 
   function runtime.warn(msg)
     table.insert(runtime.warnings, msg)
+  end
+
+  function runtime.status_string()
+    return M.status_string(runtime.mode)
+  end
+
+  function runtime.is_dry()
+    return runtime.mode == "dry"
   end
 
   return runtime

@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- SC ↔ seamstress bidirectional OSC handshake (`lib/sc_bridge.lua`): ping/pong
+  protocol on `/rekriate/ping` → `/rekriate/pong {version, features...}`. Each
+  companion .scd (voice, synths, drums, sub) replies with its own feature list;
+  the Lua bridge merges them under a single handshake nonce so `is_connected()`
+  and `status_string()` surface a canonical view. State machine
+  `disconnected → pinging → connected` with timeout fallback. Demo in
+  `scripts/demo_sc_handshake.lua`. (re-mgm)
+- Launch scripts `bin/start-sc` and `bin/start-rekriate`: one-shot sclang
+  bootstrap that loads the full companion stack (voice + mixer + sc_synth +
+  sc_drums) via `sc/rekriate-bootstrap.scd`; `start-rekriate` also backgrounds
+  SC and launches seamstress together. Prefers
+  `/Applications/SuperCollider.app/Contents/MacOS/sclang`, falls back to
+  `$PATH`. (re-mgm)
+- Softcut platform-mode helper (`softcut_runtime.detect_mode` /
+  `status_string` / `announce`): explicit `norns` vs `dry` mode distinction
+  announced at init so seamstress users aren't misled into thinking softcut
+  tracks are producing audio. (re-mgm)
 - SC mixer engine (`sc/rekriate-mixer.scd`): standalone mixer layered on
   top of the voice engine. Allocates 4 mono channel buses + stereo aux
   send/return; groups execute voices → channels → aux → master.

@@ -326,6 +326,26 @@ s.waitForBoot({
     );
 
     // ─────────────────────────────────────────────
+    // Handshake: reply to /rekriate/ping with /rekriate/pong {version, features...}
+    // ─────────────────────────────────────────────
+    //
+    // The Lua bridge (lib/sc_bridge.lua) sends:
+    //     /rekriate/ping {reply_host, reply_port, nonce}
+    // We reply with:
+    //     /rekriate/pong "voice-1" "voice" "mixer"
+    ~rekriate[\responders].add(
+        OSCFunc({ |msg, time, addr|
+            var replyHost = msg[1].asString;
+            var replyPort = msg[2].asInteger;
+            var target = NetAddr(replyHost, replyPort);
+            target.sendMsg("/rekriate/pong", "voice-1", "voice", "mixer");
+            "  handshake: ping from %:% → pong(voice/mixer)".format(
+                replyHost, replyPort
+            ).postln;
+        }, "/rekriate/ping")
+    );
+
+    // ─────────────────────────────────────────────
     // Ready
     // ─────────────────────────────────────────────
 
