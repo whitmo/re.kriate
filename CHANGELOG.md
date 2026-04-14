@@ -39,6 +39,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   the defined fail-outcome. (re-sc1)
 
 ### Added
+- Softcut sample grabbing (`lib/voices/softcut_runtime.lua`,
+  `lib/voices/softcut_zig.lua`, `lib/app.lua`): record live ADC audio
+  directly into a softcut voice's buffer region so users without any
+  sample files on disk can capture audio and play it back immediately.
+  The runtime gains a `record(voice_id, {duration, input_channel, clear})`
+  method that drives `softcut.buffer_clear_region`, `rec_level`,
+  `level_input_cut`, `rec`, and `play` on norns (no audio on seamstress,
+  same state machine for tests). `softcut_zig:grab(opts)` wraps record and
+  marks the voice `available=true` on completion, using the sentinel
+  sample path `__recorded__` so the voice plays the captured buffer with
+  no file on disk. Per-track params `sample_grab_len_N`, `sample_grab_input_N`
+  and the `sample_grab_N` action trigger the flow from the params menu.
+  (re-l8p)
 - Seamstress console `help()` object (`lib/seamstress/help_console.lua`):
   installed into the Lua console at init as a callable namespace exposing
   `help.ctx` (live application context), `help.transport` (sequencer play /

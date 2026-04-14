@@ -452,6 +452,9 @@ function M.init(config)
     params:add_number("sample_start_" .. t, "sample start", 0, 350, 0)
     params:add_number("sample_end_" .. t, "sample end", 0, 350, 1)
     params:add_option("sample_loop_" .. t, "sample loop", {"off", "on"}, 1)
+    params:add_number("sample_grab_len_" .. t, "grab length (s)", 1, 30, 4)
+    params:add_number("sample_grab_input_" .. t, "grab input", 1, 2, 1)
+    params:add_option("sample_grab_" .. t, "grab sample", {"-", "grab"}, 1)
     if not use_config_voices then
       local function rebuild_if_softcut()
         local voice_idx = params:get("voice_" .. t)
@@ -464,6 +467,12 @@ function M.init(config)
       params:set_action("sample_start_" .. t, rebuild_if_softcut)
       params:set_action("sample_end_" .. t, rebuild_if_softcut)
       params:set_action("sample_loop_" .. t, rebuild_if_softcut)
+      params:set_action("sample_grab_" .. t, function(val)
+        if val ~= 2 then return end
+        -- Reset the action param so subsequent grabs can fire.
+        params:set("sample_grab_" .. t, 1)
+        M.grab_sample(ctx, t)
+      end)
     end
 
     params:add_option("division_" .. t, "division", div_names, 1)
@@ -689,6 +698,24 @@ function M.delete_pattern_bank(ctx, name)
   log.warn(message)
   set_pattern_status(ctx, message)
   return nil, err
+end
+
+--- Trigger a softcut sample-grab on track `t`: records live ADC audio into
+--- the track's softcut buffer region, then marks the voice playable.
+--- No-ops when the track isn't a softcut voice or lacks a :grab method.
+function M.grab_sample(ctx, t)
+  local voice = ctx and ctx.voices and ctx.voices[t]
+  if not voice or type(voice.grab) ~= "function" then
+    return nil, "not_softcut"
+  end
+  local duration, input_ch = 4, 1
+  if params and params.get then
+    local ok_len = pcall(function() duration = params:get("sample_grab_len_" .. t) end)
+    local ok_in = pcall(function() input_ch = params:get("sample_grab_input_" .. t) end)
+    if not ok_len then duration = 4 end
+    if not ok_in then input_ch = 1 end
+  end
+  return voice:grab({ duration = duration, input_channel = input_ch })
 end
 
 function M.rebuild_scale(ctx)

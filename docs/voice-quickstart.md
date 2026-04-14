@@ -265,6 +265,28 @@ voice:apply_config(cfg)           -- reconfigure sample, loop bounds, etc.
 - `voice.available` is `false` if the sample file is missing or failed to load.
 - On seamstress, the runtime tracks state but produces no audio (useful for testing).
 
+### Sample Grabbing (no sample? grab one)
+
+If you don't have a sample on disk, record one live from the norns audio input
+into the voice's buffer region and play it back immediately:
+
+```lua
+voice:grab({ duration = 4, input_channel = 1 })  -- records 4s of ADC ch 1
+```
+
+Or via the params menu (per track):
+
+- **grab length (s)** → duration of the recording
+- **grab input** → ADC channel (1 or 2)
+- **grab sample** → set to `grab` to start recording
+
+After the duration elapses the voice's `sample_path` becomes `__recorded__`,
+`voice.available` flips to `true`, and the voice plays the captured buffer
+pitched against its root note. No audio file is written to disk.
+
+On seamstress (dry mode) the grab runs through the same state machine but
+produces no audio — useful for integration tests.
+
 ## Sprite Voice
 
 **Module:** `lib/voices/sprite.lua`

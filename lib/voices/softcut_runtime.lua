@@ -45,6 +45,10 @@ function M.announce(mode)
   print(M.status_string(mode))
 end
 
+local RECORDED_MARKER = "__recorded__"
+
+M.RECORDED_MARKER = RECORDED_MARKER
+
 local function new_voice_state(buf, region_start, region_end)
   return {
     enabled = false,
@@ -64,6 +68,8 @@ local function new_voice_state(buf, region_start, region_end)
     rate_slew_time = 0,
     sample_path = nil,
     sample_loaded = false,
+    recording = false,
+    record_duration = 0,
   }
 end
 
@@ -196,6 +202,93 @@ function M.new(opts)
 
   function runtime.buffer_read_mono(path, start, duration)
     return runtime.file_exists(path)
+  end
+
+  --- Record audio from an ADC input channel into a voice's buffer region.
+  --- Returns true on "armed", false, err otherwise. The recording runs for
+  --- opts.duration seconds and marks the voice's buffer as a valid sample on
+  --- completion, so the voice can play it back afterwards.
+  ---
+  --- Arguments:
+  ---   voice_id      — 1..num_voices
+  ---   opts          — table with:
+  ---                   duration (s, default = region length),
+  ---                   input_channel (1|2, default 1),
+  ---                   clear (bool, default true) — clear region before rec
+  ---   on_complete   — optional callback invoked after duration elapses,
+  ---                   called as on_complete(true) on success.
+  ---
+  --- Platform:
+  ---   dry   — updates state only, uses clock.run + clock.sleep to honor
+  ---           duration if a real clock is present, otherwise completes
+  ---           synchronously for tests.
+  ---   norns — drives _G.softcut record APIs (buffer_clear_region, rec_level,
+  ---           pre_level, level_input_cut, rec) for real capture, then stops.
+  function runtime.record(voice_id, opts, on_complete)
+    local vs = runtime.voices[voice_id]
+    if not vs then return false, "invalid_voice" end
+    if vs.recording then return false, "already_recording" end
+
+    opts = opts or {}
+    local region_len = (vs.region_end or 0) - (vs.region_start or 0)
+    if region_len <= 0 then region_len = 1 end
+    local duration = opts.duration or region_len
+    if duration <= 0 then return false, "invalid_duration" end
+    if duration > region_len then duration = region_len end
+    local input_ch = opts.input_channel or 1
+    local clear = opts.clear ~= false
+
+    vs.recording = true
+    vs.record_duration = duration
+    vs.sample_loaded = false
+
+    local sc = rawget(_G, "softcut")
+    if runtime.mode == "norns" and sc then
+      if clear and sc.buffer_clear_region then
+        sc.buffer_clear_region(vs.region_start, duration, 0.01, vs.buffer)
+      end
+      if sc.enable then sc.enable(voice_id, 1) end
+      if sc.buffer then sc.buffer(voice_id, vs.buffer) end
+      if sc.loop then sc.loop(voice_id, 0) end
+      if sc.loop_start then sc.loop_start(voice_id, vs.region_start) end
+      if sc.loop_end then sc.loop_end(voice_id, vs.region_start + duration) end
+      if sc.position then sc.position(voice_id, vs.region_start) end
+      if sc.rate then sc.rate(voice_id, 1.0) end
+      if sc.rec_level then sc.rec_level(voice_id, 1.0) end
+      if sc.pre_level then sc.pre_level(voice_id, 0.0) end
+      if sc.level_input_cut then
+        sc.level_input_cut(input_ch, voice_id, 1.0)
+      end
+      if sc.level then sc.level(voice_id, 0.0) end
+      if sc.rec then sc.rec(voice_id, 1) end
+      if sc.play then sc.play(voice_id, 1) end
+    end
+
+    local function finish()
+      vs.recording = false
+      if runtime.mode == "norns" and sc then
+        if sc.rec then sc.rec(voice_id, 0) end
+        if sc.play then sc.play(voice_id, 0) end
+        if sc.rec_level then sc.rec_level(voice_id, 0.0) end
+        if sc.level_input_cut then
+          sc.level_input_cut(input_ch, voice_id, 0.0)
+        end
+      end
+      vs.sample_path = RECORDED_MARKER
+      vs.sample_loaded = true
+      if on_complete then on_complete(true) end
+    end
+
+    local clk = rawget(_G, "clock")
+    if clk and type(clk.run) == "function" and type(clk.sleep) == "function" then
+      clk.run(function()
+        clk.sleep(duration)
+        finish()
+      end)
+    else
+      finish()
+    end
+    return true
   end
 
   function runtime.warn(msg)
