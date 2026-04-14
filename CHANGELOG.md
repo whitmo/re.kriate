@@ -28,6 +28,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   pages (note, octave, duration, velocity, probability, and extended
   ratchet/alt_note/glide) continue to edit the active track's loop for the
   current parameter. (re-lz0)
+- Per-parameter probability outcomes (`lib/sequencer.lua`): when a step's
+  probability roll fails, each param now applies a defined outcome rather
+  than uniformly holding position. Trigger: play/not (firing gated, step
+  suppressed). note/velocity/duration: new/last (hold last value).
+  alt_note/octave/glide/ratchet: shift-or-play/not (emit no-effect null —
+  alt_note=1, octave=4 center, glide=1, ratchet=1 with bits=1). Replaces
+  the previous double-roll model (per-param gate plus separate trigger-level
+  gate) with a single trigger-prob roll and per-param rolls that route to
+  the defined fail-outcome. (re-sc1)
 
 ### Added
 - Seamstress console `help()` object (`lib/seamstress/help_console.lua`):
