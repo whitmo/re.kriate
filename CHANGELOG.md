@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- Seamstress console `help()` object (`lib/seamstress/help_console.lua`):
+  installed into the Lua console at init as a callable namespace exposing
+  `help.ctx` (live application context), `help.transport` (sequencer play /
+  stop / reset plus a state snapshot) and `help.debug` (log path, `tail(n)`,
+  `ctx_dump`, voice + params + remote-API introspection). Calling `help()`,
+  `help.transport()` or `help.debug()` prints a per-topic reference so the
+  surface is discoverable from inside seamstress with no external docs.
+  (re-107)
 - SC ↔ seamstress bidirectional OSC handshake (`lib/sc_bridge.lua`): ping/pong
   protocol on `/rekriate/ping` → `/rekriate/pong {version, features...}`. Each
   companion .scd (voice, synths, drums, sub) replies with its own feature list;

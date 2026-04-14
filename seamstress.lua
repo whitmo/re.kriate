@@ -20,6 +20,7 @@ local sprite_render = require("lib/seamstress/sprite_render")
 local keyboard = require("lib/seamstress/keyboard")
 local grid_render = require("lib/seamstress/grid_render")
 local help_overlay = require("lib/seamstress/help_overlay")
+local help_console = require("lib/seamstress/help_console")
 local screen_ui = require("lib/seamstress/screen_ui")
 local track_mod = require("lib/track")
 
@@ -178,6 +179,10 @@ function init()
     redraw()
   end, "screen_metro.event")
   ctx.screen_metro:start()
+
+  -- Expose a callable `help()` in the seamstress console (_G.help) so the
+  -- user can discover ctx, transport controls, and debug tools interactively.
+  help_console.install(ctx)
 
   log.info("init complete")
 end
