@@ -12,7 +12,7 @@ local direction_mod = require("lib/direction")
 local M = {}
 
 -- Page names (primary + extended)
-M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "ratchet", "alt_note", "glide", "alt_track", "meta_pattern", "scale"}
+M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "mixer", "ratchet", "alt_note", "glide", "alt_track", "meta_pattern", "scale"}
 
 -- Extended page mappings: primary -> extended
 M.EXTENDED_PAGES = {trigger = "ratchet", note = "alt_note", octave = "glide"}
@@ -36,9 +36,9 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration"}
 -- Page group for x=9: pressing cycles through these pages
-local NAV_PAGE_CYCLE_9 = {"duration", "velocity", "probability"}
+local NAV_PAGE_CYCLE_9 = {"duration", "velocity", "probability", "mixer"}
 -- Quick lookup: which pages belong to the x=9 cycle group
-local NAV_PAGE_CYCLE_9_SET = {duration = true, velocity = true, probability = true}
+local NAV_PAGE_CYCLE_9_SET = {duration = true, velocity = true, probability = true, mixer = true}
 local NAV_KEY1 = 5    -- Ansible KEY 1: time modifier (hold)
 local NAV_KEY2 = 10   -- Ansible KEY 2: config/alt-track (press)
 local NAV_LOOP = 11
@@ -82,6 +82,8 @@ function M.redraw(ctx)
       M.draw_scale_page(ctx, g)
     elseif page == "ratchet" then
       M.draw_ratchet_page(ctx, g)
+    elseif page == "mixer" then
+      M.draw_mixer_page(ctx, g)
     else
       -- All other pages (including extended: alt_note, glide) use value display
       M.draw_value_page(ctx, g, page)
@@ -189,6 +191,102 @@ function M.draw_ratchet_page(ctx, g)
     local dec_brightness = 2
     if is_playhead then dec_brightness = 6 end
     g:led(x, 7, dec_brightness)
+  end
+end
+
+-- Mixer page: per-track level (cols 1-7), pan (cols 9-15), mute (col 16).
+-- Rows 1-4 correspond to tracks 1-4.
+--   level: lit columns form a bar from col 1 up to the current level column.
+--          col 1 = ~0.0, col 7 = 1.0 (linear).
+--   pan:   single lit column at pan position.
+--          col 9 = hard left, col 12 = center, col 15 = hard right.
+--   mute:  bright when muted.
+-- The active track row is highlighted.
+function M.level_to_col(level)
+  local v = level or 1.0
+  if v < 0 then v = 0 end
+  if v > 1 then v = 1 end
+  local col = math.floor(v * 6 + 0.5) + 1 -- 0.0 -> 1, 1.0 -> 7
+  if col < 1 then col = 1 end
+  if col > 7 then col = 7 end
+  return col
+end
+
+function M.col_to_level(col)
+  if col < 1 then col = 1 end
+  if col > 7 then col = 7 end
+  return (col - 1) / 6
+end
+
+function M.pan_to_col(pan)
+  local v = pan or 0
+  if v < -1 then v = -1 end
+  if v > 1 then v = 1 end
+  -- map [-1, 1] -> [9, 15], center (0) -> 12. Symmetric round-half-away-from-zero.
+  local sign = (v < 0) and -1 or 1
+  local col = 12 + sign * math.floor(math.abs(v) * 3 + 0.5)
+  if col < 9 then col = 9 end
+  if col > 15 then col = 15 end
+  return col
+end
+
+function M.col_to_pan(col)
+  if col < 9 then col = 9 end
+  if col > 15 then col = 15 end
+  return (col - 12) / 3
+end
+
+function M.draw_mixer_page(ctx, g)
+  local active_track = ctx.active_track or 1
+  local mx = ctx.mixer or {level = {}, pan = {}}
+  for t = 1, track_mod.NUM_TRACKS do
+    local track = ctx.tracks[t]
+    local is_active = (t == active_track)
+    local is_muted = track and track.muted
+
+    local level = mx.level and mx.level[t] or 1.0
+    local level_col = M.level_to_col(level)
+    -- Level bar: lit from col 1 to level_col.
+    for x = 1, 7 do
+      local brightness = 0
+      if x <= level_col then
+        brightness = (x == level_col) and 12 or 4
+        if is_active then brightness = math.min(15, brightness + 3) end
+        if is_muted then brightness = math.max(1, brightness - 2) end
+      else
+        brightness = is_active and 2 or 1
+      end
+      g:led(x, t, brightness)
+    end
+
+    -- Gap column (x=8): unused.
+    g:led(8, t, 0)
+
+    -- Pan: center marker dim at col 12, active position bright.
+    local pan = mx.pan and mx.pan[t] or 0
+    local pan_col = M.pan_to_col(pan)
+    for x = 9, 15 do
+      local brightness = 1
+      if x == 12 then
+        brightness = 3 -- center marker
+      end
+      if x == pan_col then
+        brightness = 12
+        if is_active then brightness = 15 end
+        if is_muted then brightness = math.max(3, brightness - 3) end
+      end
+      g:led(x, t, brightness)
+    end
+
+    -- Mute (col 16).
+    local mute_b = is_muted and 15 or (is_active and 4 or 2)
+    g:led(16, t, mute_b)
+  end
+  -- Rows 5-7 stay blank on the mixer page.
+  for y = 5, 7 do
+    for x = 1, 16 do
+      g:led(x, y, 0)
+    end
   end
 end
 
@@ -659,6 +757,8 @@ function M.grid_key(ctx, x, y, z)
     M.trigger_key(ctx, x, y)
   elseif page == "ratchet" then
     M.ratchet_key(ctx, x, y)
+  elseif page == "mixer" then
+    M.mixer_key(ctx, x, y)
   else
     M.value_key(ctx, x, y, page)
   end
@@ -678,6 +778,44 @@ function M.value_key(ctx, x, y, page)
   -- row 1 = value 7, row 7 = value 1 (all value pages including probability)
   local val = 8 - y
   track_mod.set_step(param, x, val)
+end
+
+-- Mixer page key: row = track (1-4). Sections:
+--   x 1-7  -> level for that track (col 1 = 0.0, col 7 = 1.0)
+--   x 9-15 -> pan  for that track (col 9 = -1.0, col 12 = 0, col 15 = +1.0)
+--   x 16   -> toggle mute
+-- Selecting a level/pan cell also selects the active track so subsequent
+-- non-mixer interactions target the tapped row without a separate nav step.
+function M.mixer_key(ctx, x, y)
+  if y < 1 or y > track_mod.NUM_TRACKS then return end
+  local mixer = require("lib/mixer")
+  local t = y
+  ctx.active_track = t
+  local params_available = params and params.lookup
+
+  if x >= 1 and x <= 7 then
+    local level = M.col_to_level(x)
+    if params_available and params.lookup["level_" .. t] then
+      -- Params action drives mixer.set_level so voice + events fire once.
+      params:set("level_" .. t, math.floor(level * 100 + 0.5))
+    else
+      mixer.set_level(ctx, t, level)
+    end
+  elseif x >= 9 and x <= 15 then
+    local pan = M.col_to_pan(x)
+    if params_available and params.lookup["pan_" .. t] then
+      params:set("pan_" .. t, math.floor(pan * 100 + 0.5))
+    else
+      mixer.set_pan(ctx, t, pan)
+    end
+  elseif x == 16 then
+    local new_muted = not (ctx.tracks[t] and ctx.tracks[t].muted)
+    if params_available and params.lookup["mute_" .. t] then
+      params:set("mute_" .. t, new_muted and 2 or 1)
+    else
+      mixer.toggle_mute(ctx, t)
+    end
+  end
 end
 
 -- Ratchet page key: increment/decrement count or toggle sub-gate bits

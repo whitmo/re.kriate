@@ -54,6 +54,22 @@ function M.new(track_num, shared_buffer)
       })
     end,
 
+    set_level = function(self, val)
+      table.insert(self.events, {
+        track = self.track_num,
+        type = "level",
+        level = val,
+      })
+    end,
+
+    set_pan = function(self, val)
+      table.insert(self.events, {
+        track = self.track_num,
+        type = "pan",
+        pan = val,
+      })
+    end,
+
     get_events = function(self)
       local result = {}
       for _, e in ipairs(self.events) do

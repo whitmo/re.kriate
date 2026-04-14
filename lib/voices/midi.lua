@@ -59,6 +59,22 @@ function M.new(midi_dev, channel)
         self.midi_dev:cc(65, 0, self.channel)
       end
     end,
+
+    -- Channel Volume (CC 7): level in [0, 1] -> CC value [0, 127]
+    set_level = function(self, val)
+      local v = val or 0
+      if v < 0 then v = 0 end
+      if v > 1 then v = 1 end
+      self.midi_dev:cc(7, math.floor(v * 127 + 0.5), self.channel)
+    end,
+
+    -- Pan (CC 10): pan in [-1, 1] -> CC value [0, 127] (64 = center)
+    set_pan = function(self, val)
+      local v = val or 0
+      if v < -1 then v = -1 end
+      if v > 1 then v = 1 end
+      self.midi_dev:cc(10, math.floor((v + 1) * 63.5 + 0.5), self.channel)
+    end,
   }
 end
 

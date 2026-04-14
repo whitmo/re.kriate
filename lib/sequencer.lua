@@ -296,7 +296,15 @@ end
 function M.play_note(ctx, track_num, note, velocity, duration)
   local voice = ctx.voices and ctx.voices[track_num]
   if voice then
-    voice:play_note(note, velocity, duration)
+    -- Scale by mixer level (default 1.0; 0.0 fully silences the voice).
+    local level = 1.0
+    if ctx.mixer and ctx.mixer.level and ctx.mixer.level[track_num] ~= nil then
+      level = ctx.mixer.level[track_num]
+    end
+    local scaled_vel = velocity * level
+    if scaled_vel < 0 then scaled_vel = 0 end
+    if scaled_vel > 1 then scaled_vel = 1 end
+    voice:play_note(note, scaled_vel, duration)
   end
 end
 
