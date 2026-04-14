@@ -103,10 +103,19 @@ function M.new(voice_id, runtime, config)
     local start_sec = self.config.start_sec or 0
     local duration = (self.config.end_sec or 0) - start_sec
 
+    local recorded_marker = self.runtime.RECORDED_MARKER
+        or (package.loaded["lib/voices/softcut_runtime"]
+            and package.loaded["lib/voices/softcut_runtime"].RECORDED_MARKER)
+        or "__recorded__"
+
     if not self.config.sample_path then
       self.available = false
       self.last_error = "sample_missing"
       warn("softcut_zig: missing sample path")
+    elseif self.config.sample_path == recorded_marker then
+      -- Buffer holds a live-recorded sample; no file I/O needed.
+      self.available = true
+      self.last_error = nil
     else
       local exists = self.runtime.file_exists or file_exists
       if not exists(self.config.sample_path) then
@@ -230,6 +239,41 @@ function M.new(voice_id, runtime, config)
     end)
     self.active_notes[note] = coro_id
     self.note_off_coro = coro_id
+    return true
+  end
+
+  --- Record live audio from an ADC input into this voice's buffer region.
+  --- On completion the voice is immediately playable (no file on disk).
+  --- opts: { duration = seconds, input_channel = 1|2, clear = true }
+  --- cb:   optional on_complete(true) callback.
+  function self:grab(opts, cb)
+    if not self.runtime.record then
+      return nil, "record_unsupported"
+    end
+    self:all_notes_off()
+    local marker = self.runtime.RECORDED_MARKER
+        or (package.loaded["lib/voices/softcut_runtime"]
+            and package.loaded["lib/voices/softcut_runtime"].RECORDED_MARKER)
+        or "__recorded__"
+    local ok, err = self.runtime.record(self.voice_id, opts, function(success)
+      if success then
+        local vs = self.runtime.voices and self.runtime.voices[self.voice_id]
+        local start_sec = vs and vs.region_start or 0
+        local duration = (opts and opts.duration)
+            or (vs and (vs.region_end - vs.region_start))
+            or 1
+        self.config.sample_path = marker
+        self.config.start_sec = start_sec
+        self.config.end_sec = start_sec + duration
+        self.available = true
+        self.last_error = nil
+        self:apply_config(self.config)
+      end
+      if cb then cb(success) end
+    end)
+    if not ok then
+      return nil, err
+    end
     return true
   end
 
