@@ -23,6 +23,10 @@ local help_overlay = require("lib/seamstress/help_overlay")
 local help_console = require("lib/seamstress/help_console")
 local screen_ui = require("lib/seamstress/screen_ui")
 local track_mod = require("lib/track")
+local startup_info = require("lib/startup_info")
+local softcut_runtime = require("lib/voices/softcut_runtime")
+
+local SCRIPT_DIR = debug.getinfo(1, "S").source:match("@(.*/)") or "./"
 
 local ctx
 
@@ -71,6 +75,32 @@ function init()
       mirror_monome = true,
     },
     seed_stock_presets = true,
+  })
+
+  -- Startup banner: git hash / branch / release + SC target + softcut mode.
+  -- Printed after app.init so the SC target reflects the resolved osc_host /
+  -- osc_port params rather than guessing defaults. Live connectivity is not
+  -- probed here — `seamstress scripts/demo_sc_handshake.lua` verifies the
+  -- handshake without pulling the full sequencer up.
+  local info = startup_info.collect(SCRIPT_DIR, SCRIPT_DIR .. "CHANGELOG.md")
+  local sc_host, sc_port = "127.0.0.1", 57120
+  if params and params.get then
+    -- osc_host is an option param; params:string yields the selected value
+    -- while params:get returns its index. Fall through quietly if either
+    -- param isn't defined (hermetic tests stub a minimal params table).
+    if params.string then
+      local ok, hstr = pcall(params.string, params, "osc_host")
+      if ok and hstr then sc_host = hstr end
+    end
+    local ok_p, port = pcall(params.get, params, "osc_port")
+    if ok_p and type(port) == "number" then sc_port = port end
+  end
+  startup_info.announce({
+    git = info.git,
+    release = info.release,
+    sc = string.format("SC target: %s:%d (run demo_sc_handshake to probe)",
+      sc_host, sc_port),
+    softcut = softcut_runtime.status_string(),
   })
 
   -- Patch params-menu key handler to support page up/down navigation
