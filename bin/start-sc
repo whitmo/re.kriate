@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# bin/start-sc — launch SuperCollider headless with the full re.kriate stack.
+#
+# Boots sclang (the SuperCollider language interpreter), loads
+# sc/rekriate-bootstrap.scd, which boots scsynth (the audio server) and
+# registers voice + mixer + sc_synth + sc_drums listeners. The ping/pong
+# handshake responders let the Lua bridge (lib/sc_bridge.lua) verify the
+# session is live.
+#
+# Usage:
+#   bin/start-sc                # boot and stay in foreground
+#   bin/start-sc --daemon       # background, log to .runtime/sc.log
+#
+# sclang resolution order:
+#   1. /Applications/SuperCollider.app/Contents/MacOS/sclang  (macOS bundle)
+#   2. sclang on $PATH                                        (linux/manual)
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BOOTSTRAP="${REPO_ROOT}/sc/rekriate-bootstrap.scd"
+
+if [[ ! -f "${BOOTSTRAP}" ]]; then
+    echo "start-sc: missing ${BOOTSTRAP}" >&2
+    exit 1
+fi
+
+SCLANG=""
+if [[ -x "/Applications/SuperCollider.app/Contents/MacOS/sclang" ]]; then
+    SCLANG="/Applications/SuperCollider.app/Contents/MacOS/sclang"
+elif command -v sclang >/dev/null 2>&1; then
+    SCLANG="$(command -v sclang)"
+else
+    echo "start-sc: sclang not found." >&2
+    echo "  install SuperCollider (https://supercollider.github.io/downloads)" >&2
+    echo "  or ensure sclang is on PATH." >&2
+    exit 1
+fi
+
+echo "start-sc: using ${SCLANG}"
+echo "start-sc: loading ${BOOTSTRAP}"
+
+if [[ "${1:-}" == "--daemon" ]]; then
+    mkdir -p "${REPO_ROOT}/.runtime"
+    LOG="${REPO_ROOT}/.runtime/sc.log"
+    PIDFILE="${REPO_ROOT}/.runtime/sc.pid"
+    echo "start-sc: running in background, log=${LOG}"
+    nohup "${SCLANG}" "${BOOTSTRAP}" >"${LOG}" 2>&1 &
+    echo $! > "${PIDFILE}"
+    echo "start-sc: pid=$(cat "${PIDFILE}")"
+    exit 0
+fi
+
+exec "${SCLANG}" "${BOOTSTRAP}"

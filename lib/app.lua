@@ -115,6 +115,9 @@ local function build_voice(ctx, t)
     if not ctx.softcut_runtime then
       local softcut_runtime = require("lib/voices/softcut_runtime")
       ctx.softcut_runtime = softcut_runtime.new()
+      -- Announce platform mode once per session so users immediately see
+      -- whether they're getting real audio (norns) or dry-mode (seamstress).
+      softcut_runtime.announce(ctx.softcut_runtime.mode)
     end
     local softcut_zig = require("lib/voices/softcut_zig")
     local sample_path = params:get("sample_path_" .. t)

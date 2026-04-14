@@ -174,4 +174,52 @@ describe("softcut_runtime", function()
       assert.are.same({"test warning", "another"}, rt.warnings)
     end)
   end)
+
+  describe("platform mode", function()
+    local orig_softcut
+
+    before_each(function()
+      orig_softcut = rawget(_G, "softcut")
+      rawset(_G, "softcut", nil)
+    end)
+
+    after_each(function()
+      rawset(_G, "softcut", orig_softcut)
+    end)
+
+    it("detects dry mode when _G.softcut is absent", function()
+      assert.are.equal("dry", softcut_runtime.detect_mode())
+    end)
+
+    it("detects norns mode when _G.softcut is present with expected API", function()
+      rawset(_G, "softcut", { enable = function() end })
+      assert.are.equal("norns", softcut_runtime.detect_mode())
+    end)
+
+    it("stores the mode on the runtime", function()
+      local rt = softcut_runtime.new()
+      assert.are.equal("dry", rt.mode)
+      assert.is_true(rt.is_dry())
+    end)
+
+    it("accepts an explicit mode override", function()
+      local rt = softcut_runtime.new({ mode = "norns" })
+      assert.are.equal("norns", rt.mode)
+      assert.is_false(rt.is_dry())
+    end)
+
+    it("status_string describes the active mode", function()
+      local dry = softcut_runtime.status_string("dry")
+      local native = softcut_runtime.status_string("norns")
+      assert.is_truthy(dry:match("dry"))
+      assert.is_truthy(native:match("norns"))
+    end)
+
+    it("announce() prints without error on either mode", function()
+      assert.has_no.errors(function()
+        softcut_runtime.announce("dry")
+        softcut_runtime.announce("norns")
+      end)
+    end)
+  end)
 end)

@@ -7,7 +7,26 @@ re.kriate can send OSC messages to SuperCollider, turning it into a standalone s
 - **SuperCollider** (3.x+) — [download](https://supercollider.github.io/downloads)
 - **re.kriate** running on norns or seamstress with the OSC voice backend
 
-## Quick Start
+## One-shot Launch (recommended)
+
+The repo ships two launch scripts that remove all manual IDE steps:
+
+```bash
+bin/start-sc            # boot sclang + full re.kriate companion stack
+bin/start-rekriate      # boot SC (background) + seamstress together
+```
+
+`bin/start-sc` prefers the macOS app bundle sclang
+(`/Applications/SuperCollider.app/Contents/MacOS/sclang`) and falls back to
+`sclang` on `$PATH`. It evaluates `sc/rekriate-bootstrap.scd`, which in turn
+loads the voice engine + mixer, the multi-SynthDef `sc_synth` listener, and
+the `sc_drums` percussion listener into a single sclang session.
+
+`bin/start-rekriate` is a one-shot: it backgrounds `start-sc --daemon` (logs to
+`.runtime/sc.log`, pidfile in `.runtime/sc.pid`), waits a few seconds for the
+SC server to warm up, and then launches seamstress.
+
+## Manual / IDE Quick Start
 
 1. Open SuperCollider IDE
 2. Open `examples/supercollider/rekriate_sub.scd`
@@ -19,6 +38,86 @@ re.kriate can send OSC messages to SuperCollider, turning it into a standalone s
      4 tracks, 12 OSC responders active
    ```
 6. In re.kriate, set the voice backend to `osc` (see below)
+
+## Handshake: verifying the connection
+
+re.kriate and SuperCollider exchange a small ping/pong handshake so the Lua
+side can confirm a live SC session before streaming notes. Every companion
+script (`rekriate-voice.scd`, `rekriate_synths.scd`, `rekriate_drums.scd`,
+`rekriate_sub.scd`) registers a `/rekriate/ping` responder:
+
+```
+Lua → SC :  /rekriate/ping  reply_host  reply_port  nonce
+SC  → Lua:  /rekriate/pong  version  feature1  feature2  …
+```
+
+When the bootstrap script loads multiple companions in one sclang session,
+each replies to the ping with its own feature list; the Lua bridge
+(`lib/sc_bridge.lua`) merges them under a single handshake nonce so the UI
+sees a single `{voice, mixer, sc_synth, sub, fm, wavetable, sc_drums, …}`
+list.
+
+Try the handshake demo:
+
+```bash
+seamstress -s scripts/demo_sc_handshake.lua
+```
+
+You should see:
+
+```
+-- round 1: sending ping
+  ← pong: version=voice-1 features=[voice, mixer]
+  ← pong: version=sc_synth-1 features=[voice, mixer, sc_synth, sub, fm, wavetable]
+  ← pong: version=sc_drums-1 features=[voice, mixer, sc_synth, sub, fm, wavetable, sc_drums, ...]
+  status: SC 127.0.0.1:57120 ok (v…, voice,mixer,sc_synth,…)
+```
+
+### Using the bridge in your own code
+
+```lua
+local sc_bridge = require("lib/sc_bridge")
+
+local bridge = sc_bridge.new({
+  host = "127.0.0.1", port = 57120,
+  reply_host = "127.0.0.1", reply_port = 7000,
+  timeout = 1.5,
+})
+
+-- Chain pong into your osc.event dispatcher
+local prev = osc.event
+osc.event = function(path, args, from)
+  if bridge:handle_osc(path, args, from) then return end
+  if prev then prev(path, args, from) end
+end
+
+bridge:ping()
+-- … later:
+if bridge:is_connected() then
+  print("SC features: " .. table.concat(bridge.features, ", "))
+end
+```
+
+State transitions: `disconnected` → (on ping) `pinging` → (on pong)
+`connected`. Call `bridge:tick()` periodically — any `pinging` state older
+than `timeout` seconds falls back to `disconnected`.
+
+## Softcut: norns-only
+
+Softcut is a norns-native DSP engine and **does not run in seamstress**. The
+`softcut` voice backend works in both places, but on seamstress the
+`lib/voices/softcut_runtime` module runs in **dry-mode**: voice state is
+tracked accurately (region, rate, loop points, sample load status) so the
+sequencer behaves identically, but no audio is produced.
+
+The runtime announces its mode at init:
+
+- `softcut: norns native (audio enabled)` — on norns
+- `softcut: dry-mode (no audio — norns only)` — on seamstress / tests
+
+Use `lib/voices/softcut_runtime.detect_mode()` to branch in your own code;
+any non-norns consumer that needs audio should route tracks through `osc` /
+`sc_synth` / `sc_drums` instead.
 
 ## Configuring re.kriate
 
