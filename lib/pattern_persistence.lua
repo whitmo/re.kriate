@@ -299,6 +299,14 @@ local function ensure_slots_migrated(slots)
   end
 end
 
+local function ensure_tracks_migrated(tracks)
+  if type(tracks) ~= "table" then return end
+  for _, track in pairs(tracks) do
+    ensure_probability(track)
+    ensure_ratchet_bits(track)
+  end
+end
+
 local function decode_payload(path)
   if tab and tab.load then
     local ok, data = pcall(tab.load, path)
@@ -331,25 +339,25 @@ function pattern_persistence.save(ctx, name)
     return nil, "ctx_missing"
   end
 
-  -- Always snapshot current tracks into slot 1 so save captures live state
-  if ctx.tracks then
-    ctx.patterns[1] = ctx.patterns[1] or {}
-    ctx.patterns[1].tracks = deep_copy(ctx.tracks)
-    ctx.patterns[1].populated = true
-  end
-
   local payload = {
     version = 1,
-    saved_slot = 1,
     slots = deep_copy(ctx.patterns),
   }
+
+  -- FR-007b: store live track state outside the 16 visible pattern slots so
+  -- save never mutates a user-authored slot as an implementation detail.
+  if ctx.tracks then
+    payload.tracks = deep_copy(ctx.tracks)
+  end
 
   local meta_snapshot = snapshot_meta(ctx.meta)
   if meta_snapshot then
     payload.meta = meta_snapshot
   end
 
-  -- pick first populated slot as default loaded slot
+  -- Legacy metadata: pick the first populated slot as the "default" loaded
+  -- slot when older loaders fall back to slot-based track restoration.
+  payload.saved_slot = 1
   for i = 1, #payload.slots do
     if payload.slots[i].populated then
       payload.saved_slot = i
@@ -386,14 +394,21 @@ function pattern_persistence.load(ctx, name)
 
   if not data.slots then return nil, "invalid_payload" end
   ensure_slots_migrated(data.slots)
+  ensure_tracks_migrated(data.tracks)
 
   local slots = data.slots
   ctx.patterns = deep_copy(slots)
 
-  -- restore tracks from saved_slot if populated
-  local slot_num = data.saved_slot or 1
-  if slots[slot_num] and slots[slot_num].populated and slots[slot_num].tracks then
-    ctx.tracks = deep_copy(slots[slot_num].tracks)
+  -- Restore live tracks. Prefer the top-level payload.tracks snapshot
+  -- (FR-007b); legacy banks that predate this field fall back to the
+  -- saved_slot convention so older .krp files still round-trip.
+  if type(data.tracks) == "table" then
+    ctx.tracks = deep_copy(data.tracks)
+  else
+    local slot_num = data.saved_slot or 1
+    if slots[slot_num] and slots[slot_num].populated and slots[slot_num].tracks then
+      ctx.tracks = deep_copy(slots[slot_num].tracks)
+    end
   end
 
   -- restore meta-sequencer state when present. Banks saved before this field

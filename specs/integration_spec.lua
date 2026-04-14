@@ -209,51 +209,44 @@ describe("integration", function()
 
   end)
 
-  describe("pattern persistence params", function()
+  describe("pattern persistence helpers", function()
+    -- The pattern_persistence param group was removed (re-2yn): preset
+    -- persistence owns unified save/load. The underlying app.save_pattern_bank
+    -- helpers remain for keyboard shortcuts and internal use.
 
-    it("saves and loads the current bank through params actions", function()
+    it("saves and loads the current bank via app helpers", function()
       local ctx = make_app()
       ctx.tracks[1].division = 6
       ctx.tracks[2].params.note.steps[3] = 5
-      params:set("pattern_bank_name", "menu-bank")
-      params:set("pattern_bank_save", 2)
+
+      assert.is_true(app.save_pattern_bank(ctx, "menu-bank"))
       assert.are.equal("saved bank", ctx.pattern_message.text)
 
       ctx.tracks = track_mod.new_tracks()
       assert.are.equal(1, ctx.tracks[1].division)
 
-      params:set("pattern_bank_load", 2)
-
+      assert.is_true(app.load_pattern_bank(ctx, "menu-bank"))
       assert.are.equal(6, ctx.tracks[1].division)
       assert.are.equal(5, ctx.tracks[2].params.note.steps[3])
       assert.are.equal("loaded bank", ctx.pattern_message.text)
-      assert.are.equal(1, params:get("pattern_bank_save"))
-      assert.are.equal(1, params:get("pattern_bank_load"))
     end)
 
-    it("lists saved banks through params actions", function()
+    it("lists saved banks via app helpers", function()
       local ctx = make_app()
-      params:set("pattern_bank_name", "alpha-bank")
-      params:set("pattern_bank_save", 2)
-      params:set("pattern_bank_name", "beta-bank")
-      params:set("pattern_bank_save", 2)
+      assert.is_true(app.save_pattern_bank(ctx, "alpha-bank"))
+      assert.is_true(app.save_pattern_bank(ctx, "beta-bank"))
 
-      params:set("pattern_bank_list", 2)
-
+      app.list_pattern_banks(ctx)
       assert.are.equal("banks: alpha-bank, beta-bank", ctx.pattern_message.text)
-      assert.are.equal(1, params:get("pattern_bank_list"))
     end)
 
-    it("deletes the current bank through params actions", function()
+    it("deletes a bank via app helpers", function()
       local ctx = make_app()
-      params:set("pattern_bank_name", "trash-bank")
-      params:set("pattern_bank_save", 2)
+      assert.is_true(app.save_pattern_bank(ctx, "trash-bank"))
 
-      params:set("pattern_bank_delete", 2)
-      params:set("pattern_bank_list", 2)
-
+      assert.is_true(app.delete_pattern_bank(ctx, "trash-bank"))
+      app.list_pattern_banks(ctx)
       assert.are.equal("banks: none", ctx.pattern_message.text)
-      assert.are.equal(1, params:get("pattern_bank_delete"))
     end)
 
   end)

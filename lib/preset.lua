@@ -23,7 +23,6 @@ local GLOBAL_PARAMS = {
   "osc_port",
   "clock_source_mode",
   "clock_output",
-  "pattern_bank_name",
 }
 
 local PER_TRACK_PARAM_TEMPLATES = {
@@ -371,6 +370,31 @@ function preset.save(ctx, name)
   local serialized = encode_payload(payload)
   payload.checksum = checksum(serialized)
   local final_serialized = encode_payload(payload)
+
+  local call_ok, write_ok, write_err = pcall(write_file_atomic, path, final_serialized)
+  if not call_ok then return nil, "write_error:" .. tostring(write_ok) end
+  if not write_ok then return nil, write_err or "write_error" end
+
+  return true, path
+end
+
+-- Write an already-constructed payload table under `name`. Used by stock
+-- preset seeding so the seeding code can build self-contained presets
+-- without mutating global params first. The payload is normalized (version,
+-- saved_at, checksum) and written atomically, identical to `save`.
+function preset.save_payload(payload, name)
+  if type(payload) ~= "table" then return nil, "invalid_payload" end
+  local path, err = sanitized_path(name, true)
+  if not path then return nil, err end
+
+  local p = deep_copy(payload)
+  p.version = p.version or PRESET_VERSION
+  p.saved_at = p.saved_at or os.time()
+  p.checksum = nil -- recomputed below
+
+  local serialized = encode_payload(p)
+  p.checksum = checksum(serialized)
+  local final_serialized = encode_payload(p)
 
   local call_ok, write_ok, write_err = pcall(write_file_atomic, path, final_serialized)
   if not call_ok then return nil, "write_error:" .. tostring(write_ok) end

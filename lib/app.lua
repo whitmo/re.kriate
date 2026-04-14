@@ -15,6 +15,7 @@ local events = require("lib/events")
 local log = require("lib/log")
 local clock_sync = require("lib/clock_sync")
 local mixer = require("lib/mixer")
+local stock_presets = require("lib/stock_presets")
 
 local M = {}
 
@@ -138,12 +139,6 @@ local function pattern_bank_name(name)
   if name and name ~= "" then
     return name
   end
-  if params and params.get then
-    local param_name = params:get("pattern_bank_name")
-    if param_name and param_name ~= "" then
-      return param_name
-    end
-  end
   return DEFAULT_PATTERN_BANK
 end
 
@@ -169,61 +164,6 @@ local function format_bank_list(names)
     return "banks: none"
   end
   return "banks: " .. table.concat(names, ", ")
-end
-
-local function add_pattern_persistence_params(ctx)
-  if not params or not params.add_text or not params.add_option then
-    return
-  end
-
-  params:add_group("pattern_persistence", "pattern persistence", 5)
-  params:add_text("pattern_bank_name", "bank name", DEFAULT_PATTERN_BANK)
-  params:add_option("pattern_bank_save", "save bank", {"-", "save"}, 1)
-  params:add_option("pattern_bank_load", "load bank", {"-", "load"}, 1)
-  params:add_option("pattern_bank_list", "list banks", {"-", "list"}, 1)
-  params:add_option("pattern_bank_delete", "delete bank", {"-", "delete"}, 1)
-
-  local resetting_param = false
-  local function reset_action_param(id)
-    if resetting_param then
-      return
-    end
-    resetting_param = true
-    set_param_if_needed(id, 1)
-    resetting_param = false
-  end
-
-  params:set_action("pattern_bank_save", function(value)
-    if resetting_param or value ~= 2 then
-      return
-    end
-    M.save_pattern_bank(ctx)
-    reset_action_param("pattern_bank_save")
-  end)
-
-  params:set_action("pattern_bank_load", function(value)
-    if resetting_param or value ~= 2 then
-      return
-    end
-    M.load_pattern_bank(ctx)
-    reset_action_param("pattern_bank_load")
-  end)
-
-  params:set_action("pattern_bank_list", function(value)
-    if resetting_param or value ~= 2 then
-      return
-    end
-    M.list_pattern_banks(ctx)
-    reset_action_param("pattern_bank_list")
-  end)
-
-  params:set_action("pattern_bank_delete", function(value)
-    if resetting_param or value ~= 2 then
-      return
-    end
-    M.delete_pattern_bank(ctx)
-    reset_action_param("pattern_bank_delete")
-  end)
 end
 
 local function preset_name(name)
@@ -562,7 +502,6 @@ function M.init(config)
   end
 
   add_clock_sync_params(ctx)
-  add_pattern_persistence_params(ctx)
   add_preset_persistence_params(ctx)
   add_grid_params(ctx, config)
 
@@ -607,6 +546,24 @@ function M.init(config)
 
   attach_midi_input(ctx)
 
+  -- Seed stock presets on first run (re-2yn). Gives a fresh install something
+  -- to load/audition without having to build patterns from scratch. Runs
+  -- before autorestore so stock presets exist if the user opts to browse
+  -- them, but never overwrites an existing preset library. Gated on an
+  -- explicit config flag so hermetic tests that mock params/filesystem
+  -- don't accidentally write stock files into the real user data dir.
+  if config.seed_stock_presets then
+    local seeded, seed_errs = stock_presets.seed_if_empty(preset_persistence)
+    if seeded and seeded > 0 then
+      log.info("stock presets seeded: " .. tostring(seeded))
+    end
+    if seed_errs then
+      for name, err in pairs(seed_errs) do
+        log.warn("stock preset seed failed (" .. name .. "): " .. tostring(err))
+      end
+    end
+  end
+
   -- Autorestore last session if an autosave exists and autosave is enabled
   -- (FR-009). Silent no-op if no autosave present or autosave disabled.
   if preset_autosave_enabled() and preset_persistence.exists(preset_persistence.AUTOSAVE_NAME) then
@@ -622,10 +579,8 @@ function M.init(config)
 end
 
 function M.save_pattern_bank(ctx, name)
-  -- Ensure at least one slot carries current state so persistence can restore tracks
-  if ctx and ctx.patterns and ctx.tracks then
-    pattern.save(ctx, 1)
-  end
+  -- pattern_persistence now carries ctx.tracks at payload top-level (FR-007b),
+  -- so save no longer needs to clobber pattern slot 1 as a scratch buffer.
   local ok, path_or_err = pattern_persistence.save(ctx, pattern_bank_name(name))
   if ok then
     local message = "saved bank"
