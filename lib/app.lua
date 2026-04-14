@@ -280,6 +280,47 @@ local function apply_platform_clock_source(ctx)
   end
 end
 
+--- Transport params (advance, play, stop): trigger-style option params that
+--- auto-reset to "-" after firing, mirroring the preset_save/load pattern.
+--- These expose grid transport actions to the norns/seamstress param system so
+--- they can be MIDI-mapped via PMAP (re-9d9).
+local function add_transport_params(ctx)
+  if not params or not params.add_group then return end
+  params:add_group("transport", "transport", track_mod.NUM_TRACKS + 2)
+
+  local resetting = {}
+  local function reset_action_param(id)
+    if resetting[id] then return end
+    resetting[id] = true
+    set_param_if_needed(id, 1)
+    resetting[id] = false
+  end
+
+  for t = 1, track_mod.NUM_TRACKS do
+    local id = "advance_" .. t
+    params:add_option(id, "track " .. t .. " advance", {"-", "advance"}, 1)
+    params:set_action(id, function(val)
+      if resetting[id] or val ~= 2 then return end
+      sequencer.step_track(ctx, t)
+      reset_action_param(id)
+    end)
+  end
+
+  params:add_option("transport_play", "play", {"-", "play"}, 1)
+  params:set_action("transport_play", function(val)
+    if resetting["transport_play"] or val ~= 2 then return end
+    sequencer.start(ctx)
+    reset_action_param("transport_play")
+  end)
+
+  params:add_option("transport_stop", "stop", {"-", "stop"}, 1)
+  params:set_action("transport_stop", function(val)
+    if resetting["transport_stop"] or val ~= 2 then return end
+    sequencer.stop(ctx)
+    reset_action_param("transport_stop")
+  end)
+end
+
 local function add_clock_sync_params(ctx)
   if not params or not params.add_group then return end
   params:add_group("clock_sync", "clock sync", 2)
@@ -514,6 +555,7 @@ function M.init(config)
     end)
   end
 
+  add_transport_params(ctx)
   add_clock_sync_params(ctx)
   add_preset_persistence_params(ctx)
   add_grid_params(ctx, config)
