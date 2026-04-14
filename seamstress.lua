@@ -69,6 +69,7 @@ function init()
       rows = rc.rows,
       mirror_monome = true,
     },
+    seed_stock_presets = true,
   })
 
   -- Patch params-menu key handler to support page up/down navigation

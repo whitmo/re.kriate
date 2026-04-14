@@ -38,7 +38,7 @@ function init()
     voices[t] = nb_voice.new("voice_" .. t)
   end
 
-  ctx = app.init({ voices = voices, grid_provider = "monome" })
+  ctx = app.init({ voices = voices, grid_provider = "monome", seed_stock_presets = true })
 
   -- Screen refresh metro at 15fps
   ctx.screen_metro = metro.init()

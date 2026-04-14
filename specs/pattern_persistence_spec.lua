@@ -199,6 +199,73 @@ describe("pattern_persistence", function()
     end)
   end)
 
+  describe("FR-007a: slot preservation", function()
+    it("save does not overwrite slot 1 in ctx.patterns or on disk", function()
+      local ctx = make_ctx()
+      -- Populate slot 1 with a distinctive snapshot
+      ctx.tracks[1].division = 3
+      ctx.tracks[1].params.note.steps[1] = 7
+      pattern.save(ctx, 1)
+
+      -- Mutate live tracks before save; slot 1 must NOT absorb these values
+      ctx.tracks[1].division = 99
+      ctx.tracks[1].params.note.steps[1] = 2
+
+      local ok = pp.save(ctx, "slot-guard")
+      assert.is_true(ok)
+
+      -- In-memory slot 1 is untouched by save
+      assert.are.equal(3, ctx.patterns[1].tracks[1].division)
+      assert.are.equal(7, ctx.patterns[1].tracks[1].params.note.steps[1])
+
+      -- Persisted slot 1 is the user-authored snapshot, not the live state
+      local payload = read_payload(tmp_root .. "/slot-guard.krp")
+      assert.are.equal(3, payload.slots[1].tracks[1].division)
+      assert.are.equal(7, payload.slots[1].tracks[1].params.note.steps[1])
+
+      -- Live tracks ride separately at payload top level (FR-007b)
+      assert.are.equal(99, payload.tracks[1].division)
+      assert.are.equal(2, payload.tracks[1].params.note.steps[1])
+    end)
+
+    it("save preserves unpopulated slots when live tracks differ", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].division = 5
+      -- Do not populate any slot; all should remain unpopulated.
+
+      local ok = pp.save(ctx, "no-slots")
+      assert.is_true(ok)
+
+      local payload = read_payload(tmp_root .. "/no-slots.krp")
+      for i = 1, 16 do
+        assert.is_not_true(payload.slots[i].populated)
+      end
+      assert.are.equal(5, payload.tracks[1].division)
+    end)
+
+    it("load restores tracks from payload.tracks without consulting slots", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].division = 6
+      pattern.save(ctx, 2) -- user-authored slot
+      ctx.tracks[1].division = 42 -- live state different from slot 2
+
+      assert.is_true(pp.save(ctx, "live-vs-slot"))
+
+      -- Reset ctx, then load
+      ctx.tracks = track_mod.new_tracks()
+      ctx.patterns = pattern.new_slots()
+      assert.is_true(pp.load(ctx, "live-vs-slot"))
+
+      -- Live tracks come from payload.tracks (division == 42)
+      assert.are.equal(42, ctx.tracks[1].division)
+      -- Slot 2 was populated with division==6 snapshot
+      assert.is_true(pattern.is_populated(ctx.patterns, 2))
+      assert.are.equal(6, ctx.patterns[2].tracks[1].division)
+      -- Slot 1 stays unpopulated
+      assert.is_false(pattern.is_populated(ctx.patterns, 1))
+    end)
+  end)
+
   describe("atomic overwrite", function()
     it("overwrites in place and updates the checksum", function()
       local ctx = make_ctx()
@@ -221,7 +288,10 @@ describe("pattern_persistence", function()
       local second_payload = read_payload(path)
       assert.is_truthy(second_payload.checksum)
       assert.are_not.equal(first_payload.checksum, second_payload.checksum)
-      assert.are.equal(99, second_payload.slots[1].tracks[1].division)
+      -- FR-007b: live track state rides at payload top level, not inside
+      -- slot 1. slot 1 still holds the user-authored snapshot from fill_ctx.
+      assert.are.equal(99, second_payload.tracks[1].division)
+      assert.are.equal(2, second_payload.slots[1].tracks[1].division)
 
       local fh = io.open(path, "r")
       assert.is_not_nil(fh)
