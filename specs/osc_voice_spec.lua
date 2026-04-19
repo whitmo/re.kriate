@@ -5,9 +5,13 @@ package.path = package.path .. ";./?.lua"
 
 -- Mock clock
 local beat_counter = 0
+local clock_run_calls = 0
 rawset(_G, "clock", {
   get_beats = function() return beat_counter end,
-  run = function(fn) return 1 end,
+  run = function(fn)
+    clock_run_calls = clock_run_calls + 1
+    return 1
+  end,
   cancel = function(id) end,
   sync = function() end,
 })
@@ -19,6 +23,8 @@ local param_defs = {}
 rawset(_G, "params", {
   add_separator = function(self, id, name) end,
   add_group = function(self, id, name, n) end,
+  show = function(self, id) end,
+  hide = function(self, id) end,
   add_number = function(self, id, name, min, max, default)
     param_store[id] = default
     param_defs[id] = { type = "number", min = min, max = max, default = default }
@@ -130,12 +136,18 @@ local function reset()
   for k in pairs(param_actions) do param_actions[k] = nil end
   for k in pairs(param_defs) do param_defs[k] = nil end
   beat_counter = 0
+  clock_run_calls = 0
   osc_sent = {}
+  osc.event = nil
 end
 
 -- Helper: simulate seamstress.lua init (create voices, params, call app.init)
-local function seamstress_init()
+local function seamstress_init(opts)
+  opts = opts or {}
   reset()
+  if opts.prev_osc_event then
+    osc.event = opts.prev_osc_event
+  end
   local midi_dev = midi.connect(1)
   local voices = {}
   for t = 1, track_mod.NUM_TRACKS do

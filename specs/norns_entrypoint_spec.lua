@@ -19,6 +19,8 @@ local param_defs = {}
 local mock_params = {
   add_separator = function(self, id, name) end,
   add_group = function(self, id, name, n) end,
+  show = function(self, id) end,
+  hide = function(self, id) end,
   add_number = function(self, id, name, min, max, default)
     param_store[id] = default
     param_defs[id] = { type = "number", min = min, max = max, default = default }

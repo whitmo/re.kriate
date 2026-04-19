@@ -182,6 +182,8 @@ describe("seamstress entrypoint keyboard persistence wiring", function()
     rawset(_G, "params", {
       add_separator = function() end,
       add_group = function() end,
+      show = function() end,
+      hide = function() end,
       add_number = function() end,
       add_option = function() end,
       add_text = function() end,
@@ -556,6 +558,8 @@ describe("seamstress params-menu key navigation patch", function()
     rawset(_G, "params", {
       add_separator = function() end,
       add_group = function() end,
+      show = function() end,
+      hide = function() end,
       add_number = function() end,
       add_option = function() end,
       add_text = function() end,
