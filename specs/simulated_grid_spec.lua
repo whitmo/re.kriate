@@ -16,8 +16,13 @@ rawset(_G, "grid", {
 })
 
 local grid_provider = require("lib/grid_provider")
+local grid_render = require("lib/seamstress/grid_render")
 
 describe("simulated grid", function()
+
+  before_each(function()
+    grid_render.reset()
+  end)
 
   -- ========================================================================
   -- Phase 4: Provider interface compliance (US3)
