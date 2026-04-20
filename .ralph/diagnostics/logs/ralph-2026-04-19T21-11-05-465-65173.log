@@ -1,0 +1,12 @@
+2026-04-20T04:11:05.466191Z  WARN ralph::preflight: Core config 'ralph.yml' contains hats/events and hats source 'builtin:autoresearch' was provided; hats source takes precedence for hats/events
+2026-04-20T04:11:05.471142Z  WARN ralph::loop_runner: Interactive mode requested but stdout is not a TTY, falling back to autonomous
+2026-04-20T04:11:05.472318Z  INFO ralph::loop_runner: I'm Ralph. Let's do this.
+2026-04-20T04:11:05.472425Z  INFO ralph_core::event_loop: Memory injection check: enabled=true, inject=Auto, workspace_root="/Users/whit/src/re.kriate"
+2026-04-20T04:11:05.472439Z  INFO ralph_core::event_loop: Looking for memories at: "/Users/whit/src/re.kriate/.ralph/agent/memories.md" (exists: false)
+2026-04-20T04:11:05.472447Z  INFO ralph_core::event_loop: Successfully loaded 0 memories from store
+2026-04-20T04:11:05.472451Z  INFO ralph_core::event_loop: Memory store is empty - no memories to inject
+2026-04-20T04:14:06.484043Z  INFO ralph_core::event_loop: Completion event detected in JSONL topic=LOOP_COMPLETE
+2026-04-20T04:14:06.485743Z  INFO ralph_core::event_loop: Completion event detected - terminating
+2026-04-20T04:14:06.485766Z  INFO ralph::loop_runner: Completion event LOOP_COMPLETE detected.
+2026-04-20T04:14:06.485804Z  INFO ralph_core::event_loop: Wrapping up: completed. 1 iterations in 3m 1s. reason=completed iterations=1 duration=3m 1s
+2026-04-20T04:14:06.496936Z  INFO ralph_core::landing: Beginning landing sequence loop_id=primary
