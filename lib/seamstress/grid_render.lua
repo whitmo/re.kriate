@@ -102,6 +102,9 @@ function M.reset()
   grid_cols, grid_rows = p.cols, p.rows
   cell_size, cell_pitch = p.cell_size, p.cell_pitch
   modifier_state = {ctrl = false, shift = false}
+  nav_latch = setmetatable({}, {__mode = "k"})
+  held_keys = setmetatable({}, {__mode = "k"})
+  locked_keys = setmetatable({}, {__mode = "k"})
 end
 
 --- Get current configuration.
