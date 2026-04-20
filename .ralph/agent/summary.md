@@ -1,8 +1,8 @@
 # Loop Summary
 
 **Status:** Completed successfully
-**Iterations:** 18
-**Duration:** 53m 39s
+**Iterations:** 1
+**Duration:** 1m 17s
 
 ## Tasks
 
@@ -14,4 +14,4 @@ _No events recorded._
 
 ## Final Commit
 
-bc46791: feat: add per-track swing_N params with range 0-100 (green)
+8a59d23: docs: record simulated grid isolation fix in autoresearch log
