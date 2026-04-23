@@ -16,10 +16,14 @@ set -euo pipefail
 #   SCRATCHPAD=.ralph/agent/scratchpad.md
 #   STATE_DIR=.ralph/agent/.watch
 #   POLL_SECONDS=15
+#   DRY_RUN=0                    # 1 = log prompts, do not invoke agent
+#   APPEND_RECEIPT=1             # 1 = append handled receipt to scratchpad
 
 SCRATCHPAD="${SCRATCHPAD:-.ralph/agent/scratchpad.md}"
 STATE_DIR="${STATE_DIR:-.ralph/agent/.watch}"
 POLL_SECONDS="${POLL_SECONDS:-15}"
+DRY_RUN="${DRY_RUN:-0}"
+APPEND_RECEIPT="${APPEND_RECEIPT:-1}"
 STATE_FILE="$STATE_DIR/agent-a.last_line"
 LOG_FILE="$STATE_DIR/agent-a-watch.log"
 
@@ -52,6 +56,24 @@ log() {
   printf '[%s] %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*" | tee -a "$LOG_FILE"
 }
 
+append_receipt() {
+  local status="$1"
+  local detail="$2"
+
+  if [[ "$APPEND_RECEIPT" != "1" ]]; then
+    return 0
+  fi
+
+  cat >> "$SCRATCHPAD" <<EOF
+
+## $(date -u +'%Y-%m-%d %H:%M UTC') — watcher
+To: agent-a
+Status: $status
+Context: $detail
+Claimed: n/a
+EOF
+}
+
 invoke_agent() {
   local new_text="$1"
   local prompt
@@ -69,9 +91,26 @@ $new_text
 EOF
 )
 
+  if [[ "$DRY_RUN" == "1" ]]; then
+    log "dry-run: would invoke agent with prompt below"
+    {
+      printf '----- PROMPT BEGIN -----\n'
+      printf '%s\n' "$prompt"
+      printf '----- PROMPT END -----\n'
+    } >> "$LOG_FILE"
+    append_receipt "dry-run" "watcher detected a new message for agent-a but did not invoke the agent (DRY_RUN=1)."
+    return 0
+  fi
+
   log "invoking agent"
+  append_receipt "received" "watcher detected a new message for agent-a and is invoking the agent command."
   # shellcheck disable=SC2086
-  eval "$AGENT_CMD" "\"$prompt\"" >> "$LOG_FILE" 2>&1 || log "agent command exited non-zero"
+  if eval "$AGENT_CMD" "\"$prompt\"" >> "$LOG_FILE" 2>&1; then
+    append_receipt "handled" "watcher invoked the agent command successfully; see .ralph/agent/.watch/agent-a-watch.log for details."
+  else
+    log "agent command exited non-zero"
+    append_receipt "error" "watcher invoked the agent command but it exited non-zero; see .ralph/agent/.watch/agent-a-watch.log."
+  fi
 }
 
 extract_new_agent_messages() {
