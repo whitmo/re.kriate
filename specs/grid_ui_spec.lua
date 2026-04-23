@@ -13,6 +13,8 @@ rawset(_G, "clock", {
 
 local track_mod = require("lib/track")
 local grid_ui = require("lib/grid_ui")
+local pattern = require("lib/pattern")
+local events = require("lib/events")
 
 -- Mock grid that records led() calls (used by make_ctx and extended page tests)
 local function mock_grid()
@@ -82,7 +84,9 @@ local function make_ctx(opts)
     active_page = opts.active_page or "trigger",
     playing = opts.playing or false,
     loop_held = opts.loop_held or false,
+    time_held = opts.time_held or false,
     loop_first_press = nil,
+    loop_first_y = nil,
     grid_dirty = true,
     g = g,
     voices = {},
@@ -192,13 +196,28 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 3, 1), 2)
     end)
 
-    it("shows brightness 8 for active trigger steps", function()
+    it("shows brightness 8 for active trigger steps in loop", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.tracks[1].params.trigger.steps[5] = 1
       grid_ui.draw_trigger_page(ctx, g)
-      -- Step 5 has trigger=1, should be 8
+      -- Step 5 has trigger=1, in default loop (1-6) -> brightness 8
       assert.are.equal(led_at(g, 5, 1), 8)
+    end)
+
+    it("shows brightness 4 for active trigger steps outside loop", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.tracks[1].params.trigger.loop_start = 1
+      ctx.tracks[1].params.trigger.loop_end = 4
+      ctx.tracks[1].params.trigger.steps[6] = 1
+      grid_ui.draw_trigger_page(ctx, g)
+      -- Step 6 has trigger=1, outside loop (1-4) -> dimmed brightness 4
+      assert.are.equal(led_at(g, 6, 1), 4)
+      -- Step 3 inside loop with trigger -> full brightness 8
+      ctx.tracks[1].params.trigger.steps[3] = 1
+      grid_ui.draw_trigger_page(ctx, g)
+      assert.are.equal(led_at(g, 3, 1), 8)
     end)
 
     it("shows brightness 15 for playhead when playing", function()
@@ -295,6 +314,23 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 1, 7), 3)
     end)
 
+    it("shows dim bar graph below value at brightness 1 when outside loop", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_track = 1
+      ctx.tracks[1].params.note.steps[10] = 5
+      ctx.tracks[1].params.note.loop_start = 1
+      ctx.tracks[1].params.note.loop_end = 8
+      grid_ui.draw_value_page(ctx, g, "note")
+      -- Step 10 outside loop, value 5 at row 3 -> brightness 4 (value dot)
+      assert.are.equal(led_at(g, 10, 3), 4)
+      -- Bar below (rows 4,5,6,7) -> dim brightness 1 (outside loop)
+      assert.are.equal(led_at(g, 10, 4), 1)
+      assert.are.equal(led_at(g, 10, 5), 1)
+      assert.are.equal(led_at(g, 10, 6), 1)
+      assert.are.equal(led_at(g, 10, 7), 1)
+    end)
+
     it("does not show bar above value", function()
       local ctx = make_ctx()
       local g = spy_grid()
@@ -377,24 +413,27 @@ describe("grid_ui", function()
       end
     end)
 
-    it("renders probability bars by percentage", function()
+    it("renders probability value as bar graph (1-7 scale)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.active_page = "probability"
-      ctx.tracks[1].params.probability.steps[1] = 50
+      ctx.tracks[1].params.probability.steps[1] = 4  -- maps to 50% via PROBABILITY_MAP
       grid_ui.draw_value_page(ctx, g, "probability")
-      assert.is_true(led_at(g, 1, 5) > 0)   -- lower rows lit
-      assert.are.equal(0, led_at(g, 1, 2))  -- upper row off
+      -- value 4: row 4 (8-4=4) should be active, rows 5-7 (values 3,2,1) should be bar
+      assert.is_true(led_at(g, 1, 4) > 0)   -- active value row
+      assert.are.equal(0, led_at(g, 1, 2))  -- row above value off
     end)
 
-    it("lights all probability rows at 100%", function()
+    it("renders probability=7 with full bar graph", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.active_page = "probability"
-      ctx.tracks[1].params.probability.steps[1] = 100
+      ctx.tracks[1].params.probability.steps[1] = 7  -- maps to 100% via PROBABILITY_MAP
       grid_ui.draw_value_page(ctx, g, "probability")
-      for y = 1, 7 do
-        assert.is_true(led_at(g, 1, y) > 0)
+      -- value 7: row 1 (8-7=1) active, rows 2-7 are bar
+      assert.are.equal(10, led_at(g, 1, 1))  -- active value
+      for y = 2, 7 do
+        assert.are.equal(3, led_at(g, 1, y), "row " .. y .. " should be bar for value 7")
       end
     end)
 
@@ -411,14 +450,14 @@ describe("grid_ui", function()
       local g = spy_grid()
       ctx.tracks[1].direction = "pendulum"
       ctx.tracks[1].division = 4
-      ctx.tracks[1].swing = 75
+      ctx.tracks[1].swing = 50
       ctx.tracks[1].muted = true
 
       grid_ui.draw_alt_track_page(ctx, g)
 
       assert.are.equal(12, led_at(g, 3, 1))   -- direction pendulum (col 3)
       assert.are.equal(12, led_at(g, 9, 1))   -- division 4 -> col 9 (6..12 mapping)
-      assert.are.equal(12, led_at(g, 14, 1))  -- swing 75 -> col 14 (11..15 mapping)
+      assert.are.equal(12, led_at(g, 14, 1))  -- swing 50 -> col 14 (13..15 mapping)
       assert.are.equal(15, led_at(g, 16, 1))  -- mute toggle bright
     end)
 
@@ -446,10 +485,10 @@ describe("grid_ui", function()
       grid_ui.alt_track_key(ctx, 10, 2)  -- division col 10 => 5
       assert.are.equal(5, ctx.tracks[2].division)
 
-      grid_ui.alt_track_key(ctx, 13, 2) -- swing 50 (cols 11-15 map to 0/25/50/75/100)
+      grid_ui.alt_track_key(ctx, 13, 2) -- swing 0 (cols 13-15 map to 0/50/100)
+      assert.are.equal(0, ctx.tracks[2].swing)
+      grid_ui.alt_track_key(ctx, 14, 2) -- swing 50
       assert.are.equal(50, ctx.tracks[2].swing)
-      grid_ui.alt_track_key(ctx, 14, 2) -- swing 75
-      assert.are.equal(75, ctx.tracks[2].swing)
       grid_ui.alt_track_key(ctx, 15, 2) -- swing 100
       assert.are.equal(100, ctx.tracks[2].swing)
       grid_ui.alt_track_key(ctx, 15, 2)
@@ -489,7 +528,7 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 4, 8), 3)
     end)
 
-    it("highlights active page", function()
+    it("highlights active page on x=6-8", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.active_page = "octave"
@@ -497,40 +536,88 @@ describe("grid_ui", function()
       assert.are.equal(led_at(g, 6, 8), 3)   -- trigger (not active)
       assert.are.equal(led_at(g, 7, 8), 3)   -- note (not active)
       assert.are.equal(led_at(g, 8, 8), 12)  -- octave (active)
-      assert.are.equal(led_at(g, 9, 8), 3)   -- duration (not active)
-      assert.are.equal(led_at(g, 10, 8), 3)  -- velocity (not active)
+      assert.are.equal(led_at(g, 9, 8), 3)   -- x=9 cycle group (not active)
     end)
 
-    it("highlights loop key when held", function()
+    it("highlights x=9 for cycle group pages", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "velocity"
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 9, 8), 12)  -- velocity is in cycle group
+      assert.are.equal(led_at(g, 6, 8), 3)   -- trigger (not active)
+    end)
+
+    it("highlights loop key when held (x=11)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.loop_held = true
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 12, 8), 12)
+      assert.are.equal(led_at(g, 11, 8), 12)
     end)
 
-    it("dims loop key when not held", function()
+    it("dims loop key when not held (x=11)", function()
       local ctx = make_ctx()
       local g = spy_grid()
       ctx.loop_held = false
       grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 12, 8), 3)
+      assert.are.equal(led_at(g, 11, 8), 3)
     end)
 
-    it("highlights play button when playing", function()
+    it("highlights pattern key when held (x=12)", function()
       local ctx = make_ctx()
       local g = spy_grid()
-      ctx.playing = true
+      ctx.pattern_held = true
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 12, 8), 12)
+    end)
+
+    it("highlights mute indicator when muted (x=13)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.tracks[ctx.active_track].muted = true
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 13, 8), 12)
+    end)
+
+    it("highlights KEY 1 when time_held (x=5)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.time_held = true
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 5, 8), 12)
+    end)
+
+    it("KEY 1 is dim (3) when not time_held (x=5)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.time_held = false
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 5, 8), 3)
+    end)
+
+    it("highlights KEY 2 when on alt_track page (x=10)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "alt_track"
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 10, 8), 12)
+    end)
+
+    it("KEY 2 is off when on other pages (x=10)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "trigger"
+      grid_ui.draw_nav(ctx, g)
+      assert.are.equal(led_at(g, 10, 8), 0)
+    end)
+
+    it("highlights meta key when on alt_track page (x=16)", function()
+      local ctx = make_ctx()
+      local g = spy_grid()
+      ctx.active_page = "alt_track"
       grid_ui.draw_nav(ctx, g)
       assert.are.equal(led_at(g, 16, 8), 12)
-    end)
-
-    it("dims play button when stopped", function()
-      local ctx = make_ctx()
-      local g = spy_grid()
-      ctx.playing = false
-      grid_ui.draw_nav(ctx, g)
-      assert.are.equal(led_at(g, 16, 8), 3)
     end)
 
   end)
@@ -606,59 +693,110 @@ describe("grid_ui", function()
       assert.are.equal(ctx.active_page, "octave")
     end)
 
-    it("selects duration page (x=9)", function()
+    it("selects duration page on first press of x=9", function()
       local ctx = make_ctx()
+      ctx.active_page = "trigger"
       grid_ui.nav_key(ctx, 9, 1)
       assert.are.equal(ctx.active_page, "duration")
     end)
 
-    it("selects velocity page (x=10)", function()
-      local ctx = make_ctx()
-      grid_ui.nav_key(ctx, 10, 1)
-      assert.are.equal(ctx.active_page, "velocity")
-    end)
-
-    it("selects probability page (x=11)", function()
+    it("cycles x=9: duration → velocity → probability → mixer → duration", function()
       local ctx = make_ctx()
       ctx.active_page = "trigger"
-      grid_ui.nav_key(ctx, 11, 1)
+      grid_ui.nav_key(ctx, 9, 1)
+      assert.are.equal("duration", ctx.active_page)
+      grid_ui.nav_key(ctx, 9, 1)
+      assert.are.equal("velocity", ctx.active_page)
+      grid_ui.nav_key(ctx, 9, 1)
       assert.are.equal("probability", ctx.active_page)
+      grid_ui.nav_key(ctx, 9, 1)
+      assert.are.equal("mixer", ctx.active_page)
+      grid_ui.nav_key(ctx, 9, 1)
+      assert.are.equal("duration", ctx.active_page)
     end)
 
-    it("selects alt_track page (x=15)", function()
+    it("selects meta/alt_track page (x=16)", function()
       local ctx = make_ctx()
-      grid_ui.nav_key(ctx, 15, 1)
+      grid_ui.nav_key(ctx, 16, 1)
       assert.are.equal("alt_track", ctx.active_page)
     end)
 
-    it("sets loop_held on press of x=12", function()
+    it("selects scale page (x=15)", function()
       local ctx = make_ctx()
-      grid_ui.nav_key(ctx, 12, 1)
+      grid_ui.nav_key(ctx, 15, 1)
+      assert.are.equal("scale", ctx.active_page)
+    end)
+
+    it("sets loop_held on press of x=11", function()
+      local ctx = make_ctx()
+      grid_ui.nav_key(ctx, 11, 1)
       assert.is_true(ctx.loop_held)
     end)
 
-    it("clears loop_held and loop_first_press on release of x=12", function()
+    it("clears loop_held and loop anchors on release of x=11", function()
       local ctx = make_ctx()
       ctx.loop_held = true
       ctx.loop_first_press = 5
-      grid_ui.nav_key(ctx, 12, 0)
+      ctx.loop_first_y = 2
+      grid_ui.nav_key(ctx, 11, 0)
       assert.is_false(ctx.loop_held)
       assert.is_nil(ctx.loop_first_press)
+      assert.is_nil(ctx.loop_first_y)
     end)
 
-    it("toggles play/stop on x=16 press", function()
+    it("sets pattern_held on press of x=12", function()
+      local ctx = make_ctx()
+      grid_ui.nav_key(ctx, 12, 1)
+      assert.is_true(ctx.pattern_held)
+    end)
+
+    it("clears pattern_held on release of x=12", function()
+      local ctx = make_ctx()
+      ctx.pattern_held = true
+      grid_ui.nav_key(ctx, 12, 0)
+      assert.is_false(ctx.pattern_held)
+    end)
+
+    it("toggles mute on x=13 press", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].muted = false
+      grid_ui.nav_key(ctx, 13, 1)
+      assert.is_true(ctx.tracks[1].muted)
+      grid_ui.nav_key(ctx, 13, 1)
+      assert.is_false(ctx.tracks[1].muted)
+    end)
+
+    it("KEY 1 (x=5) sets time_held on press", function()
+      local ctx = make_ctx()
+      grid_ui.nav_key(ctx, 5, 1)
+      assert.is_true(ctx.time_held)
+    end)
+
+    it("KEY 1 (x=5) clears time_held on release", function()
+      local ctx = make_ctx()
+      ctx.time_held = true
+      grid_ui.nav_key(ctx, 5, 0)
+      assert.is_false(ctx.time_held)
+    end)
+
+    it("KEY 2 (x=10) switches to alt_track page on press", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      grid_ui.nav_key(ctx, 10, 1)
+      assert.are.equal("alt_track", ctx.active_page)
+    end)
+
+    it("KEY 2 (x=10) does nothing on release", function()
+      local ctx = make_ctx()
+      ctx.active_page = "note"
+      grid_ui.nav_key(ctx, 10, 0)
+      assert.are.equal("note", ctx.active_page)
+    end)
+
+    it("x=16 is blank (no play/stop)", function()
       local ctx = make_ctx()
       ctx.playing = false
       grid_ui.nav_key(ctx, 16, 1)
-      assert.is_true(ctx.playing)
-      grid_ui.nav_key(ctx, 16, 1)
-      assert.is_false(ctx.playing)
-    end)
-
-    it("ignores play/stop on release", function()
-      local ctx = make_ctx()
-      ctx.playing = false
-      grid_ui.nav_key(ctx, 16, 0)
       assert.is_false(ctx.playing)
     end)
 
@@ -780,12 +918,12 @@ describe("grid_ui", function()
       end
     end)
 
-    it("maps probability rows to percentages", function()
+    it("maps probability rows to 1-7 values like other params", function()
       local ctx = make_ctx({active_track = 1})
       grid_ui.value_key(ctx, 2, 7, "probability")
-      assert.are.equal(0, ctx.tracks[1].params.probability.steps[2])
+      assert.are.equal(1, ctx.tracks[1].params.probability.steps[2])  -- row 7 = value 1 (0%)
       grid_ui.value_key(ctx, 2, 1, "probability")
-      assert.are.equal(100, ctx.tracks[1].params.probability.steps[2])
+      assert.are.equal(7, ctx.tracks[1].params.probability.steps[2])  -- row 1 = value 7 (100%)
     end)
 
   end)
@@ -860,67 +998,115 @@ describe("grid_ui", function()
 
     describe("ratchet page (T050)", function()
 
-      it("displays bar graph for ratchet param via draw_value_page", function()
+      it("displays sub-gate layout for ratchet count 3 with all bits active", function()
         local ctx = make_ctx()
         local g = mock_grid()
         ctx.active_track = 1
         ctx.tracks[1].params.ratchet.steps[1] = 3
+        ctx.tracks[1].params.ratchet.bits[1] = 7  -- 0b111: all 3 active
         ctx.tracks[1].params.ratchet.loop_start = 1
         ctx.tracks[1].params.ratchet.loop_end = 16
-        grid_ui.draw_value_page(ctx, g, "ratchet")
-        -- Value 3 at row 5 (8-3=5), brightness 10 in loop
-        assert.are.equal(led_at(g, 1, 5), 10)
-        -- Bar below: rows 6-7 at brightness 3
-        assert.are.equal(led_at(g, 1, 6), 3)
-        assert.are.equal(led_at(g, 1, 7), 3)
-        -- Above value: rows 1-4 should be off
-        for y = 1, 4 do
-          assert.are.equal(led_at(g, 1, y), 0, "row " .. y .. " should be off")
-        end
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- Row 1 (increment): dim marker = 2
+        assert.are.equal(2, led_at(g, 1, 1))
+        -- y=2 (bit 4): out of range (count=3, only bits 0-2) = 0
+        assert.are.equal(0, led_at(g, 1, 2))
+        -- y=3 (bit 3): out of range = 0
+        assert.are.equal(0, led_at(g, 1, 3))
+        -- y=4 (bit 2): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 4))
+        -- y=5 (bit 1): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 5))
+        -- y=6 (bit 0): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 6))
+        -- Row 7 (decrement): dim marker = 2
+        assert.are.equal(2, led_at(g, 1, 7))
       end)
 
-      it("shows playhead brightness on ratchet page", function()
-        local ctx = make_ctx()
-        local g = mock_grid()
-        ctx.playing = true
-        ctx.active_track = 2
-        ctx.tracks[2].params.ratchet.steps[7] = 5
-        ctx.tracks[2].params.ratchet.pos = 7
-        grid_ui.draw_value_page(ctx, g, "ratchet")
-        -- Value 5 at row 3 (8-5=3), playhead -> brightness 15
-        assert.are.equal(led_at(g, 7, 3), 15)
-        -- Bar below playhead: rows 4-7 at brightness 6
-        for y = 4, 7 do
-          assert.are.equal(led_at(g, 7, y), 6, "row " .. y .. " should be playhead bar")
-        end
-      end)
-
-      it("ratchet default value 1 lights only row 7", function()
+      it("shows rest sub-gates dimly within range", function()
         local ctx = make_ctx()
         local g = mock_grid()
         ctx.active_track = 1
-        -- Default ratchet is 1
+        ctx.tracks[1].params.ratchet.steps[1] = 3
+        ctx.tracks[1].params.ratchet.bits[1] = 5  -- 0b101: bits 0,2 on; bit 1 off (rest)
         ctx.tracks[1].params.ratchet.loop_start = 1
         ctx.tracks[1].params.ratchet.loop_end = 16
-        grid_ui.draw_value_page(ctx, g, "ratchet")
-        -- Value 1 at row 7, brightness 10
-        assert.are.equal(led_at(g, 1, 7), 10)
-        -- All rows above off
-        for y = 1, 6 do
-          assert.are.equal(led_at(g, 1, y), 0, "row " .. y .. " should be off for ratchet=1")
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- y=4 (bit 2): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 4))
+        -- y=5 (bit 1): in range, bit OFF (rest) = 5
+        assert.are.equal(5, led_at(g, 1, 5))
+        -- y=6 (bit 0): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 6))
+      end)
+
+      it("shows playhead highlight on ratchet page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.playing = true
+        ctx.active_track = 1
+        ctx.tracks[1].params.ratchet.steps[1] = 2
+        ctx.tracks[1].params.ratchet.bits[1] = 3  -- 0b11: both active
+        ctx.tracks[1].params.ratchet.pos = 1
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 16
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- Playhead: increment row = 6
+        assert.are.equal(6, led_at(g, 1, 1))
+        -- y=5 (bit 1): playhead + in range + on = 15
+        assert.are.equal(15, led_at(g, 1, 5))
+        -- y=6 (bit 0): playhead + in range + on = 15
+        assert.are.equal(15, led_at(g, 1, 6))
+        -- Decrement row = 6
+        assert.are.equal(6, led_at(g, 1, 7))
+      end)
+
+      it("shows default ratchet (count 1) with single sub-gate lit", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 16
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- Default: count=1, bits=1 (0b00001)
+        -- y=6 (bit 0): in range, bit on = 12
+        assert.are.equal(12, led_at(g, 1, 6))
+        -- y=2-5 (bits 1-4): out of range = 0
+        for y = 2, 5 do
+          assert.are.equal(0, led_at(g, 1, y), "row " .. y .. " should be off for ratchet=1")
         end
       end)
 
-      it("redraw dispatches ratchet page correctly", function()
+      it("redraw dispatches ratchet page to draw_ratchet_page", function()
         local ctx = make_ctx()
         ctx.active_page = "ratchet"
         ctx.active_track = 1
         ctx.tracks[1].params.ratchet.steps[2] = 4
+        ctx.tracks[1].params.ratchet.bits[2] = 15  -- 0b1111: all 4 active
         ctx.tracks[1].params.ratchet.loop_start = 1
         ctx.tracks[1].params.ratchet.loop_end = 16
         grid_ui.redraw(ctx)
-        -- Value 4 at row 4 (8-4=4) should be lit
-        assert.are.equal(led_at(ctx.g, 2, 4), 10)
+        -- y=3 (bit 3): in range, on = 12
+        assert.are.equal(12, led_at(ctx.g, 2, 3))
+        -- y=6 (bit 0): in range, on = 12
+        assert.are.equal(12, led_at(ctx.g, 2, 6))
+      end)
+
+      it("dims steps outside loop on ratchet page", function()
+        local ctx = make_ctx()
+        local g = mock_grid()
+        ctx.active_track = 1
+        ctx.tracks[1].params.ratchet.steps[1] = 2
+        ctx.tracks[1].params.ratchet.bits[1] = 3
+        ctx.tracks[1].params.ratchet.steps[10] = 2
+        ctx.tracks[1].params.ratchet.bits[10] = 3
+        ctx.tracks[1].params.ratchet.loop_start = 1
+        ctx.tracks[1].params.ratchet.loop_end = 6
+        grid_ui.draw_ratchet_page(ctx, g)
+        -- Step 1 (in loop): bit on = 12
+        assert.are.equal(12, led_at(g, 1, 5))
+        -- Step 10 (out of loop): bit on = 5 (dimmed)
+        assert.are.equal(5, led_at(g, 10, 5))
       end)
 
     end)
@@ -1001,48 +1187,73 @@ describe("grid_ui", function()
 
   describe("loop_key", function()
 
-    it("first press sets loop_first_press", function()
+    it("first press sets loop_first_press (value page)", function()
       local ctx = make_ctx()
       ctx.active_track = 1
       ctx.loop_first_press = nil
-      grid_ui.loop_key(ctx, 5, "trigger")
+      grid_ui.loop_key(ctx, 5, 3, "note")
       assert.are.equal(ctx.loop_first_press, 5)
     end)
 
-    it("second press sets loop boundaries and clears loop_first_press", function()
+    it("second press sets loop boundaries and clears anchors (value page)", function()
       local ctx = make_ctx()
       ctx.active_track = 1
       ctx.loop_first_press = 3
-      grid_ui.loop_key(ctx, 8, "trigger")
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_start, 3)
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_end, 8)
+      grid_ui.loop_key(ctx, 8, 2, "note")
+      assert.are.equal(ctx.tracks[1].params.note.loop_start, 3)
+      assert.are.equal(ctx.tracks[1].params.note.loop_end, 8)
       assert.is_nil(ctx.loop_first_press)
+      assert.is_nil(ctx.loop_first_y)
     end)
 
     it("orders boundaries correctly regardless of press order", function()
       local ctx = make_ctx()
       ctx.active_track = 1
       ctx.loop_first_press = 10
-      grid_ui.loop_key(ctx, 4, "trigger")
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_start, 4)
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_end, 10)
+      grid_ui.loop_key(ctx, 4, 3, "note")
+      assert.are.equal(ctx.tracks[1].params.note.loop_start, 4)
+      assert.are.equal(ctx.tracks[1].params.note.loop_end, 10)
     end)
 
-    it("uses trigger param on trigger page", function()
+    it("trigger page: row determines track (first press records loop_first_y)", function()
       local ctx = make_ctx()
-      ctx.active_track = 2
-      ctx.loop_first_press = 2
-      grid_ui.loop_key(ctx, 6, "trigger")
-      assert.are.equal(ctx.tracks[2].params.trigger.loop_start, 2)
-      assert.are.equal(ctx.tracks[2].params.trigger.loop_end, 6)
+      ctx.loop_first_press = nil
+      grid_ui.loop_key(ctx, 2, 2, "trigger")
+      assert.are.equal(2, ctx.loop_first_press)
+      assert.are.equal(2, ctx.loop_first_y)
     end)
 
-    it("uses page-specific param on value pages", function()
+    it("trigger page: second press on same row sets that track's loop", function()
+      local ctx = make_ctx()
+      -- active_track intentionally differs from the row being pressed
+      ctx.active_track = 1
+      grid_ui.loop_key(ctx, 2, 3, "trigger")  -- first press, row 3 = track 3
+      grid_ui.loop_key(ctx, 6, 3, "trigger")  -- second press, same row
+      assert.are.equal(2, ctx.tracks[3].params.trigger.loop_start)
+      assert.are.equal(6, ctx.tracks[3].params.trigger.loop_end)
+      -- other tracks unaffected
+      assert.are.equal(1, ctx.tracks[1].params.trigger.loop_start)
+    end)
+
+    it("trigger page: second press on different row re-anchors gesture", function()
+      local ctx = make_ctx()
+      grid_ui.loop_key(ctx, 2, 1, "trigger")  -- anchor row 1
+      grid_ui.loop_key(ctx, 9, 3, "trigger")  -- different row → re-anchor
+      -- No loop was committed on either track
+      assert.are.equal(1, ctx.tracks[1].params.trigger.loop_start)
+      assert.are.equal(1, ctx.tracks[3].params.trigger.loop_start)
+      -- New anchor is the second press
+      assert.are.equal(9, ctx.loop_first_press)
+      assert.are.equal(3, ctx.loop_first_y)
+    end)
+
+    it("uses page-specific param on value pages (active track)", function()
       local ctx = make_ctx()
       ctx.active_track = 1
       for _, page in ipairs({"note", "octave", "duration", "velocity"}) do
         ctx.loop_first_press = 3
-        grid_ui.loop_key(ctx, 7, page)
+        ctx.loop_first_y = nil
+        grid_ui.loop_key(ctx, 7, 4, page)
         assert.are.equal(ctx.tracks[1].params[page].loop_start, 3,
           page .. " loop_start should be 3")
         assert.are.equal(ctx.tracks[1].params[page].loop_end, 7,
@@ -1050,13 +1261,12 @@ describe("grid_ui", function()
       end
     end)
 
-    it("sets single-step loop when both presses are same column", function()
+    it("sets single-step loop when both presses are same column on trigger page", function()
       local ctx = make_ctx()
-      ctx.active_track = 1
-      ctx.loop_first_press = 5
-      grid_ui.loop_key(ctx, 5, "trigger")
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_start, 5)
-      assert.are.equal(ctx.tracks[1].params.trigger.loop_end, 5)
+      grid_ui.loop_key(ctx, 5, 2, "trigger")
+      grid_ui.loop_key(ctx, 5, 2, "trigger")
+      assert.are.equal(ctx.tracks[2].params.trigger.loop_start, 5)
+      assert.are.equal(ctx.tracks[2].params.trigger.loop_end, 5)
     end)
 
   end)
@@ -1067,59 +1277,62 @@ describe("grid_ui", function()
 
   describe("ratchet page display (T048)", function()
 
-    it("displays ratchet values as bar graph when active_page is ratchet", function()
+    it("displays sub-gate layout when active_page is ratchet", function()
       local ctx, g = make_ctx({ active_page = "ratchet" })
-      -- Set ratchet values: step 1 = 3, step 5 = 7
+      -- Set ratchet values: step 1 = 3 (all on), step 5 = 5 (all on)
       ctx.tracks[1].params.ratchet.steps[1] = 3
-      ctx.tracks[1].params.ratchet.steps[5] = 7
+      ctx.tracks[1].params.ratchet.bits[1] = 7  -- 0b111
+      ctx.tracks[1].params.ratchet.steps[5] = 5
+      ctx.tracks[1].params.ratchet.bits[5] = 31  -- 0b11111
 
       grid_ui.redraw(ctx)
 
-      -- Value 3 at step 1: row_val==3 at y = 8-3 = 5, brightness 10 (in loop)
-      assert.are.equal(10, g:get_led(1, 5))
-      -- Value 7 at step 5: row_val==7 at y = 8-7 = 1, brightness 10
-      assert.are.equal(10, g:get_led(5, 1))
-      -- Below the value (bar fill): step 1, row_val 2 at y=6, brightness 3
-      assert.are.equal(3, g:get_led(1, 6))
-      -- Above the value should be 0: step 1, row_val 4 at y=4
-      assert.are.equal(0, g:get_led(1, 4))
+      -- Step 1, count=3: y=4 (bit 2) should be lit, y=3 (bit 3) off
+      assert.are.equal(12, g:get_led(1, 4))
+      assert.are.equal(0, g:get_led(1, 3))
+      -- Step 5, count=5: y=2 (bit 4) should be lit
+      assert.are.equal(12, g:get_led(5, 2))
+      -- Row 1 (increment) = dim marker
+      assert.are.equal(2, g:get_led(1, 1))
     end)
 
     it("shows playhead highlight on ratchet page", function()
       local ctx, g = make_ctx({ active_page = "ratchet", playing = true })
       ctx.tracks[1].params.ratchet.steps[1] = 4
+      ctx.tracks[1].params.ratchet.bits[1] = 15  -- 0b1111: all on
       ctx.tracks[1].params.ratchet.pos = 1
 
       grid_ui.redraw(ctx)
 
-      -- Playhead at step 1: value 4, row_val==4 at y=4, brightness 15
-      assert.are.equal(15, g:get_led(1, 4))
-      -- Below value on playhead: row_val 3 at y=5, brightness 6
-      assert.are.equal(6, g:get_led(1, 5))
+      -- Playhead at step 1: y=3 (bit 3) in range + on + playhead = 15
+      assert.are.equal(15, g:get_led(1, 3))
+      -- y=6 (bit 0): in range + on + playhead = 15
+      assert.are.equal(15, g:get_led(1, 6))
+      -- Row 1 increment: playhead = 6
+      assert.are.equal(6, g:get_led(1, 1))
     end)
 
     it("shows default ratchet values (1) for a fresh track", function()
       local ctx, g = make_ctx({ active_page = "ratchet" })
-      -- Default ratchet value should be 1
 
       grid_ui.redraw(ctx)
 
-      -- Value 1 at step 1: row_val==1 at y=7, brightness 10
-      assert.are.equal(10, g:get_led(1, 7))
-      -- All rows above should be 0 for step 1
-      for y = 1, 6 do
-        assert.are.equal(0, g:get_led(1, y))
+      -- Default: count=1, bits=1. y=6 (bit 0) should be lit
+      assert.are.equal(12, g:get_led(1, 6))
+      -- y=2-5 should be off (out of range)
+      for y = 2, 5 do
+        assert.are.equal(0, g:get_led(1, y), "row " .. y .. " should be off for ratchet=1")
       end
     end)
 
-    it("highlights primary nav button (trigger x=6) when on ratchet page", function()
+    it("dims primary nav button (trigger x=6) when on ratchet page", function()
       local ctx, g = make_ctx({ active_page = "ratchet" })
 
       grid_ui.redraw(ctx)
 
-      -- Nav row is y=8. The trigger nav button at x=6 should be highlighted
-      -- because ratchet is trigger's extended page
-      assert.are.equal(12, g:get_led(6, 8))
+      -- Nav row is y=8. The trigger nav button at x=6 should be dimmed
+      -- because ratchet is trigger's extended/secondary page
+      assert.are.equal(8, g:get_led(6, 8))
       -- Other page buttons should be dim
       assert.are.equal(3, g:get_led(7, 8))  -- note
     end)
@@ -1157,13 +1370,13 @@ describe("grid_ui", function()
       assert.are.equal(15, g:get_led(4, 2))
     end)
 
-    it("highlights primary nav button (note x=7) when on alt_note page", function()
+    it("dims primary nav button (note x=7) when on alt_note page", function()
       local ctx, g = make_ctx({ active_page = "alt_note" })
 
       grid_ui.redraw(ctx)
 
-      -- Note nav button at x=7 should be highlighted for alt_note
-      assert.are.equal(12, g:get_led(7, 8))
+      -- Note nav button at x=7 should be dimmed for alt_note (secondary page)
+      assert.are.equal(8, g:get_led(7, 8))
       -- Trigger button should be dim
       assert.are.equal(3, g:get_led(6, 8))
     end)
@@ -1201,13 +1414,13 @@ describe("grid_ui", function()
       assert.are.equal(15, g:get_led(7, 5))
     end)
 
-    it("highlights primary nav button (octave x=8) when on glide page", function()
+    it("dims primary nav button (octave x=8) when on glide page", function()
       local ctx, g = make_ctx({ active_page = "glide" })
 
       grid_ui.redraw(ctx)
 
-      -- Octave nav button at x=8 should be highlighted for glide
-      assert.are.equal(12, g:get_led(8, 8))
+      -- Octave nav button at x=8 should be dimmed for glide (secondary page)
+      assert.are.equal(8, g:get_led(8, 8))
       -- Other page buttons dim
       assert.are.equal(3, g:get_led(6, 8))  -- trigger
     end)
@@ -1220,13 +1433,38 @@ describe("grid_ui", function()
 
   describe("value editing on extended pages (T060)", function()
 
-    it("edits ratchet values via grid press", function()
+    it("increment ratchet count via row 1 press", function()
       local ctx, g = make_ctx({ active_page = "ratchet" })
+      -- Default ratchet = 1
+      assert.are.equal(1, ctx.tracks[1].params.ratchet.steps[3])
 
-      -- Press at (x=3, y=5) -> value = 8-5 = 3
+      -- Press row 1 (increment) at step 3
+      grid_ui.key(ctx, 3, 1, 1)
+      assert.are.equal(2, ctx.tracks[1].params.ratchet.steps[3])
+      -- New bit should be set (bits = 0b11 = 3)
+      assert.are.equal(3, ctx.tracks[1].params.ratchet.bits[3])
+    end)
+
+    it("decrement ratchet count via row 7 press", function()
+      local ctx, g = make_ctx({ active_page = "ratchet" })
+      ctx.tracks[1].params.ratchet.steps[3] = 3
+      ctx.tracks[1].params.ratchet.bits[3] = 7  -- 0b111
+
+      -- Press row 7 (decrement) at step 3
+      grid_ui.key(ctx, 3, 7, 1)
+      assert.are.equal(2, ctx.tracks[1].params.ratchet.steps[3])
+      -- Bit 2 should be cleared (bits = 0b11 = 3)
+      assert.are.equal(3, ctx.tracks[1].params.ratchet.bits[3])
+    end)
+
+    it("toggle sub-gate bit via rows 2-6 press", function()
+      local ctx, g = make_ctx({ active_page = "ratchet" })
+      ctx.tracks[1].params.ratchet.steps[3] = 3
+      ctx.tracks[1].params.ratchet.bits[3] = 7  -- 0b111: all on
+
+      -- Press y=5 (bit_idx=1) to toggle bit 1 OFF
       grid_ui.key(ctx, 3, 5, 1)
-
-      assert.are.equal(3, ctx.tracks[1].params.ratchet.steps[3])
+      assert.are.equal(5, ctx.tracks[1].params.ratchet.bits[3])  -- 0b101
     end)
 
     it("edits alt_note values via grid press", function()
@@ -1250,10 +1488,11 @@ describe("grid_ui", function()
     it("edits ratchet on correct track", function()
       local ctx, g = make_ctx({ active_page = "ratchet", active_track = 3 })
 
-      grid_ui.key(ctx, 5, 3, 1)
+      -- Press row 1 (increment) at step 5 on track 3
+      grid_ui.key(ctx, 5, 1, 1)
 
       -- Should edit track 3, not track 1
-      assert.are.equal(5, ctx.tracks[3].params.ratchet.steps[5])
+      assert.are.equal(2, ctx.tracks[3].params.ratchet.steps[5])
       -- Track 1 should be unchanged (default = 1)
       assert.are.equal(1, ctx.tracks[1].params.ratchet.steps[5])
     end)
@@ -1363,19 +1602,19 @@ describe("grid_ui", function()
       assert.are.equal("octave", ctx.active_page)
     end)
 
-    it("pressing duration nav (x=9) does not toggle to extended page", function()
+    it("pressing x=9 cycles duration → velocity (no extended page toggle)", function()
       local ctx, g = make_ctx({ active_page = "duration" })
 
-      -- Duration has no extended page, pressing again stays on duration
+      -- Duration is in x=9 cycle group, pressing again advances to velocity
       grid_ui.key(ctx, 9, 8, 1)
-      assert.are.equal("duration", ctx.active_page)
+      assert.are.equal("velocity", ctx.active_page)
     end)
 
-    it("pressing velocity nav (x=10) does not toggle to extended page", function()
+    it("pressing x=9 cycles velocity → probability", function()
       local ctx, g = make_ctx({ active_page = "velocity" })
 
-      grid_ui.key(ctx, 10, 8, 1)
-      assert.are.equal("velocity", ctx.active_page)
+      grid_ui.key(ctx, 9, 8, 1)
+      assert.are.equal("probability", ctx.active_page)
     end)
 
     it("extended pages are included in PAGES list", function()
@@ -1402,28 +1641,33 @@ describe("grid_ui", function()
 
     it("ratchet page shows active track's ratchet param", function()
       local ctx, g = make_ctx({ active_page = "ratchet", active_track = 2 })
-      ctx.tracks[2].params.ratchet.steps[4] = 6
+      ctx.tracks[2].params.ratchet.steps[4] = 5
+      ctx.tracks[2].params.ratchet.bits[4] = 31  -- 0b11111: all 5 active
 
       grid_ui.redraw(ctx)
 
-      -- Value 6 at step 4: row_val==6 at y=2, brightness 10
-      assert.are.equal(10, g:get_led(4, 2))
+      -- Count=5 with all bits on: y=2 (bit 4) through y=6 (bit 0) = 12
+      assert.are.equal(12, g:get_led(4, 2))
+      assert.are.equal(12, g:get_led(4, 6))
     end)
 
     it("switching tracks changes displayed ratchet data", function()
       local ctx, g = make_ctx({ active_page = "ratchet", active_track = 1 })
-      ctx.tracks[1].params.ratchet.steps[1] = 5
+      ctx.tracks[1].params.ratchet.steps[1] = 4
+      ctx.tracks[1].params.ratchet.bits[1] = 15  -- 0b1111
       ctx.tracks[2].params.ratchet.steps[1] = 2
+      ctx.tracks[2].params.ratchet.bits[1] = 3   -- 0b11
 
-      -- Track 1 display
+      -- Track 1 display: count=4, y=3 (bit 3) should be lit
       grid_ui.redraw(ctx)
-      assert.are.equal(10, g:get_led(1, 3))  -- value 5, y = 8-5 = 3
+      assert.are.equal(12, g:get_led(1, 3))
 
-      -- Switch to track 2
+      -- Switch to track 2: count=2, y=3 (bit 3) out of range
       ctx.active_track = 2
       grid_ui.redraw(ctx)
-      assert.are.equal(10, g:get_led(1, 6))  -- value 2, y = 8-2 = 6
-      assert.are.equal(0, g:get_led(1, 3))   -- previous value row cleared
+      assert.are.equal(0, g:get_led(1, 3))
+      -- y=5 (bit 1) should be lit for track 2
+      assert.are.equal(12, g:get_led(1, 5))
     end)
 
   end)
@@ -1432,5 +1676,438 @@ describe("grid_ui", function()
   -- Direction cycling via grid nav
   -- direction cycling via nav x=11 was removed (x=11 is now probability page)
   -- direction controls are accessible via the alt_track page (x=15)
+
+  -- ========================================================================
+  -- Time modifier: per-parameter clock division
+  -- ========================================================================
+
+  describe("time modifier", function()
+
+    -- Note: time modifier no longer has a dedicated nav button.
+    -- time_held is set programmatically or via future meta page.
+    -- These tests verify the time_key/draw_time_page logic still works
+    -- when time_held is set on the context directly.
+
+    describe("time_key on trigger page", function()
+      it("sets trigger clock_div for the pressed track row", function()
+        local ctx = make_ctx({ active_page = "trigger", time_held = true })
+        -- Press column 3, row 2 → sets track 2 trigger clock_div to 3
+        grid_ui.grid_key(ctx, 3, 2, 1)
+        assert.are.equal(3, ctx.tracks[2].params.trigger.clock_div)
+      end)
+
+      it("resets tick counter when setting clock_div", function()
+        local ctx = make_ctx({ active_page = "trigger", time_held = true })
+        ctx.tracks[1].params.trigger.tick = 5
+        grid_ui.grid_key(ctx, 2, 1, 1)
+        assert.are.equal(0, ctx.tracks[1].params.trigger.tick)
+      end)
+
+      it("ignores presses beyond column 7", function()
+        local ctx = make_ctx({ active_page = "trigger", time_held = true })
+        local before = ctx.tracks[1].params.trigger.clock_div
+        grid_ui.grid_key(ctx, 10, 1, 1)
+        assert.are.equal(before, ctx.tracks[1].params.trigger.clock_div)
+      end)
+
+      it("ignores rows beyond NUM_TRACKS", function()
+        local ctx = make_ctx({ active_page = "trigger", time_held = true })
+        -- Row 5 is beyond 4 tracks — should not error
+        grid_ui.grid_key(ctx, 3, 5, 1)
+      end)
+    end)
+
+    describe("time_key on value pages", function()
+      it("sets note clock_div on note page for pressed track row", function()
+        local ctx = make_ctx({ active_page = "note", time_held = true })
+        grid_ui.grid_key(ctx, 4, 1, 1)
+        assert.are.equal(4, ctx.tracks[1].params.note.clock_div)
+      end)
+
+      it("sets velocity clock_div on velocity page for pressed track row", function()
+        local ctx = make_ctx({ active_page = "velocity", time_held = true })
+        grid_ui.grid_key(ctx, 2, 1, 1)
+        assert.are.equal(2, ctx.tracks[1].params.velocity.clock_div)
+      end)
+
+      it("row y=3 targets track 3's param on value page", function()
+        local ctx = make_ctx({ active_page = "note", time_held = true })
+        grid_ui.grid_key(ctx, 5, 3, 1)
+        assert.are.equal(5, ctx.tracks[3].params.note.clock_div)
+        -- other tracks untouched
+        assert.are.equal(1, ctx.tracks[1].params.note.clock_div)
+      end)
+
+      it("edits only the page's parameter (not siblings)", function()
+        local ctx = make_ctx({ active_page = "velocity", time_held = true })
+        grid_ui.grid_key(ctx, 4, 1, 1)
+        assert.are.equal(4, ctx.tracks[1].params.velocity.clock_div)
+        assert.are.equal(1, ctx.tracks[1].params.trigger.clock_div)
+        assert.are.equal(1, ctx.tracks[1].params.note.clock_div)
+      end)
+
+      it("sets duration clock_div on duration page", function()
+        local ctx = make_ctx({ active_page = "duration", time_held = true })
+        grid_ui.grid_key(ctx, 5, 1, 1)
+        assert.are.equal(5, ctx.tracks[1].params.duration.clock_div)
+      end)
+
+      it("row y selects track regardless of active_track", function()
+        local ctx = make_ctx({ active_page = "note", active_track = 3, time_held = true })
+        grid_ui.grid_key(ctx, 6, 1, 1)
+        -- y=1 means track 1, not the active_track
+        assert.are.equal(6, ctx.tracks[1].params.note.clock_div)
+        assert.are.equal(1, ctx.tracks[3].params.note.clock_div)
+      end)
+
+      it("ignores rows beyond NUM_TRACKS", function()
+        local ctx = make_ctx({ active_page = "note", time_held = true })
+        grid_ui.grid_key(ctx, 3, 5, 1)
+        for t = 1, 4 do
+          assert.are.equal(1, ctx.tracks[t].params.note.clock_div)
+        end
+      end)
+
+      it("handles extended pages (ratchet -> trigger)", function()
+        local ctx = make_ctx({ active_page = "ratchet", time_held = true })
+        grid_ui.grid_key(ctx, 3, 2, 1)
+        assert.are.equal(3, ctx.tracks[2].params.trigger.clock_div)
+      end)
+
+      it("handles extended pages (alt_note -> note)", function()
+        local ctx = make_ctx({ active_page = "alt_note", time_held = true })
+        grid_ui.grid_key(ctx, 5, 1, 1)
+        assert.are.equal(5, ctx.tracks[1].params.note.clock_div)
+      end)
+
+      it("handles extended pages (glide -> octave)", function()
+        local ctx = make_ctx({ active_page = "glide", time_held = true })
+        grid_ui.grid_key(ctx, 2, 4, 1)
+        assert.are.equal(2, ctx.tracks[4].params.octave.clock_div)
+      end)
+    end)
+
+    describe("time_key on alt_track page", function()
+      it("sets clock_div for param by row", function()
+        local ctx = make_ctx({ active_page = "alt_track", time_held = true })
+        -- Row 1 = trigger (first PARAM_NAMES entry)
+        grid_ui.grid_key(ctx, 4, 1, 1)
+        assert.are.equal(4, ctx.tracks[1].params.trigger.clock_div)
+        -- Row 2 = note
+        grid_ui.grid_key(ctx, 3, 2, 1)
+        assert.are.equal(3, ctx.tracks[1].params.note.clock_div)
+      end)
+    end)
+
+    describe("draw_time_page", function()
+      it("shows trigger clock_divs per track on trigger page", function()
+        local ctx, g = make_ctx({ active_page = "trigger", time_held = true })
+        ctx.tracks[1].params.trigger.clock_div = 3
+        ctx.tracks[2].params.trigger.clock_div = 5
+        grid_ui.redraw(ctx)
+        -- Track 1 (active): column 3 should be bright (15)
+        assert.are.equal(15, g:get_led(3, 1))
+        -- Track 2: column 5 should be lit (10)
+        assert.are.equal(10, g:get_led(5, 2))
+        -- Unselected columns should be dim
+        assert.are.equal(3, g:get_led(1, 1))  -- active track, non-selected
+        assert.are.equal(2, g:get_led(1, 2))  -- inactive track, non-selected
+      end)
+
+      it("shows active track's clock_div bright on value page", function()
+        local ctx, g = make_ctx({ active_page = "note", time_held = true })
+        ctx.tracks[1].params.note.clock_div = 4
+        grid_ui.redraw(ctx)
+        -- Active track (row 1), selected column: 15
+        assert.are.equal(15, g:get_led(4, 1))
+        -- Active track, unselected column: dim 3
+        assert.are.equal(3, g:get_led(1, 1))
+      end)
+
+      it("shows other tracks' clock_divs on rows 2-4 on value page", function()
+        local ctx, g = make_ctx({ active_page = "note", time_held = true })
+        ctx.tracks[2].params.note.clock_div = 5
+        grid_ui.redraw(ctx)
+        -- Inactive track, selected column: 10
+        assert.are.equal(10, g:get_led(5, 2))
+        -- Inactive track, unselected column: 2
+        assert.are.equal(2, g:get_led(1, 2))
+      end)
+    end)
+
+  end)
+
+  -- ========================================================================
+  -- Loop page display tests
+  -- ========================================================================
+
+  -- Loop modifier is an OVERLAY on the current page (not its own page).
+  -- The page renders normally; the overlay only adds the first-press anchor
+  -- highlight when the gesture is mid-flight.
+  describe("draw_loop_overlay", function()
+
+    describe("trigger page", function()
+
+      it("highlights first_press only on the anchor row (loop_first_y)", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "trigger", loop_held = true })
+        ctx.loop_first_press = 5
+        ctx.loop_first_y = 2
+
+        grid_ui.draw_loop_overlay(ctx, g)
+
+        assert.are.equal(15, led_at(g, 5, 2))
+        -- Other rows at the first-press column should NOT be highlighted
+        -- by the overlay (they remain whatever the page drew -- here, 0
+        -- because we called the overlay alone without a base render).
+        assert.are_not.equal(15, led_at(g, 5, 1))
+        assert.are_not.equal(15, led_at(g, 5, 3))
+        assert.are_not.equal(15, led_at(g, 5, 4))
+      end)
+
+      it("is a no-op when loop_first_press is not set", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "trigger", loop_held = true })
+
+        grid_ui.draw_loop_overlay(ctx, g)
+
+        -- Nothing got drawn by the overlay
+        for y = 1, 4 do
+          for x = 1, 16 do
+            assert.are_not.equal(15, led_at(g, x, y))
+          end
+        end
+      end)
+
+    end)
+
+    describe("value pages", function()
+
+      it("highlights first_press column across all seven value rows", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "note", loop_held = true })
+        ctx.loop_first_press = 7
+
+        grid_ui.draw_loop_overlay(ctx, g)
+
+        for y = 1, 7 do
+          assert.are.equal(15, led_at(g, 7, y), "first press col 7, row " .. y)
+        end
+      end)
+
+      it("works on extended pages (ratchet)", function()
+        local g = spy_grid()
+        local ctx = make_ctx({ active_page = "ratchet", loop_held = true })
+        ctx.loop_first_press = 4
+
+        grid_ui.draw_loop_overlay(ctx, g)
+
+        for y = 1, 7 do
+          assert.are.equal(15, led_at(g, 4, y))
+        end
+      end)
+
+    end)
+
+    describe("redraw integration", function()
+
+      it("keeps the trigger page visible when loop_held", function()
+        local ctx, g = make_ctx({ active_page = "trigger", loop_held = true })
+        -- Put a trigger on each track so we can see the normal page render
+        ctx.tracks[1].params.trigger.steps[2] = 1
+        ctx.tracks[1].params.trigger.loop_start = 1
+        ctx.tracks[1].params.trigger.loop_end = 4
+
+        grid_ui.redraw(ctx)
+
+        -- Normal trigger rendering still applies: step 2 on track 1 is a
+        -- trigger in the loop region (brightness 8). This is the same value
+        -- as when the loop modifier is NOT held.
+        assert.are.equal(8, g:get_led(2, 1))
+      end)
+
+      it("keeps the value page visible when loop_held on note page", function()
+        local ctx, g = make_ctx({ active_page = "note", loop_held = true })
+        ctx.tracks[1].params.note.steps[3] = 5
+        ctx.tracks[1].params.note.loop_start = 1
+        ctx.tracks[1].params.note.loop_end = 8
+
+        grid_ui.redraw(ctx)
+
+        -- Value 5 on step 3 shows the value dot at row 3 (8-5=3) at
+        -- brightness 10 (in-loop) -- same as a non-loop-held render.
+        assert.are.equal(10, g:get_led(3, 3))
+      end)
+
+      it("overlays first_press on top of the underlying page", function()
+        local ctx, g = make_ctx({ active_page = "note", loop_held = true })
+        ctx.loop_first_press = 6
+
+        grid_ui.redraw(ctx)
+
+        -- Overlay wins at the first-press column: all 7 value rows at 15.
+        for y = 1, 7 do
+          assert.are.equal(15, g:get_led(6, y),
+            "overlay should paint first_press at col 6, row " .. y)
+        end
+      end)
+
+      it("does not overlay on alt_track even when loop_held", function()
+        local ctx, g = make_ctx({ active_page = "alt_track", loop_held = true })
+        ctx.loop_first_press = 3
+
+        grid_ui.redraw(ctx)
+
+        -- alt_track excluded from the loop overlay: col 3 should not be
+        -- forced to 15 by the overlay.
+        assert.are_not.equal(15, g:get_led(3, 2))
+      end)
+
+    end)
+
+  end)
+
+  -- ========================================================================
+  -- Probability modifier (prob_held)
+  -- ========================================================================
+
+  describe("probability modifier", function()
+
+    it("grid nav x=14 press sets prob_held true", function()
+      local ctx = make_ctx()
+      ctx.prob_held = false
+      grid_ui.nav_key(ctx, 14, 1)
+      assert.is_true(ctx.prob_held)
+    end)
+
+    it("grid nav x=14 release clears prob_held", function()
+      local ctx = make_ctx()
+      ctx.prob_held = true
+      grid_ui.nav_key(ctx, 14, 0)
+      assert.is_false(ctx.prob_held)
+    end)
+
+    it("prob_held routes grid_key to probability value editing", function()
+      local ctx = make_ctx({ active_page = "trigger" })
+      ctx.prob_held = true
+      -- Press at (3, 2) — row 2 = value 6, step 3
+      grid_ui.grid_key(ctx, 3, 2, 1)
+      assert.are.equal(6, ctx.tracks[1].params.probability.steps[3])
+    end)
+
+    it("prob_held does not change active_page", function()
+      local ctx = make_ctx({ active_page = "note" })
+      ctx.prob_held = true
+      grid_ui.grid_key(ctx, 1, 1, 1)
+      assert.are.equal("note", ctx.active_page)
+    end)
+
+    it("prob_held draws probability overlay via redraw", function()
+      local ctx, g = make_ctx({ active_page = "trigger" })
+      ctx.prob_held = true
+      ctx.tracks[1].params.probability.steps[1] = 5
+      ctx.tracks[1].params.probability.loop_start = 1
+      ctx.tracks[1].params.probability.loop_end = 16
+      grid_ui.redraw(ctx)
+      -- Value 5 at step 1: row_val==5 at y=3 (8-5=3), brightness 10 in loop
+      assert.are.equal(10, g:get_led(1, 3))
+    end)
+
+    it("nav row shows prob LED lit when prob_held", function()
+      local ctx, g = make_ctx()
+      ctx.prob_held = true
+      grid_ui.redraw(ctx)
+      assert.are.equal(12, g:get_led(14, 8))
+    end)
+
+    it("nav row shows prob LED dim when not prob_held", function()
+      local ctx, g = make_ctx()
+      ctx.prob_held = false
+      grid_ui.redraw(ctx)
+      assert.are.equal(3, g:get_led(14, 8))
+    end)
+
+  end)
+
+  -- ========================================================================
+  -- Pattern cueing (quantized transitions) — hardware kria parity (re-f9i)
+  -- ========================================================================
+
+  describe("pattern_key cueing", function()
+
+    local function make_pattern_ctx()
+      local ctx, g = make_ctx()
+      ctx.patterns = pattern.new_slots()
+      ctx.pattern_slot = 1
+      ctx.events = events.new()
+      -- Save distinct state to slots 1 and 2 so load has something to restore
+      ctx.tracks[1].division = 1
+      pattern.save(ctx, 1)
+      ctx.tracks[1].division = 2
+      pattern.save(ctx, 2)
+      pattern.load(ctx, 1)
+      ctx.pattern_slot = 1
+      return ctx, g
+    end
+
+    it("loads immediately when stopped", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = false
+      grid_ui.pattern_key(ctx, 2, 1)  -- slot 2
+      assert.are.equal(2, ctx.pattern_slot)
+      assert.are.equal(2, ctx.tracks[1].division)
+      assert.is_nil(ctx.cued_pattern_slot)
+    end)
+
+    it("cues a quantized transition when playing", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- slot 2
+      -- current slot unchanged; transition is pending
+      assert.are.equal(1, ctx.pattern_slot)
+      assert.are.equal(1, ctx.tracks[1].division)
+      assert.are.equal(2, ctx.cued_pattern_slot)
+    end)
+
+    it("pressing the currently-playing slot cancels a pending cue", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      assert.are.equal(2, ctx.cued_pattern_slot)
+      grid_ui.pattern_key(ctx, 1, 1)  -- press current slot 1
+      assert.is_nil(ctx.cued_pattern_slot)
+      assert.are.equal(1, ctx.pattern_slot)
+    end)
+
+    it("pressing the already-cued slot cancels the cue", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      grid_ui.pattern_key(ctx, 2, 1)  -- press slot 2 again
+      assert.is_nil(ctx.cued_pattern_slot)
+      assert.are.equal(1, ctx.pattern_slot)
+    end)
+
+    it("a second cue overwrites the pending slot", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      grid_ui.pattern_key(ctx, 4, 1)  -- cue slot 4 instead
+      assert.are.equal(4, ctx.cued_pattern_slot)
+    end)
+
+    it("draw_pattern_slots highlights the cued slot distinctly", function()
+      local ctx, g = make_pattern_ctx()
+      ctx.pattern_held = true
+      ctx.playing = true
+      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      grid_ui.draw_pattern_slots(ctx, g)
+      -- slot 2 is at col 2 row 1, cued brightness = 13
+      assert.are.equal(13, led_at(g, 2, 1))
+      -- slot 1 is at col 1 row 1, current+populated = 15
+      assert.are.equal(15, led_at(g, 1, 1))
+    end)
+
+  end)
 
 end)

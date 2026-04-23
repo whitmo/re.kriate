@@ -6,6 +6,7 @@ package.path = "./?.lua;./?/init.lua;" .. package.path
 
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
+local meta_pattern = require("lib/meta_pattern")
 local pp = require("lib/pattern_persistence")
 
 local tmp_root = "specs/tmp/pattern_persistence"
@@ -198,6 +199,73 @@ describe("pattern_persistence", function()
     end)
   end)
 
+  describe("FR-007a: slot preservation", function()
+    it("save does not overwrite slot 1 in ctx.patterns or on disk", function()
+      local ctx = make_ctx()
+      -- Populate slot 1 with a distinctive snapshot
+      ctx.tracks[1].division = 3
+      ctx.tracks[1].params.note.steps[1] = 7
+      pattern.save(ctx, 1)
+
+      -- Mutate live tracks before save; slot 1 must NOT absorb these values
+      ctx.tracks[1].division = 99
+      ctx.tracks[1].params.note.steps[1] = 2
+
+      local ok = pp.save(ctx, "slot-guard")
+      assert.is_true(ok)
+
+      -- In-memory slot 1 is untouched by save
+      assert.are.equal(3, ctx.patterns[1].tracks[1].division)
+      assert.are.equal(7, ctx.patterns[1].tracks[1].params.note.steps[1])
+
+      -- Persisted slot 1 is the user-authored snapshot, not the live state
+      local payload = read_payload(tmp_root .. "/slot-guard.krp")
+      assert.are.equal(3, payload.slots[1].tracks[1].division)
+      assert.are.equal(7, payload.slots[1].tracks[1].params.note.steps[1])
+
+      -- Live tracks ride separately at payload top level (FR-007b)
+      assert.are.equal(99, payload.tracks[1].division)
+      assert.are.equal(2, payload.tracks[1].params.note.steps[1])
+    end)
+
+    it("save preserves unpopulated slots when live tracks differ", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].division = 5
+      -- Do not populate any slot; all should remain unpopulated.
+
+      local ok = pp.save(ctx, "no-slots")
+      assert.is_true(ok)
+
+      local payload = read_payload(tmp_root .. "/no-slots.krp")
+      for i = 1, 16 do
+        assert.is_not_true(payload.slots[i].populated)
+      end
+      assert.are.equal(5, payload.tracks[1].division)
+    end)
+
+    it("load restores tracks from payload.tracks without consulting slots", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].division = 6
+      pattern.save(ctx, 2) -- user-authored slot
+      ctx.tracks[1].division = 42 -- live state different from slot 2
+
+      assert.is_true(pp.save(ctx, "live-vs-slot"))
+
+      -- Reset ctx, then load
+      ctx.tracks = track_mod.new_tracks()
+      ctx.patterns = pattern.new_slots()
+      assert.is_true(pp.load(ctx, "live-vs-slot"))
+
+      -- Live tracks come from payload.tracks (division == 42)
+      assert.are.equal(42, ctx.tracks[1].division)
+      -- Slot 2 was populated with division==6 snapshot
+      assert.is_true(pattern.is_populated(ctx.patterns, 2))
+      assert.are.equal(6, ctx.patterns[2].tracks[1].division)
+      -- Slot 1 stays unpopulated
+      assert.is_false(pattern.is_populated(ctx.patterns, 1))
+    end)
+  end)
+
   describe("atomic overwrite", function()
     it("overwrites in place and updates the checksum", function()
       local ctx = make_ctx()
@@ -220,7 +288,10 @@ describe("pattern_persistence", function()
       local second_payload = read_payload(path)
       assert.is_truthy(second_payload.checksum)
       assert.are_not.equal(first_payload.checksum, second_payload.checksum)
-      assert.are.equal(99, second_payload.slots[1].tracks[1].division)
+      -- FR-007b: live track state rides at payload top level, not inside
+      -- slot 1. slot 1 still holds the user-authored snapshot from fill_ctx.
+      assert.are.equal(99, second_payload.tracks[1].division)
+      assert.are.equal(2, second_payload.slots[1].tracks[1].division)
 
       local fh = io.open(path, "r")
       assert.is_not_nil(fh)
@@ -290,6 +361,110 @@ describe("pattern_persistence", function()
     end)
   end)
 
+
+  describe("meta-sequence persistence", function()
+    it("round-trips meta steps, length, and selected_step", function()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      ctx.meta = meta_pattern.new()
+      meta_pattern.set_step(ctx.meta, 1, 3, 2)
+      meta_pattern.set_step(ctx.meta, 2, 7, 4)
+      meta_pattern.set_step(ctx.meta, 3, 1, 1)
+      ctx.meta.selected_step = 2
+
+      assert.is_true(pp.save(ctx, "meta-bank"))
+
+      -- wipe meta state to prove load restores it
+      local new_ctx = make_ctx()
+      new_ctx.meta = meta_pattern.new()
+
+      local ok_load = pp.load(new_ctx, "meta-bank")
+      assert.is_true(ok_load)
+
+      assert.are.equal(3, new_ctx.meta.length)
+      assert.are.equal(2, new_ctx.meta.selected_step)
+      assert.are.equal(3, new_ctx.meta.steps[1].slot)
+      assert.are.equal(2, new_ctx.meta.steps[1].loops)
+      assert.are.equal(7, new_ctx.meta.steps[2].slot)
+      assert.are.equal(4, new_ctx.meta.steps[2].loops)
+      assert.are.equal(1, new_ctx.meta.steps[3].slot)
+      assert.are.equal(1, new_ctx.meta.steps[3].loops)
+      assert.are.equal(0, new_ctx.meta.steps[4].slot)
+    end)
+
+    it("excludes runtime playback state on save/load", function()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      ctx.meta = meta_pattern.new()
+      meta_pattern.set_step(ctx.meta, 1, 2, 3)
+      -- simulate an in-flight meta-sequence so runtime fields are non-default
+      ctx.meta.active = true
+      ctx.meta.pos = 5
+      ctx.meta.loop_counter = 9
+      ctx.meta.cued_slot = 11
+
+      assert.is_true(pp.save(ctx, "meta-runtime"))
+
+      local payload = read_payload(tmp_root .. "/meta-runtime.krp")
+      assert.is_truthy(payload.meta)
+      assert.is_nil(payload.meta.active)
+      assert.is_nil(payload.meta.pos)
+      assert.is_nil(payload.meta.loop_counter)
+      assert.is_nil(payload.meta.cued_slot)
+
+      local new_ctx = make_ctx()
+      new_ctx.meta = meta_pattern.new()
+      new_ctx.meta.active = true
+      new_ctx.meta.pos = 7
+      new_ctx.meta.loop_counter = 4
+      new_ctx.meta.cued_slot = 12
+
+      assert.is_true(pp.load(new_ctx, "meta-runtime"))
+      assert.is_false(new_ctx.meta.active)
+      assert.are.equal(1, new_ctx.meta.pos)
+      assert.are.equal(0, new_ctx.meta.loop_counter)
+      assert.is_nil(new_ctx.meta.cued_slot)
+    end)
+
+    it("leaves existing ctx.meta untouched when loading a legacy bank without meta", function()
+      -- Save a bank without ever setting ctx.meta, mimicking old .krp files
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      assert.is_true(pp.save(ctx, "legacy-bank"))
+
+      local payload = read_payload(tmp_root .. "/legacy-bank.krp")
+      assert.is_nil(payload.meta)
+
+      -- Load into a ctx whose meta is populated; it must survive intact
+      local new_ctx = make_ctx()
+      new_ctx.meta = meta_pattern.new()
+      meta_pattern.set_step(new_ctx.meta, 1, 8, 5)
+      new_ctx.meta.selected_step = 3
+
+      assert.is_true(pp.load(new_ctx, "legacy-bank"))
+      assert.are.equal(1, new_ctx.meta.length)
+      assert.are.equal(8, new_ctx.meta.steps[1].slot)
+      assert.are.equal(5, new_ctx.meta.steps[1].loops)
+      assert.are.equal(3, new_ctx.meta.selected_step)
+    end)
+
+    it("handles save when ctx.meta is absent", function()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      ctx.meta = nil
+
+      assert.is_true(pp.save(ctx, "no-meta"))
+
+      local payload = read_payload(tmp_root .. "/no-meta.krp")
+      assert.is_nil(payload.meta)
+
+      local new_ctx = make_ctx()
+      new_ctx.meta = nil
+      assert.is_true(pp.load(new_ctx, "no-meta"))
+      -- No meta block written, so ctx.meta stays nil after load
+      assert.is_nil(new_ctx.meta)
+    end)
+  end)
 
   describe("list and delete", function()
     it("lists saved banks sorted and ignores temp files", function()

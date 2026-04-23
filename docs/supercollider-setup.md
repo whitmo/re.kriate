@@ -7,7 +7,26 @@ re.kriate can send OSC messages to SuperCollider, turning it into a standalone s
 - **SuperCollider** (3.x+) — [download](https://supercollider.github.io/downloads)
 - **re.kriate** running on norns or seamstress with the OSC voice backend
 
-## Quick Start
+## One-shot Launch (recommended)
+
+The repo ships two launch scripts that remove all manual IDE steps:
+
+```bash
+bin/start-sc            # boot sclang + full re.kriate companion stack
+bin/start-rekriate      # boot SC (background) + seamstress together
+```
+
+`bin/start-sc` prefers the macOS app bundle sclang
+(`/Applications/SuperCollider.app/Contents/MacOS/sclang`) and falls back to
+`sclang` on `$PATH`. It evaluates `sc/rekriate-bootstrap.scd`, which in turn
+loads the voice engine + mixer, the multi-SynthDef `sc_synth` listener, and
+the `sc_drums` percussion listener into a single sclang session.
+
+`bin/start-rekriate` is a one-shot: it backgrounds `start-sc --daemon` (logs to
+`.runtime/sc.log`, pidfile in `.runtime/sc.pid`), waits a few seconds for the
+SC server to warm up, and then launches seamstress.
+
+## Manual / IDE Quick Start
 
 1. Open SuperCollider IDE
 2. Open `examples/supercollider/rekriate_sub.scd`
@@ -19,6 +38,86 @@ re.kriate can send OSC messages to SuperCollider, turning it into a standalone s
      4 tracks, 12 OSC responders active
    ```
 6. In re.kriate, set the voice backend to `osc` (see below)
+
+## Handshake: verifying the connection
+
+re.kriate and SuperCollider exchange a small ping/pong handshake so the Lua
+side can confirm a live SC session before streaming notes. Every companion
+script (`rekriate-voice.scd`, `rekriate_synths.scd`, `rekriate_drums.scd`,
+`rekriate_sub.scd`) registers a `/rekriate/ping` responder:
+
+```
+Lua → SC :  /rekriate/ping  reply_host  reply_port  nonce
+SC  → Lua:  /rekriate/pong  version  feature1  feature2  …
+```
+
+When the bootstrap script loads multiple companions in one sclang session,
+each replies to the ping with its own feature list; the Lua bridge
+(`lib/sc_bridge.lua`) merges them under a single handshake nonce so the UI
+sees a single `{voice, mixer, sc_synth, sub, fm, wavetable, sc_drums, …}`
+list.
+
+Try the handshake demo:
+
+```bash
+seamstress -s scripts/demo_sc_handshake.lua
+```
+
+You should see:
+
+```
+-- round 1: sending ping
+  ← pong: version=voice-1 features=[voice, mixer]
+  ← pong: version=sc_synth-1 features=[voice, mixer, sc_synth, sub, fm, wavetable]
+  ← pong: version=sc_drums-1 features=[voice, mixer, sc_synth, sub, fm, wavetable, sc_drums, ...]
+  status: SC 127.0.0.1:57120 ok (v…, voice,mixer,sc_synth,…)
+```
+
+### Using the bridge in your own code
+
+```lua
+local sc_bridge = require("lib/sc_bridge")
+
+local bridge = sc_bridge.new({
+  host = "127.0.0.1", port = 57120,
+  reply_host = "127.0.0.1", reply_port = 7000,
+  timeout = 1.5,
+})
+
+-- Chain pong into your osc.event dispatcher
+local prev = osc.event
+osc.event = function(path, args, from)
+  if bridge:handle_osc(path, args, from) then return end
+  if prev then prev(path, args, from) end
+end
+
+bridge:ping()
+-- … later:
+if bridge:is_connected() then
+  print("SC features: " .. table.concat(bridge.features, ", "))
+end
+```
+
+State transitions: `disconnected` → (on ping) `pinging` → (on pong)
+`connected`. Call `bridge:tick()` periodically — any `pinging` state older
+than `timeout` seconds falls back to `disconnected`.
+
+## Softcut: norns-only
+
+Softcut is a norns-native DSP engine and **does not run in seamstress**. The
+`softcut` voice backend works in both places, but on seamstress the
+`lib/voices/softcut_runtime` module runs in **dry-mode**: voice state is
+tracked accurately (region, rate, loop points, sample load status) so the
+sequencer behaves identically, but no audio is produced.
+
+The runtime announces its mode at init:
+
+- `softcut: norns native (audio enabled)` — on norns
+- `softcut: dry-mode (no audio — norns only)` — on seamstress / tests
+
+Use `lib/voices/softcut_runtime.detect_mode()` to branch in your own code;
+any non-norns consumer that needs audio should route tracks through `osc` /
+`sc_synth` / `sc_drums` instead.
 
 ## Configuring re.kriate
 
@@ -46,13 +145,20 @@ If SuperCollider is running on a laptop on the same network:
 re.kriate (norns/seamstress)
     │
     │  OSC messages (UDP)
-    │  /rekriate/track/{1-4}/note     midi_note velocity duration
-    │  /rekriate/track/{1-4}/all_notes_off
-    │  /rekriate/track/{1-4}/portamento  time
+    │  Note control:
+    │    /rekriate/track/{1-4}/note           midi_note velocity duration
+    │    /rekriate/track/{1-4}/all_notes_off
+    │    /rekriate/track/{1-4}/portamento     time
+    │  Mixer (sc/rekriate-voice.scd only):
+    │    /rekriate/mixer/track/{1-4}/level    0..2
+    │    /rekriate/mixer/track/{1-4}/pan      -1..1
+    │    /rekriate/mixer/track/{1-4}/mute     0|1
+    │    /rekriate/mixer/master/level         0..2
     │
     └──► SuperCollider (sclang, port 57120)
               │
-              │  Synth(\rekriate_sub, ...)
+              │  voice synths → per-track bus → track strip (level/pan/mute)
+              │                → master bus → master strip (level) → out 0
               │
               └──► scsynth (audio server)
                         │
@@ -88,6 +194,47 @@ With the SuperCollider listener running:
 The test script sends all 3 message types (note, portamento, all_notes_off) across all 4 tracks. Check both:
 - **Terminal**: shows which messages were sent
 - **SC post window**: shows received messages
+
+## sc_synth Voice (multi-SynthDef)
+
+`examples/supercollider/rekriate_synths.scd` hosts three melodic SynthDefs — subtractive (`\rekriate_sub`), 2-op FM (`\rekriate_fm`), and a wavetable-style blend (`\rekriate_wt`) — driven by the `sc_synth` voice backend (`lib/voices/sc_synth.lua`). It is the richer counterpart to the single-SynthDef `rekriate_sub.scd` example above, and is the target for tracks configured with voice type `sc_synth`.
+
+### Running rekriate_synths.scd
+
+1. Boot the SC server (**Cmd+B** / **Ctrl+B**).
+2. Evaluate the outer parentheses of `rekriate_synths.scd`.
+3. The post window should print:
+   ```
+   re.kriate sc_synth listener ready on port 57120
+     4 tracks, 24 OSC responders active, SynthDefs: sub / fm / wavetable
+   ```
+
+### Configuring re.kriate for sc_synth
+
+For each track you want routed to the multi-SynthDef listener:
+
+- **track N voice** → `sc_synth`
+- **track N sc synthdef** → `sub`, `fm`, or `wavetable`
+- **osc host** / **osc port** → same machine running SuperCollider (default `127.0.0.1:57120`)
+
+Changing `sc synthdef` while the track is live announces the new SynthDef to SuperCollider — subsequent notes use it.
+
+### OSC paths
+
+`sc_synth` uses the `/rekriate/synth/{track}/…` namespace (distinct from the
+generic `osc` voice's `/rekriate/track/{n}/note` and from `sc_drums`'s
+`/drum` messages), so all three backends can coexist on a single SC session.
+
+| Path | Args | Behavior |
+|------|------|----------|
+| `/rekriate/synth/{n}/play` | midi, vel, dur | Timed note, self-frees after `dur` |
+| `/rekriate/synth/{n}/note_on` | midi, vel | Sustained note (gate=1) |
+| `/rekriate/synth/{n}/note_off` | midi | Releases the matching gated note |
+| `/rekriate/synth/{n}/all_notes_off` | — | Frees all timed + gated nodes on the track |
+| `/rekriate/synth/{n}/portamento` | time | Lag-time for frequency glide |
+| `/rekriate/synth/{n}/synthdef` | name | Selects `sub` / `fm` / `wavetable` |
+
+All three SynthDefs accept a common argument surface (`freq, amp, dur, cutoff, porta, gate, timed`) plus SynthDef-specific controls (`ratio`/`modIndex` on FM, `shape` on wavetable). `timed=1` runs a `Env.perc` that self-frees after `dur`; `timed=0` runs an `Env.asr` that releases when `gate` falls.
 
 ## Troubleshooting
 

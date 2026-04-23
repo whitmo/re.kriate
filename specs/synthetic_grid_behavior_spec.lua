@@ -99,8 +99,8 @@ describe("simulate: replay user interactions", function()
     assert.are.equal(1, trig.loop_start)
     assert.are.equal(6, trig.loop_end)
 
-    -- Hold loop button (x=12, y=8)
-    synth_grid.press(g, 12, 8)
+    -- Hold loop button (x=11, y=8)
+    synth_grid.press(g, 11, 8)
     assert.is_true(ctx.loop_held)
 
     -- Tap start and end of new loop
@@ -108,7 +108,7 @@ describe("simulate: replay user interactions", function()
     synth_grid.tap(g, 12, 1)  -- second press = end
 
     -- Release loop button
-    synth_grid.release(g, 12, 8)
+    synth_grid.release(g, 11, 8)
 
     assert.are.equal(5, trig.loop_start)
     assert.are.equal(12, trig.loop_end)
@@ -226,11 +226,7 @@ describe("test: verify behavioral contracts", function()
     synth_grid.assert_led(g, 6, 8, 12, "trigger page selected")
     synth_grid.assert_led(g, 7, 8, 3)
     synth_grid.assert_led(g, 8, 8, 3)
-    synth_grid.assert_led(g, 9, 8, 3)
-    synth_grid.assert_led(g, 10, 8, 3)
-
-    -- Play/stop: not playing (dim=3)
-    synth_grid.assert_led(g, 16, 8, 3, "play button dim when stopped")
+    synth_grid.assert_led(g, 9, 8, 3)  -- cycle group (duration/velocity/probability)
   end)
 
   it("mute toggle changes nav indicator", function()
@@ -238,17 +234,17 @@ describe("test: verify behavioral contracts", function()
 
     -- Initially unmuted
     synth_grid.render(ctx)
-    synth_grid.assert_led(g, 5, 8, 3, "mute button dim when unmuted")
+    synth_grid.assert_led(g, 13, 8, 3, "mute button dim when unmuted")
 
-    -- Tap mute (x=5, y=8)
-    synth_grid.tap(g, 5, 8)
+    -- Tap mute (x=13, y=8)
+    synth_grid.tap(g, 13, 8)
     assert.is_true(ctx.tracks[1].muted)
 
     synth_grid.render(ctx)
-    synth_grid.assert_led(g, 5, 8, 12, "mute button bright when muted")
+    synth_grid.assert_led(g, 13, 8, 12, "mute button bright when muted")
 
     -- Tap again to unmute
-    synth_grid.tap(g, 5, 8)
+    synth_grid.tap(g, 13, 8)
     assert.is_false(ctx.tracks[1].muted)
   end)
 
@@ -293,10 +289,10 @@ describe("test: verify behavioral contracts", function()
     trig.pos = 10
 
     -- Set loop to 3-6
-    synth_grid.press(g, 12, 8)  -- hold loop
+    synth_grid.press(g, 11, 8)  -- hold loop
     synth_grid.tap(g, 3, 1)     -- start
     synth_grid.tap(g, 6, 1)     -- end
-    synth_grid.release(g, 12, 8)
+    synth_grid.release(g, 11, 8)
 
     -- Playhead should be clamped into new loop
     assert.is_true(trig.pos >= 3 and trig.pos <= 6,
@@ -374,7 +370,7 @@ describe("event tracing: capture side-effects of grid actions", function()
       captured[#captured + 1] = { track = data.track, muted = data.muted }
     end)
 
-    synth_grid.tap(g, 5, 8)  -- mute toggle
+    synth_grid.tap(g, 13, 8)  -- mute toggle
 
     assert.are.equal(1, #captured)
     assert.are.equal(2, captured[1].track)
@@ -404,8 +400,8 @@ describe("pattern management: save/load through grid", function()
   it("pattern mode shows slot grid when held", function()
     local ctx, g = setup_with_patterns()
 
-    -- Hold pattern button (x=14, y=8)
-    synth_grid.press(g, 14, 8)
+    -- Hold pattern button (x=12, y=8)
+    synth_grid.press(g, 12, 8)
     assert.is_true(ctx.pattern_held)
 
     -- Render in pattern mode
@@ -419,7 +415,7 @@ describe("pattern management: save/load through grid", function()
       end
     end
 
-    synth_grid.release(g, 14, 8)
+    synth_grid.release(g, 12, 8)
   end)
 
   it("populated slots appear brighter than empty ones", function()
@@ -429,7 +425,7 @@ describe("pattern management: save/load through grid", function()
     pattern.save(ctx, 1)
 
     -- Hold pattern and render
-    synth_grid.press(g, 14, 8)
+    synth_grid.press(g, 12, 8)
     synth_grid.render(ctx)
 
     -- Slot 1 (row 1, col 1) should be brighter than empty slots
@@ -437,7 +433,7 @@ describe("pattern management: save/load through grid", function()
     -- Slot 2 (row 1, col 2) still empty
     synth_grid.assert_led(g, 2, 1, 2, "empty slot should be dim")
 
-    synth_grid.release(g, 14, 8)
+    synth_grid.release(g, 12, 8)
   end)
 
   it("loading a pattern restores track state", function()
@@ -462,9 +458,9 @@ describe("pattern management: save/load through grid", function()
     assert.are.equal(1, trig.steps[4])
 
     -- Hold pattern, tap slot 3 (row 1, col 3) to load
-    synth_grid.press(g, 14, 8)
+    synth_grid.press(g, 12, 8)
     synth_grid.tap(g, 3, 1)
-    synth_grid.release(g, 14, 8)
+    synth_grid.release(g, 12, 8)
 
     -- Track state should be restored to the saved version
     local restored = ctx.tracks[1].params.trigger
@@ -516,11 +512,12 @@ describe("row-level inspection: analyze grid regions", function()
     synth_grid.render(ctx)
     local row = synth_grid.get_row(g, 3)
 
-    -- Steps with triggers should be brightness 8
+    -- Steps with triggers in loop (1-6) -> brightness 8
     assert.are.equal(8, row[1])
     assert.are.equal(8, row[5])
-    assert.are.equal(8, row[9])
-    assert.are.equal(8, row[13])
+    -- Steps with triggers outside loop -> dimmed brightness 4
+    assert.are.equal(4, row[9])
+    assert.are.equal(4, row[13])
 
     -- Steps 2-4 are in default loop (1-6) but no trigger -> brightness 2
     assert.are.equal(2, row[2])

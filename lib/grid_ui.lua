@@ -6,12 +6,13 @@
 
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
+local meta_pattern = require("lib/meta_pattern")
 local direction_mod = require("lib/direction")
 
 local M = {}
 
 -- Page names (primary + extended)
-M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "ratchet", "alt_note", "glide", "alt_track"}
+M.PAGES = {"trigger", "note", "octave", "duration", "velocity", "probability", "mixer", "ratchet", "alt_note", "glide", "alt_track", "meta_pattern", "scale"}
 
 -- Extended page mappings: primary -> extended
 M.EXTENDED_PAGES = {trigger = "ratchet", note = "alt_note", octave = "glide"}
@@ -20,28 +21,36 @@ M.EXTENDED_REVERSE = {ratchet = "trigger", alt_note = "note", glide = "octave"}
 
 -- Nav row (row 8) layout:
 -- x=1-4: track select
--- x=6: trigger page (double-tap: ratchet)
--- x=7: note page (double-tap: alt_note)
--- x=8: octave page (double-tap: glide)
--- x=9: duration page
--- x=10: velocity page
--- x=11: probability page
--- x=5: mute toggle
--- x=12: loop modifier (hold)
--- x=14: pattern mode (hold)
--- x=15: alt-track page (direction/division/swing/mute)
--- x=16: play/stop
+-- x=5: KEY 1 — time modifier (hold, Ansible KEY 1)
+-- x=6: trigger page (press again: ratchet)
+-- x=7: note page (press again: alt_note)
+-- x=8: octave page (press again: glide)
+-- x=9: cycles duration → velocity → probability
+-- x=10: KEY 2 — config/alt-track page (press, Ansible KEY 2)
+-- x=11: loop modifier (hold)
+-- x=12: pattern mode (hold)
+-- x=13: mute toggle
+-- x=14: probability modifier (hold)
+-- x=15: scale
+-- x=16: meta (alt-track settings; double-press: meta-pattern sequencer)
 
-local NAV_TRACK = {1, 2, 3, 4} -- @@ unused
-local NAV_MUTE = 5
-local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration", [10] = "velocity", [11] = "probability", [15] = "alt_track"}
-local NAV_LOOP = 12
-local NAV_PATTERN = 14
-local NAV_PLAY = 16
+local NAV_PAGE = {[6] = "trigger", [7] = "note", [8] = "octave", [9] = "duration"}
+-- Page group for x=9: pressing cycles through these pages
+local NAV_PAGE_CYCLE_9 = {"duration", "velocity", "probability", "mixer"}
+-- Quick lookup: which pages belong to the x=9 cycle group
+local NAV_PAGE_CYCLE_9_SET = {duration = true, velocity = true, probability = true, mixer = true}
+local NAV_KEY1 = 5    -- Ansible KEY 1: time modifier (hold)
+local NAV_KEY2 = 10   -- Ansible KEY 2: config/alt-track (press)
+local NAV_LOOP = 11
+local NAV_PATTERN = 12
+local NAV_MUTE = 13
+local NAV_PROB = 14
+local NAV_SCALE = 15
+local NAV_META = 16
 
 local ALT_DIRECTIONS = {"forward", "reverse", "pendulum", "drunk", "random"}
 local ALT_DIVISIONS = {1,2,3,4,5,6,7}
-local ALT_SWING = {0, 25, 50, 75, 100}
+local ALT_SWING = {0, 50, 100}
 
 function M.redraw(ctx)
   local g = ctx.g
@@ -51,6 +60,12 @@ function M.redraw(ctx)
   if ctx.pattern_held then
     -- pattern mode: show pattern slots on rows 1-2, cols 1-8
     M.draw_pattern_slots(ctx, g)
+  elseif ctx.time_held then
+    -- time modifier: show per-param clock division selector
+    M.draw_time_page(ctx, g)
+  elseif ctx.prob_held then
+    -- probability modifier: show per-step probability overlay
+    M.draw_value_page(ctx, g, "probability")
   else
     local page = ctx.active_page
 
@@ -58,10 +73,26 @@ function M.redraw(ctx)
       M.draw_trigger_page(ctx, g)
     elseif page == "alt_track" then
       M.draw_alt_track_page(ctx, g)
+    elseif page == "meta_pattern" then
+      M.draw_meta_pattern_page(ctx, g)
+    elseif page == "scale" then
+      M.draw_scale_page(ctx, g)
+    elseif page == "ratchet" then
+      M.draw_ratchet_page(ctx, g)
+    elseif page == "mixer" then
+      M.draw_mixer_page(ctx, g)
     else
-      -- All other pages (including extended: ratchet, alt_note, glide) use value display
+      -- All other pages (including extended: alt_note, glide) use value display
       M.draw_value_page(ctx, g, page)
     end
+  end
+
+  -- Loop modifier overlay: keeps the current page visible (it is a modifier,
+  -- not a dedicated page) and adds a highlight for the first-press column.
+  -- In-loop vs out-of-loop brightness is already encoded in each page's draw
+  -- routine, so all we need here is a first-press anchor marker.
+  if ctx.loop_held and ctx.active_page ~= "alt_track" then
+    M.draw_loop_overlay(ctx, g)
   end
 
   M.draw_nav(ctx, g)
@@ -74,13 +105,14 @@ function M.draw_trigger_page(ctx, g)
     local param = ctx.tracks[t].params.trigger
     for x = 1, track_mod.NUM_STEPS do
       local brightness = 0
+      local in_loop = x >= param.loop_start and x <= param.loop_end
       -- loop region indicator
-      if x >= param.loop_start and x <= param.loop_end then
+      if in_loop then
         brightness = 2
       end
-      -- step value
+      -- step value (dimmer outside loop)
       if param.steps[x] == 1 then
-        brightness = 8
+        brightness = in_loop and 8 or 4
       end
       -- playhead
       if x == param.pos and ctx.playing then
@@ -96,36 +128,24 @@ end
 function M.draw_value_page(ctx, g, page)
   local track = ctx.tracks[ctx.active_track]
   local param = track.params[page]
-  local is_prob = (page == "probability")
   for x = 1, track_mod.NUM_STEPS do
     local val = param.steps[x]
     local in_loop = x >= param.loop_start and x <= param.loop_end
     for y = 1, 7 do
       local brightness = 0
-      if is_prob then
-        local pct = val or 0
-        local row_thresh = (8 - y) * (100 / 7)
-        if pct >= row_thresh then
-          brightness = in_loop and 10 or 4
-        end
-        if x == param.pos and ctx.playing then
-          brightness = math.min(15, brightness + 5)
-        end
-      else
-        -- value display: row 1 = value 7, row 7 = value 1
-        local row_val = 8 - y
+      -- value display: row 1 = value 7, row 7 = value 1
+      local row_val = 8 - y
+      if row_val == val then
+        brightness = in_loop and 10 or 4
+      elseif row_val < val then
+        brightness = in_loop and 3 or 1
+      end
+      -- playhead column
+      if x == param.pos and ctx.playing then
         if row_val == val then
-          brightness = in_loop and 10 or 4
-        elseif row_val < val and in_loop then
-          brightness = 3
-        end
-        -- playhead column
-        if x == param.pos and ctx.playing then
-          if row_val == val then
-            brightness = 15
-          elseif row_val < val then
-            brightness = 6
-          end
+          brightness = 15
+        elseif row_val < val then
+          brightness = 6
         end
       end
       g:led(x, y, brightness)
@@ -133,10 +153,152 @@ function M.draw_value_page(ctx, g, page)
   end
 end
 
+-- Ratchet page: dedicated sub-gate display (matches kria ansible/n.kria UX)
+-- Row 1 (y=1): increment button row (dim markers)
+-- Rows 2-6 (y=2-6): subdivision toggles (5 slots, y=2=top/sub5, y=6=bottom/sub1)
+-- Row 7 (y=7): decrement button row (dim markers)
+function M.draw_ratchet_page(ctx, g)
+  local track = ctx.tracks[ctx.active_track]
+  local param = track.params.ratchet
+  for x = 1, track_mod.NUM_STEPS do
+    local count = param.steps[x]
+    local bits = param.bits and param.bits[x] or ((1 << count) - 1)
+    local in_loop = x >= param.loop_start and x <= param.loop_end
+    local is_playhead = x == param.pos and ctx.playing
+
+    -- Row 1: increment
+    local inc_brightness = 2
+    if is_playhead then inc_brightness = 6 end
+    g:led(x, 1, inc_brightness)
+
+    -- Rows 2-6: subdivision toggles
+    -- y=2 → bit 4 (subdivision 5, top), y=6 → bit 0 (subdivision 1, bottom)
+    for y = 2, 6 do
+      local bit_idx = 6 - y  -- y=2→4, y=3→3, y=4→2, y=5→1, y=6→0
+      local in_range = bit_idx < count
+      local bit_on = (bits >> bit_idx) & 1 == 1
+      local brightness = 0
+
+      if in_range and bit_on then
+        brightness = in_loop and 12 or 5
+      elseif in_range then
+        brightness = in_loop and 5 or 2
+      end
+
+      if is_playhead and in_range then
+        brightness = bit_on and 15 or 6
+      end
+
+      g:led(x, y, brightness)
+    end
+
+    -- Row 7: decrement
+    local dec_brightness = 2
+    if is_playhead then dec_brightness = 6 end
+    g:led(x, 7, dec_brightness)
+  end
+end
+
+-- Mixer page: per-track level (cols 1-7), pan (cols 9-15), mute (col 16).
+-- Rows 1-4 correspond to tracks 1-4.
+--   level: lit columns form a bar from col 1 up to the current level column.
+--          col 1 = ~0.0, col 7 = 1.0 (linear).
+--   pan:   single lit column at pan position.
+--          col 9 = hard left, col 12 = center, col 15 = hard right.
+--   mute:  bright when muted.
+-- The active track row is highlighted.
+function M.level_to_col(level)
+  local v = level or 1.0
+  if v < 0 then v = 0 end
+  if v > 1 then v = 1 end
+  local col = math.floor(v * 6 + 0.5) + 1 -- 0.0 -> 1, 1.0 -> 7
+  if col < 1 then col = 1 end
+  if col > 7 then col = 7 end
+  return col
+end
+
+function M.col_to_level(col)
+  if col < 1 then col = 1 end
+  if col > 7 then col = 7 end
+  return (col - 1) / 6
+end
+
+function M.pan_to_col(pan)
+  local v = pan or 0
+  if v < -1 then v = -1 end
+  if v > 1 then v = 1 end
+  -- map [-1, 1] -> [9, 15], center (0) -> 12. Symmetric round-half-away-from-zero.
+  local sign = (v < 0) and -1 or 1
+  local col = 12 + sign * math.floor(math.abs(v) * 3 + 0.5)
+  if col < 9 then col = 9 end
+  if col > 15 then col = 15 end
+  return col
+end
+
+function M.col_to_pan(col)
+  if col < 9 then col = 9 end
+  if col > 15 then col = 15 end
+  return (col - 12) / 3
+end
+
+function M.draw_mixer_page(ctx, g)
+  local active_track = ctx.active_track or 1
+  local mx = ctx.mixer or {level = {}, pan = {}}
+  for t = 1, track_mod.NUM_TRACKS do
+    local track = ctx.tracks[t]
+    local is_active = (t == active_track)
+    local is_muted = track and track.muted
+
+    local level = mx.level and mx.level[t] or 1.0
+    local level_col = M.level_to_col(level)
+    -- Level bar: lit from col 1 to level_col.
+    for x = 1, 7 do
+      local brightness = 0
+      if x <= level_col then
+        brightness = (x == level_col) and 12 or 4
+        if is_active then brightness = math.min(15, brightness + 3) end
+        if is_muted then brightness = math.max(1, brightness - 2) end
+      else
+        brightness = is_active and 2 or 1
+      end
+      g:led(x, t, brightness)
+    end
+
+    -- Gap column (x=8): unused.
+    g:led(8, t, 0)
+
+    -- Pan: center marker dim at col 12, active position bright.
+    local pan = mx.pan and mx.pan[t] or 0
+    local pan_col = M.pan_to_col(pan)
+    for x = 9, 15 do
+      local brightness = 1
+      if x == 12 then
+        brightness = 3 -- center marker
+      end
+      if x == pan_col then
+        brightness = 12
+        if is_active then brightness = 15 end
+        if is_muted then brightness = math.max(3, brightness - 3) end
+      end
+      g:led(x, t, brightness)
+    end
+
+    -- Mute (col 16).
+    local mute_b = is_muted and 15 or (is_active and 4 or 2)
+    g:led(16, t, mute_b)
+  end
+  -- Rows 5-7 stay blank on the mixer page.
+  for y = 5, 7 do
+    for x = 1, 16 do
+      g:led(x, y, 0)
+    end
+  end
+end
+
 -- Alt-track settings page (rows = tracks)
 -- x1-5: direction (forward, reverse, pendulum, drunk, random)
 -- x6-12: division (1..7)
--- x11-15: swing (0,25,50,75,100)
+-- x13-15: swing (0,50,100)
 -- x16: mute toggle
 function M.draw_alt_track_page(ctx, g)
   local active_track = ctx.active_track or 1
@@ -163,7 +325,7 @@ function M.draw_alt_track_page(ctx, g)
     end
     -- swing (coarse buckets)
     for idx, swing in ipairs(ALT_SWING) do
-      local x = 10 + idx -- 11..15
+      local x = 12 + idx -- 13..15
       local selected = (track.swing == swing)
       local base = selected and 10 or 2
       if is_active_row then base = math.min(12, base + 2) end
@@ -173,6 +335,56 @@ function M.draw_alt_track_page(ctx, g)
     -- mute
     local mute_brightness = track.muted and 15 or (is_active_row and 4 or 2)
     g:led(16, t, mute_brightness)
+  end
+  -- trigger clocking toggles (row 5, x=1-4 = tracks 1-4)
+  for t = 1, track_mod.NUM_TRACKS do
+    local track = ctx.tracks[t]
+    g:led(t, 5, track.trig_clock and 12 or 2)
+  end
+end
+
+-- Time page: per-parameter clock division selector (kria KEY 1 semantics).
+-- Standard layout: rows 1-4 = tracks, columns 1-7 = clock division values,
+-- applied to the currently active page's parameter. The active track row is
+-- drawn brighter so the user can tell which row their encoder selection
+-- targets; all 4 tracks remain editable by pressing any row directly.
+-- Alt-track page keeps its own "row = param for active track" layout since
+-- it's a config view, not a value page.
+function M.draw_time_page(ctx, g)
+  local page = ctx.active_page
+  local param_name = M.EXTENDED_REVERSE[page] or page
+
+  if page == "alt_track" then
+    local track = ctx.tracks[ctx.active_track]
+    for row, name in ipairs(track_mod.PARAM_NAMES) do
+      if row > 7 then break end
+      local p = track.params[name]
+      for x = 1, 7 do
+        local brightness = 2
+        if x == p.clock_div then
+          brightness = 10
+        end
+        g:led(x, row, brightness)
+      end
+    end
+    return
+  end
+
+  -- Trigger + all value pages: row = track, col = clock_div for the page's param.
+  for t = 1, track_mod.NUM_TRACKS do
+    local p = ctx.tracks[t].params[param_name]
+    if p then
+      local is_active = (t == ctx.active_track)
+      for x = 1, 7 do
+        local brightness = 2
+        if x == p.clock_div then
+          brightness = is_active and 15 or 10
+        elseif is_active then
+          brightness = 3
+        end
+        g:led(x, t, brightness)
+      end
+    end
   end
 end
 
@@ -184,8 +396,12 @@ function M.draw_pattern_slots(ctx, g)
     local row = ((slot - 1) < 8) and 1 or 2
     local populated = pattern.is_populated(ctx.patterns, slot)
     local is_current = (slot == ctx.pattern_slot)
+    local is_cued = (slot == ctx.cued_pattern_slot)
     local brightness = 2
-    if populated and is_current then
+    if is_cued then
+      -- cued: distinct mid-bright level so it stands out from current/populated
+      brightness = 13
+    elseif populated and is_current then
       brightness = 15
     elseif populated then
       brightness = 10
@@ -196,27 +412,126 @@ function M.draw_pattern_slots(ctx, g)
   end
 end
 
+-- Loop modifier overlay: drawn on top of the current page when LOOP is held.
+-- Highlights the first-press anchor column so the player can see where the
+-- gesture started. Does NOT replace the page's own rendering -- the caller
+-- has already drawn the page, which encodes in-loop/out-of-loop brightness
+-- on its own.
+--   * On trigger/tracks page: first-press is anchored to a specific track row
+--     (`loop_first_y`) because each row is an independent track. The highlight
+--     is drawn only on that row.
+--   * On value pages (incl. extended ratchet/alt_note/glide): the gesture
+--     targets the active track's current parameter; the highlight spans all
+--     seven value rows of the first-press column.
+function M.draw_loop_overlay(ctx, g)
+  if not ctx.loop_first_press then return end
+  local page = ctx.active_page
+  local x = ctx.loop_first_press
+  if page == "trigger" then
+    local row = ctx.loop_first_y
+    if row and row >= 1 and row <= track_mod.NUM_TRACKS then
+      g:led(x, row, 15)
+    end
+  else
+    for y = 1, 7 do
+      g:led(x, y, 15)
+    end
+  end
+end
+
+-- Scale page: root note selection, scale type selection, scale visualization
+-- Row 1: x=1-12 chromatic note class (C=1, C#=2, ..., B=12)
+-- Row 2: x=1-10 octave 0-9
+-- Row 3: x=1-7 scale types 1-7
+-- Row 4: x=1-7 scale types 8-14
+-- Row 5: x=1-12 interactive custom-scale mask editor. When scale_type == 15
+--        (Custom), LEDs reflect ctx.custom_intervals and row-5 presses toggle
+--        semitones. Otherwise shows which chromatic notes are in the active
+--        preset scale (read-only visualization).
+function M.draw_scale_page(ctx, g)
+  local root = ctx.root_note or 60
+  local pitch_class = root % 12  -- 0-11
+  local octave = math.floor(root / 12)  -- 0-10
+  local scale_idx = ctx.scale_type or 1
+
+  -- Row 1: chromatic note selection (x=1-12)
+  for x = 1, 12 do
+    local selected = (x - 1) == pitch_class
+    g:led(x, 1, selected and 15 or 3)
+  end
+
+  -- Row 2: octave selection (x=1-10)
+  for x = 1, 10 do
+    local selected = (x - 1) == octave
+    g:led(x, 2, selected and 15 or 3)
+  end
+
+  -- Row 3: scale types 1-7
+  for x = 1, 7 do
+    local selected = x == scale_idx
+    g:led(x, 3, selected and 15 or 3)
+  end
+
+  -- Row 4: scale types 8-14
+  for x = 1, 7 do
+    local selected = (x + 7) == scale_idx
+    g:led(x, 4, selected and 15 or 3)
+  end
+
+  -- Row 5: custom mask editor (when custom) or preset visualization
+  if scale_idx == 15 then
+    local mask = ctx.custom_intervals
+    for x = 1, 12 do
+      local on = mask and mask[x]
+      g:led(x, 5, on and 15 or 2)
+    end
+  elseif ctx.scale_notes and #ctx.scale_notes > 0 then
+    local in_scale = {}
+    for _, note in ipairs(ctx.scale_notes) do
+      in_scale[note % 12] = true
+    end
+    for x = 1, 12 do
+      g:led(x, 5, in_scale[x - 1] and 8 or 1)
+    end
+  end
+end
+
 -- Navigation row
 function M.draw_nav(ctx, g)
   local y = 8
-  -- track select
+  -- track select (x=1-4)
   for i = 1, 4 do
     g:led(i, y, i == ctx.active_track and 12 or 3)
   end
-  -- mute indicator (x=5)
+  -- x=5: KEY 1 (time modifier)
+  g:led(NAV_KEY1, y, ctx.time_held and 12 or 3)
+  -- page select x=6-9 (highlight correct button even when on extended page)
+  local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
+  local on_extended = M.EXTENDED_REVERSE[ctx.active_page] ~= nil
+  for x = 6, 8 do
+    if NAV_PAGE[x] == active_primary then
+      g:led(x, y, on_extended and 8 or 12)
+    else
+      g:led(x, y, 3)
+    end
+  end
+  -- x=9: lit if current page is in the cycle group (duration/velocity/probability)
+  g:led(9, y, NAV_PAGE_CYCLE_9_SET[ctx.active_page] and 12 or 3)
+  -- x=10: KEY 2 (config/alt-track)
+  local config_active = ctx.active_page == "alt_track" or ctx.active_page == "meta_pattern"
+  g:led(NAV_KEY2, y, config_active and 12 or 0)
+  -- modifiers (x=11-14)
+  g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
+  g:led(NAV_PATTERN, y, ctx.pattern_held and 12 or 3)
   local muted = ctx.tracks[ctx.active_track] and ctx.tracks[ctx.active_track].muted
   g:led(NAV_MUTE, y, muted and 12 or 3)
-  -- page select (highlight correct button even when on extended page)
-  local active_primary = M.EXTENDED_REVERSE[ctx.active_page] or ctx.active_page
-  for x, page in pairs(NAV_PAGE) do
-    g:led(x, y, page == active_primary and 12 or 3)
-  end
-  -- loop modifier
-  g:led(NAV_LOOP, y, ctx.loop_held and 12 or 3)
-  -- pattern mode
-  g:led(NAV_PATTERN, y, ctx.pattern_held and 12 or 3)
-  -- play/stop
-  g:led(NAV_PLAY, y, ctx.playing and 12 or 3)
+  g:led(NAV_PROB, y, ctx.prob_held and 12 or 3)
+  -- scale (x=15)
+  g:led(NAV_SCALE, y, ctx.active_page == "scale" and 12 or 3)
+  -- meta (x=15): alt-track or meta-pattern
+  local meta_active = ctx.active_page == "alt_track" or ctx.active_page == "meta_pattern"
+  g:led(NAV_META, y, meta_active and 12 or 3)
+  -- x=16: blank (no LED)
 end
 
 function M.key(ctx, x, y, z)
@@ -233,23 +548,27 @@ function M.key(ctx, x, y, z)
 end
 
 function M.nav_key(ctx, x, z)
-  -- track select (momentary not needed, select on press)
+  -- KEY 1: time modifier hold (x=5)
+  if x == NAV_KEY1 then
+    ctx.time_held = (z == 1)
+  end
+  -- KEY 2: config/alt-track (x=10, press only)
+  if x == NAV_KEY2 and z == 1 then
+    local old_page = ctx.active_page
+    ctx.active_page = "alt_track"
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
+  end
+  -- track select x=1-4 (select on press)
   if x >= 1 and x <= 4 and z == 1 then
     ctx.active_track = x
     if ctx.events then
       ctx.events:emit("track:select", {track=x})
     end
   end
-  -- mute toggle (x=5)
-  if x == NAV_MUTE and z == 1 then
-    local track = ctx.tracks[ctx.active_track]
-    track.muted = not track.muted
-    if ctx.events then
-      ctx.events:emit("track:mute", {track=ctx.active_track, muted=track.muted})
-    end
-  end
-  -- page select with extended page toggle
-  if NAV_PAGE[x] and z == 1 then
+  -- page select x=6-8 with extended page toggle
+  if x >= 6 and x <= 8 and NAV_PAGE[x] and z == 1 then
     local old_page = ctx.active_page
     local target_page = NAV_PAGE[x]
     if ctx.active_page == target_page then
@@ -257,40 +576,80 @@ function M.nav_key(ctx, x, z)
       if M.EXTENDED_PAGES[target_page] then
         ctx.active_page = M.EXTENDED_PAGES[target_page]
       end
-      -- If no extended page (duration, velocity), stay on same page
     elseif M.EXTENDED_REVERSE[ctx.active_page] == target_page then
       -- Currently on extended page, pressing its primary button: toggle back
       ctx.active_page = target_page
     else
-      -- Different page button: switch to primary page (clear extended)
+      -- Different page button: switch to primary page
       ctx.active_page = target_page
     end
     if ctx.active_page ~= old_page and ctx.events then
       ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
     end
   end
-  -- loop modifier (hold)
+  -- page select x=9: cycle through duration → velocity → probability
+  if x == 9 and z == 1 then
+    local old_page = ctx.active_page
+    -- Find current position in cycle group
+    local idx = nil
+    for i, p in ipairs(NAV_PAGE_CYCLE_9) do
+      if ctx.active_page == p then idx = i; break end
+    end
+    if idx then
+      -- Advance to next in cycle (wrap around)
+      ctx.active_page = NAV_PAGE_CYCLE_9[(idx % #NAV_PAGE_CYCLE_9) + 1]
+    else
+      -- Not currently on a cycle-9 page: go to first (duration)
+      ctx.active_page = NAV_PAGE_CYCLE_9[1]
+    end
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
+  end
+  -- loop modifier hold (x=11)
   if x == NAV_LOOP then
     ctx.loop_held = z == 1
     if z == 0 then
       ctx.loop_first_press = nil
+      ctx.loop_first_y = nil
     end
   end
-  -- pattern mode (hold x=14)
+  -- pattern mode hold (x=12)
   if x == NAV_PATTERN then
     ctx.pattern_held = (z == 1)
   end
-  -- alt-track page toggle (x=15)
-  if x == 15 and z == 1 then
-    ctx.active_page = "alt_track"
+  -- probability modifier hold (x=14)
+  if x == NAV_PROB then
+    ctx.prob_held = (z == 1)
   end
-  -- play/stop
-  if x == NAV_PLAY and z == 1 then
-    local seq = require("lib/sequencer")
-    if ctx.playing then
-      seq.stop(ctx)
+  -- mute toggle (x=13)
+  if x == NAV_MUTE and z == 1 then
+    local track = ctx.tracks[ctx.active_track]
+    track.muted = not track.muted
+    if ctx.events then
+      ctx.events:emit("track:mute", {track=ctx.active_track, muted=track.muted})
+    end
+  end
+  -- scale (x=14)
+  if x == NAV_SCALE and z == 1 then
+    local old_page = ctx.active_page
+    ctx.active_page = "scale"
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
+  end
+  -- meta / alt-track (x=15): double-press toggles alt_track <-> meta_pattern
+  if x == NAV_META and z == 1 then
+    local old_page = ctx.active_page
+    if ctx.active_page == "alt_track" then
+      ctx.active_page = "meta_pattern"
+    elseif ctx.active_page == "meta_pattern" then
+      ctx.active_page = "alt_track"
     else
-      seq.start(ctx)
+      ctx.active_page = "alt_track"
+    end
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
     end
   end
 end
@@ -304,6 +663,18 @@ function M.grid_key(ctx, x, y, z)
     return
   end
 
+  -- time modifier: set per-param clock division
+  if ctx.time_held then
+    M.time_key(ctx, x, y)
+    return
+  end
+
+  -- probability modifier: edit probability values regardless of active page
+  if ctx.prob_held then
+    M.value_key(ctx, x, y, "probability")
+    return
+  end
+
   -- alt-track page (bypasses loop/pattern edits)
   if ctx.active_page == "alt_track" then
     if z == 1 then
@@ -312,16 +683,34 @@ function M.grid_key(ctx, x, y, z)
     return
   end
 
+  -- scale page
+  if ctx.active_page == "scale" then
+    M.scale_key(ctx, x, y)
+    return
+  end
+
+  -- meta-pattern page
+  if ctx.active_page == "meta_pattern" then
+    if z == 1 then
+      M.meta_pattern_key(ctx, x, y)
+    end
+    return
+  end
+
   local page = ctx.active_page
 
   -- loop editing mode
   if ctx.loop_held then
-    M.loop_key(ctx, x, page)
+    M.loop_key(ctx, x, y, page)
     return
   end
 
   if page == "trigger" then
     M.trigger_key(ctx, x, y)
+  elseif page == "ratchet" then
+    M.ratchet_key(ctx, x, y)
+  elseif page == "mixer" then
+    M.mixer_key(ctx, x, y)
   else
     M.value_key(ctx, x, y, page)
   end
@@ -338,54 +727,147 @@ end
 function M.value_key(ctx, x, y, page)
   local track = ctx.tracks[ctx.active_track]
   local param = track.params[page]
-  if page == "probability" then
-    local pct = math.floor(((8 - y) / 7) * 100 + 0.5)
-    if y == 7 then pct = 0 end
-    if pct < 0 then pct = 0 end
-    if pct > 100 then pct = 100 end
-    track_mod.set_step(param, x, pct)
-  else
-    -- row 1 = value 7, row 7 = value 1
-    local val = 8 - y
-    track_mod.set_step(param, x, val)
+  -- row 1 = value 7, row 7 = value 1 (all value pages including probability)
+  local val = 8 - y
+  track_mod.set_step(param, x, val)
+end
+
+-- Mixer page key: row = track (1-4). Sections:
+--   x 1-7  -> level for that track (col 1 = 0.0, col 7 = 1.0)
+--   x 9-15 -> pan  for that track (col 9 = -1.0, col 12 = 0, col 15 = +1.0)
+--   x 16   -> toggle mute
+-- Selecting a level/pan cell also selects the active track so subsequent
+-- non-mixer interactions target the tapped row without a separate nav step.
+function M.mixer_key(ctx, x, y)
+  if y < 1 or y > track_mod.NUM_TRACKS then return end
+  local mixer = require("lib/mixer")
+  local t = y
+  ctx.active_track = t
+  local params_available = params and params.lookup
+
+  if x >= 1 and x <= 7 then
+    local level = M.col_to_level(x)
+    if params_available and params.lookup["level_" .. t] then
+      -- Params action drives mixer.set_level so voice + events fire once.
+      params:set("level_" .. t, math.floor(level * 100 + 0.5))
+    else
+      mixer.set_level(ctx, t, level)
+    end
+  elseif x >= 9 and x <= 15 then
+    local pan = M.col_to_pan(x)
+    if params_available and params.lookup["pan_" .. t] then
+      params:set("pan_" .. t, math.floor(pan * 100 + 0.5))
+    else
+      mixer.set_pan(ctx, t, pan)
+    end
+  elseif x == 16 then
+    local new_muted = not (ctx.tracks[t] and ctx.tracks[t].muted)
+    if params_available and params.lookup["mute_" .. t] then
+      params:set("mute_" .. t, new_muted and 2 or 1)
+    else
+      mixer.toggle_mute(ctx, t)
+    end
   end
 end
 
--- Loop editing: first press = start, second press = end
-function M.loop_key(ctx, x, page)
+-- Ratchet page key: increment/decrement count or toggle sub-gate bits
+function M.ratchet_key(ctx, x, y)
   local track = ctx.tracks[ctx.active_track]
-  -- on trigger page, use active_track's trigger param
-  -- on other pages, use that page's param
+  local param = track.params.ratchet
+
+  if y == 1 then
+    -- Increment subdivision count
+    track_mod.delta_ratchet_count(param, x, 1)
+  elseif y == 7 then
+    -- Decrement subdivision count
+    track_mod.delta_ratchet_count(param, x, -1)
+  elseif y >= 2 and y <= 6 then
+    -- Toggle sub-gate bit: y=2→bit4, y=3→bit3, y=4→bit2, y=5→bit1, y=6→bit0
+    local bit_idx = 6 - y
+    track_mod.toggle_ratchet_bit(param, x, bit_idx)
+  end
+end
+
+-- Loop editing: first press = start, second press = end.
+-- Loop is a modifier on the CURRENT page, not its own page. It edits the loop
+-- of whatever parameter the current page exposes.
+--   * Trigger/tracks page: each row 1-4 is an independent track, so the row
+--     the gesture started on determines which track's trigger loop is edited.
+--     The second press must also land on that row to complete the gesture --
+--     a press on a different row re-anchors to the new row. This matches
+--     original kria's per-track trigger loops.
+--   * All other pages (note, octave, duration, velocity, probability, mixer
+--     in spirit, plus extended alt_note/glide/ratchet): the gesture edits
+--     the active track's loop for that page's parameter, and `y` is ignored.
+function M.loop_key(ctx, x, y, page)
   local param
   if page == "trigger" then
-    param = track.params.trigger
+    if not y or y < 1 or y > track_mod.NUM_TRACKS then return end
+    if ctx.loop_first_press and ctx.loop_first_y and ctx.loop_first_y ~= y then
+      -- Second press landed on a different track row than the anchor --
+      -- reset the gesture to the new row so the user doesn't set a loop
+      -- on a track they didn't intend.
+      ctx.loop_first_press = x
+      ctx.loop_first_y = y
+      return
+    end
+    param = ctx.tracks[y].params.trigger
   else
-    param = track.params[page]
+    local track = ctx.tracks[ctx.active_track]
+    param = track and track.params[page]
+    if not param then return end
   end
 
   if not ctx.loop_first_press then
     ctx.loop_first_press = x
+    if page == "trigger" then
+      ctx.loop_first_y = y
+    end
   else
     local s = math.min(ctx.loop_first_press, x)
     local e = math.max(ctx.loop_first_press, x)
     track_mod.set_loop(param, s, e)
     ctx.loop_first_press = nil
+    ctx.loop_first_y = nil
   end
 end
 
 -- Pattern slot selection: rows 1-2, cols 1-8 = 16 slots
+-- When playing: queue a quantized transition (applied at next track-1 loop
+-- boundary). Pressing the current or already-cued slot cancels the cue.
+-- When stopped: load immediately so patterns can be auditioned.
 function M.pattern_key(ctx, x, y)
   if x < 1 or x > 8 or y < 1 or y > 2 then return end
   local slot = (y - 1) * 8 + x
-  ctx.pattern_slot = slot
-  pattern.load(ctx, slot)
-  if ctx.events then
-    ctx.events:emit("pattern:load", {slot=slot})
+
+  if not ctx.playing then
+    ctx.pattern_slot = slot
+    pattern.load(ctx, slot)
+    if ctx.events then
+      ctx.events:emit("pattern:load", {slot=slot})
+    end
+    return
+  end
+
+  -- Playing: cue quantized transition
+  if slot == ctx.pattern_slot or slot == ctx.cued_pattern_slot then
+    pattern.cancel_cue(ctx)
+  else
+    pattern.cue(ctx, slot)
   end
 end
 
 -- Alt-track interaction
 function M.alt_track_key(ctx, x, y)
+  -- trigger clocking toggles (row 5, x=1-4)
+  if y == 5 and x >= 1 and x <= track_mod.NUM_TRACKS then
+    local track = ctx.tracks[x]
+    if track then
+      track.trig_clock = not track.trig_clock
+    end
+    return
+  end
+
   if y < 1 or y > track_mod.NUM_TRACKS then return end
   local track = ctx.tracks[y]
   if not track then return end
@@ -405,8 +887,8 @@ function M.alt_track_key(ctx, x, y)
     end
   end
 
-  if x >= 11 and x <= 15 then
-    local idx = x - 10
+  if x >= 13 and x <= 15 then
+    local idx = x - 12
     if ALT_SWING[idx] ~= nil then
       track.swing = ALT_SWING[idx]
       ctx.active_track = y
@@ -417,6 +899,202 @@ function M.alt_track_key(ctx, x, y)
   if x == 16 then
     track.muted = not track.muted
     ctx.active_track = y
+  end
+end
+
+-- Scale page key: set root note or scale type
+function M.scale_key(ctx, x, y)
+  local root = ctx.root_note or 60
+
+  if y == 1 and x >= 1 and x <= 12 then
+    -- Set pitch class, keep octave
+    local octave = math.floor(root / 12)
+    local new_root = octave * 12 + (x - 1)
+    ctx.root_note = math.min(127, new_root)
+    if ctx.events then
+      ctx.events:emit("scale:root", {root_note = ctx.root_note})
+    end
+  elseif y == 2 and x >= 1 and x <= 10 then
+    -- Set octave, keep pitch class
+    local pc = root % 12
+    local new_root = (x - 1) * 12 + pc
+    ctx.root_note = math.min(127, new_root)
+    if ctx.events then
+      ctx.events:emit("scale:root", {root_note = ctx.root_note})
+    end
+  elseif y == 3 and x >= 1 and x <= 7 then
+    -- Scale types 1-7
+    ctx.scale_type = x
+    if ctx.events then
+      ctx.events:emit("scale:type", {scale_type = ctx.scale_type})
+    end
+  elseif y == 4 and x >= 1 and x <= 7 then
+    -- Scale types 8-14
+    ctx.scale_type = x + 7
+    if ctx.events then
+      ctx.events:emit("scale:type", {scale_type = ctx.scale_type})
+    end
+  elseif y == 5 and x >= 1 and x <= 12 then
+    -- Row 5 toggles a semitone in the custom mask and switches to
+    -- scale_type=15 (Custom). Preset masks in rows 3-4 are preserved and
+    -- resume when the user selects a preset again.
+    if not ctx.custom_intervals then
+      ctx.custom_intervals = {}
+      for i = 1, 12 do ctx.custom_intervals[i] = false end
+      ctx.custom_intervals[1] = true  -- ensure root is present
+    end
+    ctx.custom_intervals[x] = not ctx.custom_intervals[x]
+    ctx.scale_type = 15
+    if ctx.events then
+      ctx.events:emit("scale:type", {scale_type = ctx.scale_type})
+    end
+  end
+end
+
+-- Meta-pattern page display
+-- Row 1-2: Pattern slot selector (16 slots across 2 rows, same as pattern mode)
+-- Row 3: Loop count for selected meta-step (cols 1-7)
+-- Row 5: Meta-sequence overview (cols 1-16 = meta-steps)
+-- Row 7: Controls (x=1 = toggle active)
+function M.draw_meta_pattern_page(ctx, g)
+  local meta = ctx.meta
+  if not meta then return end
+
+  local sel = meta.selected_step
+  local step = meta.steps[sel]
+
+  -- Rows 1-2: Pattern slot selector for selected meta-step
+  for slot = 1, 16 do
+    local col = ((slot - 1) % 8) + 1
+    local row = ((slot - 1) < 8) and 1 or 2
+    local populated = pattern.is_populated(ctx.patterns, slot)
+    local is_assigned = (step.slot == slot and slot > 0)
+    local brightness = 2
+    if is_assigned and populated then
+      brightness = 15
+    elseif is_assigned then
+      brightness = 12
+    elseif populated then
+      brightness = 8
+    end
+    g:led(col, row, brightness)
+  end
+
+  -- Row 3: Loop count bar (1-7)
+  for x = 1, 7 do
+    local brightness = 2
+    if x == step.loops then
+      brightness = 15
+    elseif x < step.loops then
+      brightness = 6
+    end
+    g:led(x, 3, brightness)
+  end
+
+  -- Row 5: Meta-sequence overview
+  for i = 1, meta_pattern.MAX_STEPS do
+    local is_playback = (meta.active and meta.pos == i)
+    local is_selected = (sel == i)
+    local has_pattern = (meta.steps[i].slot > 0)
+    local brightness = 2
+    if is_playback then
+      brightness = 15
+    elseif is_selected then
+      brightness = 12
+    elseif has_pattern then
+      brightness = 8
+    end
+    g:led(i, 5, brightness)
+  end
+
+  -- Row 6: Cued pattern indicator
+  if meta.cued_slot then
+    for x = 1, 16 do
+      g:led(x, 6, x == meta.cued_slot and 10 or 0)
+    end
+  end
+
+  -- Row 7: Controls
+  g:led(1, 7, meta.active and 15 or 4)
+end
+
+-- Meta-pattern page key handler
+function M.meta_pattern_key(ctx, x, y)
+  local meta = ctx.meta
+  if not meta then return end
+
+  -- Rows 1-2: Assign pattern slot to selected meta-step
+  if y >= 1 and y <= 2 and x >= 1 and x <= 8 then
+    local slot = (y - 1) * 8 + x
+    local sel = meta.selected_step
+    if meta.steps[sel].slot == slot then
+      -- Toggle off: clear step
+      meta_pattern.clear_step(meta, sel)
+    else
+      meta_pattern.set_step(meta, sel, slot, meta.steps[sel].loops)
+    end
+    if ctx.events then
+      ctx.events:emit("meta:edit", { step = sel, slot = meta.steps[sel].slot })
+    end
+    return
+  end
+
+  -- Row 3: Set loop count (1-7)
+  if y == 3 and x >= 1 and x <= 7 then
+    local sel = meta.selected_step
+    meta.steps[sel].loops = x
+    return
+  end
+
+  -- Row 5: Select meta-step for editing
+  if y == 5 and x >= 1 and x <= meta_pattern.MAX_STEPS then
+    meta.selected_step = x
+    return
+  end
+
+  -- Row 6: Cue a pattern slot (press to cue, press again to cancel)
+  if y == 6 and x >= 1 and x <= 16 then
+    if meta.cued_slot == x then
+      meta_pattern.cancel_cue(meta)
+    else
+      meta_pattern.cue(meta, x)
+    end
+    return
+  end
+
+  -- Row 7: Controls
+  if y == 7 and x == 1 then
+    meta_pattern.toggle(meta, ctx)
+    return
+  end
+end
+
+-- Time modifier key: set clock division for the active page's parameter.
+-- y=1-4 selects the track, x=1-7 selects the divisor. On alt_track the
+-- row maps to a param for the active track (config view).
+function M.time_key(ctx, x, y)
+  if x < 1 or x > 7 then return end
+  local page = ctx.active_page
+
+  if page == "alt_track" then
+    if y >= 1 and y <= #track_mod.PARAM_NAMES and y <= 7 then
+      local name = track_mod.PARAM_NAMES[y]
+      local p = ctx.tracks[ctx.active_track].params[name]
+      if p then
+        p.clock_div = x
+        p.tick = 0
+      end
+    end
+    return
+  end
+
+  local param_name = M.EXTENDED_REVERSE[page] or page
+  if y >= 1 and y <= track_mod.NUM_TRACKS then
+    local p = ctx.tracks[y].params[param_name]
+    if p then
+      p.clock_div = x
+      p.tick = 0
+    end
   end
 end
 

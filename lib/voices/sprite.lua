@@ -38,7 +38,11 @@ M.Y_MAP = {
   [7] = 16,
 }
 
--- X position map: alt_note (1-7) -> horizontal position (screen width 256)
+-- Screen width for step-based X positioning
+M.SCREEN_W = 256
+
+-- X position map: effective degree (1-7) -> horizontal position (screen width 256)
+-- Legacy fallback when step position is not available
 M.X_MAP = {
   [1] = 32,
   [2] = 64,
@@ -48,6 +52,13 @@ M.X_MAP = {
   [6] = 192,
   [7] = 224,
 }
+
+--- Compute X position from sequencer step position.
+--- Distributes steps evenly across display width.
+function M.step_to_x(step, loop_len)
+  if not step or not loop_len or loop_len < 1 then return 128 end
+  return math.floor((step - 0.5) / loop_len * M.SCREEN_W)
+end
 
 -- Movement constants
 M.DRIFT_SPEED = 20   -- pixels per second horizontal drift
@@ -76,7 +87,15 @@ function M.new(track_num)
       local glide_val = vals.glide or 1
       local is_muted = opts.muted or false
 
-      local x = M.X_MAP[alt_val] or 128
+      -- X position: follow playhead step across full display width
+      local x
+      if opts.step and opts.loop_len then
+        x = M.step_to_x(opts.step, opts.loop_len)
+      else
+        -- Fallback: derive from effective degree when step info unavailable
+        local effective_degree = ((note_val - 1) + (alt_val - 1)) % 7 + 1
+        x = M.X_MAP[effective_degree] or 128
+      end
       local y = M.Y_MAP[oct_val] or 64
       local size = M.SIZE_MAP[vel_val] or 10
       local alpha = base_color[4]
@@ -85,7 +104,7 @@ function M.new(track_num)
       local r, g, b = base_color[1], base_color[2], base_color[3]
       if ratchet_val > 1 then
         -- Blend toward white proportionally to ratchet intensity
-        local blend = (ratchet_val - 1) / 6  -- 0 at ratchet=1, ~1 at ratchet=7
+        local blend = (ratchet_val - 1) / 4  -- 0 at ratchet=1, 1 at ratchet=5
         r = math.floor(r + (255 - r) * blend)
         g = math.floor(g + (255 - g) * blend)
         b = math.floor(b + (255 - b) * blend)

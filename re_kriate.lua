@@ -16,11 +16,26 @@ local log = require("lib/log")
 local app = require("lib/app")
 local nb_voice = require("lib/norns/nb_voice")
 local track_mod = require("lib/track")
+local startup_info = require("lib/startup_info")
+local softcut_runtime = require("lib/voices/softcut_runtime")
+
+local SCRIPT_DIR = debug.getinfo(1, "S").source:match("@(.*/)") or "./"
 
 local ctx
 
 function init()
   log.session_start()
+
+  -- Startup banner: git hash / branch / release + softcut mode.
+  -- Printed to the norns Maiden REPL so fresh sessions make the runtime
+  -- environment obvious. SC status lives in each SC voice wrapper on norns
+  -- (not an app-wide bridge), so it's omitted here.
+  local info = startup_info.collect(SCRIPT_DIR, SCRIPT_DIR .. "CHANGELOG.md")
+  startup_info.announce({
+    git = info.git,
+    release = info.release,
+    softcut = softcut_runtime.status_string(),
+  })
 
   local nb = require("nb")
   nb.voice_count = track_mod.NUM_TRACKS
@@ -38,7 +53,7 @@ function init()
     voices[t] = nb_voice.new("voice_" .. t)
   end
 
-  ctx = app.init({ voices = voices, grid_provider = "monome" })
+  ctx = app.init({ voices = voices, grid_provider = "monome", seed_stock_presets = true })
 
   -- Screen refresh metro at 15fps
   ctx.screen_metro = metro.init()

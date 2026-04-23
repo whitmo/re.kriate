@@ -9,6 +9,7 @@ M.PARAM_NAMES = {"trigger", "note", "octave", "duration", "velocity", "ratchet",
 M.CORE_PARAMS = {"trigger", "note", "octave", "duration", "velocity", "probability"}
 M.EXTENDED_PARAMS = {"ratchet", "alt_note", "glide"}
 M.DEFAULT_LOOP_LEN = 6
+M.MAX_RATCHET = 5  -- max subdivisions per step (matches kria ansible/n.kria)
 
 -- Step value ranges (1-indexed, matching grid rows 1-7)
 -- trigger: 0 or 1
@@ -39,6 +40,17 @@ M.VELOCITY_MAP = {
   [7] = 1.0,
 }
 
+-- Probability map: step value -> percentage (0-100)
+M.PROBABILITY_MAP = {
+  [1] = 0,
+  [2] = 17,
+  [3] = 33,
+  [4] = 50,
+  [5] = 67,
+  [6] = 83,
+  [7] = 100,
+}
+
 function M.new_param(default_val)
   local steps = {}
   for i = 1, M.NUM_STEPS do
@@ -54,10 +66,12 @@ function M.new_param(default_val)
   }
 end
 
--- Extended param value ranges (1-indexed, matching grid rows 1-7)
--- ratchet: 1-7 (number of repeats within step; 1 = normal, 2+ = ratchet)
+-- Extended param value ranges
+-- ratchet: 1-5 (subdivision count per step; 1 = normal, 2-5 = ratchet)
+--   Each step also has a ratchet_bits bitmask controlling which sub-gates fire
 -- alt_note: 1-7 (secondary note offset, combined with note for variation)
 -- glide: 1-7 (portamento amount; 1 = none, 7 = max)
+-- probability: 1-7 (trigger probability; 7 = 100% always fire, 1 = 0% never fire)
 
 -- Musically useful defaults per track
 local DEFAULT_PATTERNS = {
@@ -107,7 +121,7 @@ local PARAM_DEFAULTS = {
   ratchet  = 1,  -- 1 = no ratchet
   alt_note = 1,  -- 1 = no offset
   glide    = 1,  -- 1 = no glide
-  probability = 100, -- percent
+  probability = 7,  -- 7 = 100% (always fire)
 }
 
 function M.new_track(track_num)
@@ -118,6 +132,7 @@ function M.new_track(track_num)
     muted = false,
     direction = "forward",
     swing = 0,
+    trig_clock = false,  -- trigger clocking: non-trigger params advance only when trigger fires
   }
   for _, name in ipairs(M.PARAM_NAMES) do
     local default_val = PARAM_DEFAULTS[name] or 4
@@ -129,6 +144,12 @@ function M.new_track(track_num)
     end
     if name == "note" and defaults.note_loop_end then
       p.loop_end = defaults.note_loop_end
+    end
+    if name == "ratchet" then
+      p.bits = {}
+      for i = 1, M.NUM_STEPS do
+        p.bits[i] = 1  -- default: single subdivision active (bit 0 set)
+      end
     end
     track.params[name] = p
   end
@@ -187,6 +208,101 @@ end
 function M.toggle_step(param, step)
   if step >= 1 and step <= M.NUM_STEPS then
     param.steps[step] = param.steps[step] == 0 and 1 or 0
+  end
+end
+
+-- Ratchet sub-gate helpers (operate on ratchet param's bits array)
+
+-- Check if a specific sub-gate bit is active
+function M.get_ratchet_bit(param, step, bit_idx)
+  local bits = param.bits and param.bits[step] or 0
+  return (bits >> bit_idx) & 1 == 1
+end
+
+-- Toggle a specific sub-gate bit; auto-extend count if toggling ON above current count,
+-- auto-shrink count if toggling OFF leaves highest bits clear
+function M.toggle_ratchet_bit(param, step, bit_idx)
+  if not param.bits then return end
+  local bits = param.bits[step] or 0
+  local count = param.steps[step] or 1
+
+  -- Toggle the bit
+  bits = bits ~ (1 << bit_idx)
+  local new_bit_on = (bits >> bit_idx) & 1 == 1
+
+  if new_bit_on and bit_idx >= count then
+    -- Extending: set count to include this bit position
+    count = bit_idx + 1
+  elseif not new_bit_on then
+    -- Shrinking: find highest set bit to determine new count
+    local highest = 0
+    for i = M.MAX_RATCHET - 1, 0, -1 do
+      if (bits >> i) & 1 == 1 then
+        highest = i + 1
+        break
+      end
+    end
+    count = math.max(1, highest)
+  end
+
+  -- Ensure at least one bit is set
+  local mask = (1 << count) - 1
+  bits = bits & mask
+  if bits == 0 then bits = 1; count = math.max(count, 1) end
+
+  param.steps[step] = count
+  param.bits[step] = bits
+end
+
+-- Increment/decrement ratchet subdivision count
+-- delta > 0: new subdivision bit is set by default
+-- delta < 0: bits above new count are cleared
+function M.delta_ratchet_count(param, step, delta)
+  if not param.bits then return end
+  local old_count = param.steps[step] or 1
+  local new_count = math.max(1, math.min(M.MAX_RATCHET, old_count + delta))
+  if new_count == old_count then return end
+
+  local bits = param.bits[step] or ((1 << old_count) - 1)
+  if delta > 0 then
+    -- Set new subdivision bits
+    for i = old_count, new_count - 1 do
+      bits = bits | (1 << i)
+    end
+  else
+    -- Clear bits above new count
+    local mask = (1 << new_count) - 1
+    bits = bits & mask
+  end
+
+  -- Ensure at least one bit set
+  if bits == 0 then bits = 1 end
+  param.steps[step] = new_count
+  param.bits[step] = bits
+end
+
+-- Fill all subdivisions in current count range
+function M.fill_ratchet_bits(param, step)
+  if not param.bits then return end
+  local count = param.steps[step] or 1
+  param.bits[step] = (1 << count) - 1
+end
+
+-- Clear ratchet: reset to single subdivision
+function M.clear_ratchet(param, step)
+  param.steps[step] = 1
+  if param.bits then param.bits[step] = 1 end
+end
+
+-- Ensure ratchet param has bits array (migration helper for loaded patterns)
+function M.ensure_ratchet_bits(param)
+  if param.bits then return end
+  param.bits = {}
+  for i = 1, M.NUM_STEPS do
+    local count = param.steps[i] or 1
+    count = math.max(1, math.min(M.MAX_RATCHET, count))
+    param.steps[i] = count
+    param.bits[i] = (1 << count) - 1  -- all subdivisions active
   end
 end
 

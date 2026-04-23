@@ -229,6 +229,103 @@ describe("scale", function()
 
   end)
 
+  describe("build_custom_scale", function()
+
+    local function mask_from_semitones(semitones)
+      local m = {}
+      for i = 1, 12 do m[i] = false end
+      for _, s in ipairs(semitones) do
+        m[s + 1] = true
+      end
+      return m
+    end
+
+    it("returns a non-empty ascending array", function()
+      local mask = mask_from_semitones({0, 2, 4, 5, 7, 9, 11})
+      local notes = scale.build_custom_scale(60, mask)
+      assert.is_true(#notes > 0)
+      for i = 2, #notes do
+        assert.is_true(notes[i] >= notes[i - 1])
+      end
+    end)
+
+    it("only emits notes whose pitch classes are set in the mask", function()
+      local mask = mask_from_semitones({0, 2, 4, 5, 7, 9, 11}) -- major
+      local notes = scale.build_custom_scale(60, mask)
+      local allowed = {[0]=true,[2]=true,[4]=true,[5]=true,[7]=true,[9]=true,[11]=true}
+      for _, n in ipairs(notes) do
+        assert.is_true(allowed[n % 12] == true,
+          "note " .. n .. " (pc " .. (n % 12) .. ") is not in the custom mask")
+      end
+    end)
+
+    it("starts from root - 36 when in range", function()
+      -- Root-only mask: every emitted note is a pure octave of (root - 36)
+      local mask = mask_from_semitones({0})
+      local notes = scale.build_custom_scale(60, mask)
+      assert.are.equal(24, notes[1])
+      for _, n in ipairs(notes) do
+        assert.are.equal(0, (n - 24) % 12)
+      end
+    end)
+
+    it("generates notes across multiple octaves", function()
+      local mask = mask_from_semitones({0}) -- root only
+      local notes = scale.build_custom_scale(60, mask)
+      -- 8 octaves starting at 24 -> 24,36,48,60,72,84,96,108 (108 ≤ 127)
+      assert.is_true(#notes >= 7, "expected at least 7 octaves of root, got " .. #notes)
+    end)
+
+    it("clamps to MIDI range (0..127)", function()
+      local mask = mask_from_semitones({0, 2, 4, 5, 7, 9, 11})
+      local notes = scale.build_custom_scale(120, mask)
+      for _, n in ipairs(notes) do
+        assert.is_true(n >= 0 and n <= 127,
+          "note " .. n .. " is outside 0..127")
+      end
+    end)
+
+    it("falls back to root when mask is empty", function()
+      local mask = {}
+      for i = 1, 12 do mask[i] = false end
+      local notes = scale.build_custom_scale(60, mask)
+      assert.are.equal(1, #notes)
+      assert.are.equal(24, notes[1])  -- 60 - 36
+    end)
+
+    it("falls back to root when mask is nil", function()
+      local notes = scale.build_custom_scale(60, nil)
+      assert.are.equal(1, #notes)
+      assert.are.equal(24, notes[1])
+    end)
+
+    it("different masks produce different scales", function()
+      local major = mask_from_semitones({0, 2, 4, 5, 7, 9, 11})
+      local minor = mask_from_semitones({0, 2, 3, 5, 7, 8, 10})
+      local a = scale.build_custom_scale(60, major)
+      local b = scale.build_custom_scale(60, minor)
+      assert.are_not.same(a, b)
+    end)
+
+    it("to_midi works with a custom scale", function()
+      local mask = mask_from_semitones({0, 2, 4, 5, 7, 9, 11})
+      local notes = scale.build_custom_scale(60, mask)
+      local note = scale.to_midi(1, 4, notes)
+      assert.are.equal(type(note), "number")
+      -- Every note to_midi returns must be present in the custom scale
+      local set = {}
+      for _, n in ipairs(notes) do set[n] = true end
+      for oct = 1, 7 do
+        for deg = 1, 7 do
+          local got = scale.to_midi(deg, oct, notes)
+          assert.is_true(set[got] == true,
+            "to_midi(" .. deg .. "," .. oct .. ")=" .. got .. " not in custom scale")
+        end
+      end
+    end)
+
+  end)
+
   describe("degree wrapping with shorter scale", function()
 
     it("degree 7 on a 5-note scale returns a valid note without error (T030)", function()

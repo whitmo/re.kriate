@@ -98,19 +98,25 @@ Kria is a multi-track step sequencer where each track has independent loop lengt
 - Scale quantization
 
 ## Active Technologies
-- Lua 5.4 (via busted test runner, seamstress runtime) + busted (test framework), seamstress v1.4.7, musicutil (norns/seamstress scale utilities) (002-quality-hardening)
-- N/A (in-memory patterns, no persistence layer) (002-quality-hardening)
-- Lua 5.4 (via busted test runner, seamstress v1.4.7 runtime) + seamstress v1.4.7, musicutil, busted (test framework) (004-osc-voice-integration)
-- N/A (in-memory params, no persistence layer) (004-osc-voice-integration)
-- Lua 5.3 (norns runtime) / Lua 5.4 (busted test runner) + norns runtime (screen, params, metro, grid, clock, util), nb (voice framework), lib/app.lua (shared sequencer logic) (005-norns-entrypoint)
-- N/A (in-memory state, no persistence layer) (005-norns-entrypoint)
-- Lua 5.4 (busted test runner), seamstress v1.4.7 runtime + seamstress v1.4.7, busted (test framework) (006-pattern-bank-ui)
-- N/A (in-memory patterns via lib/pattern.lua, no persistence layer) (006-pattern-bank-ui)
-- SuperCollider (sclang) for synth/listener, Lua 5.4 for test scrip + SuperCollider 3.x (user-installed), seamstress v1.4.7 (for test script OSC), lib/voices/osc.lua (existing, not modified) (008-supercollider-voice-example)
-- N/A (no persistence) (008-supercollider-voice-example)
-- Lua 5.3/5.4 + `lib/pattern_persistence.lua`, busted, optional norns `tab.save/tab.load` helpers (013-pattern-persistence)
-- Pattern bank files stored as `.krp` under platform data dirs with checksum validation (013-pattern-persistence)
+- Lua 5.3 (norns runtime) / Lua 5.4 (busted test runner, seamstress runtime)
+- seamstress v1.4.7 (desktop development runtime)
+- norns runtime (screen, params, metro, grid, clock, util) + nb (voice framework)
+- busted (test framework), musicutil (scale utilities)
+- SuperCollider 3.x (optional, for `sc_synth` melodic + `sc_drums` percussion voices)
+- MIDI clock sync at 24 PPQ (external slave / internal master with clock output)
+- Pattern banks and full-session presets stored as `.krp` under platform data dirs with Adler-32 checksum validation
 
-## Recent Changes
-- 002-quality-hardening: Added Lua 5.4 (via busted test runner, seamstress runtime) + busted (test framework), seamstress v1.4.7, musicutil (norns/seamstress scale utilities)
-- 013-pattern-persistence: Added disk-backed pattern-bank persistence, checksum validation, list/delete helpers, demo harness, and busted coverage
+## Recent Changes (through #109)
+- Multi-grid support: Launchpad Pro MK3 provider with page switching, grid selection params for runtime backend swap (re-yp0)
+- Meta-sequencer state persisted in `.krp` pattern banks (#108)
+- Pattern cueing with quantized transitions at track-1 loop boundary (#107)
+- Full-session preset persistence (tracks + patterns + meta + params) with autosave (#106)
+- Custom scale mask editor on the scale page (#105)
+- MIDI clock sync — external slave, clock output at 24 PPQ, Start/Stop/Continue (spec 010, #104)
+- SuperCollider melodic synth voice with sub / fm / wavetable synthdefs (#103)
+- Ratchet page UX rewrite: per-sub-gate bitmask with dedicated grid display
+- Help overlay (`?`), grid theme cycling (Ctrl+Shift+T), page-indicator screen tray
+- Loop boundary indicators on simulated grid; cell edge borders; dim notes outside loop
+- Probability modifier key (hold x=14) as an overlay across pages
+- Time modifier (F1) per-parameter clock division overlay
+- Disk-backed pattern-bank persistence with Adler-32 checksum validation

@@ -28,6 +28,22 @@ function M.key(ctx, char, modifiers, is_repeat, state)
   if state ~= 1 then return end
   if is_repeat then return end
 
+  -- Function keys: seamstress keycodes.lua returns a table {name = "F1"} for
+  -- non-printable keys. Match on the name before the string-only guard below,
+  -- so Ansible KEY 1/2 emulation actually fires.
+  if type(char) == "table" then
+    if char.name == "F1" then
+      ctx.time_held = not ctx.time_held
+      ctx.grid_dirty = true
+    elseif char.name == "F2" then
+      ctx.active_page = "alt_track"
+      ctx.grid_dirty = true
+    end
+    return
+  end
+
+  if type(char) ~= "string" then return end
+
   if char == " " then
     if ctx.playing then
       sequencer.stop(ctx)
@@ -58,8 +74,7 @@ function M.key(ctx, char, modifiers, is_repeat, state)
       set_status(ctx, "delete failed: " .. tostring(err))
     end
   elseif char == "p" and modifiers and modifiers.ctrl then
-    ctx.active_page = "probability"
-    set_status(ctx, "probability page")
+    ctx.prob_held = not ctx.prob_held
   elseif char == "a" and modifiers and modifiers.ctrl then
     ctx.active_page = "alt_track"
     set_status(ctx, "alt-track page")
@@ -88,6 +103,12 @@ function M.key(ctx, char, modifiers, is_repeat, state)
       if m == cur then idx = i; break end
     end
     track.direction = modes[(idx % #modes) + 1]
+  elseif char == "l" and not (modifiers and modifiers.ctrl) then
+    ctx.loop_held = not ctx.loop_held
+    if not ctx.loop_held then
+      ctx.loop_first_press = nil
+      ctx.loop_first_y = nil
+    end
   elseif KEY_PAGE[char] then
     local target = KEY_PAGE[char]
     if ctx.active_page == target and grid_ui.EXTENDED_PAGES[target] then

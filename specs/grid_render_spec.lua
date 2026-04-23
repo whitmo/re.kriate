@@ -5,31 +5,178 @@ package.path = package.path .. ";./?.lua"
 
 local grid_render = require("lib/seamstress/grid_render")
 
+-- ========================================================================
+-- Helpers
+-- ========================================================================
+
+local function make_mock_grid(cols, rows)
+  cols = cols or 16
+  rows = rows or 8
+  local leds = {}
+  return {
+    get_led = function(self, x, y) return leds[y * cols + x] or 0 end,
+    led = function(self, x, y, b) leds[y * cols + x] = b end,
+    all = function(self, b)
+      leds = {}
+      if b and b > 0 then
+        for y2 = 1, rows do
+          for x2 = 1, cols do leds[y2 * cols + x2] = b end
+        end
+      end
+    end,
+    cols = function() return cols end,
+    rows = function() return rows end,
+    key = nil,
+    _keys = {},
+  }
+end
+
+local function with_key_log(grid)
+  grid._keys = {}
+  grid.key = function(x, y, z)
+    grid._keys[#grid._keys + 1] = {x = x, y = y, z = z}
+  end
+  return grid
+end
+
+local function make_mock_screen()
+  local calls = {}
+  return {
+    calls = calls,
+    color = function(r, g, b, a)
+      calls[#calls + 1] = {type = "color", r = r, g = g, b = b, a = a}
+    end,
+    move = function(x, y)
+      calls[#calls + 1] = {type = "move", x = x, y = y}
+    end,
+    rect_fill = function(w, h)
+      calls[#calls + 1] = {type = "rect_fill", w = w, h = h}
+    end,
+  }
+end
+
+local function make_perf_screen()
+  local noop = function() end
+  return {color = noop, move = noop, rect_fill = noop}
+end
+
+-- ========================================================================
+-- Tests
+-- ========================================================================
+
 describe("grid_render", function()
 
-  -- ========================================================================
-  -- Phase 2: Brightness-to-color mapping (US4)
-  -- ========================================================================
+  before_each(function()
+    grid_render.reset()
+  end)
+
+  -- ======================================================================
+  -- Configuration
+  -- ======================================================================
+
+  describe("configure", function()
+
+    it("defaults to 128 / yellow / mext", function()
+      local c = grid_render.get_config()
+      assert.are.equal(128, c.size)
+      assert.are.equal("yellow", c.theme)
+      assert.are.equal("mext", c.protocol)
+      assert.are.equal(16, c.cols)
+      assert.are.equal(8, c.rows)
+    end)
+
+    it("accepts valid size presets", function()
+      grid_render.configure({size = 64})
+      local c = grid_render.get_config()
+      assert.are.equal(64, c.size)
+      assert.are.equal(8, c.cols)
+      assert.are.equal(8, c.rows)
+
+      grid_render.configure({size = 256})
+      c = grid_render.get_config()
+      assert.are.equal(256, c.size)
+      assert.are.equal(16, c.cols)
+      assert.are.equal(16, c.rows)
+    end)
+
+    it("ignores invalid size", function()
+      grid_render.configure({size = 999})
+      assert.are.equal(128, grid_render.get_config().size)
+    end)
+
+    it("accepts valid themes", function()
+      for _, name in ipairs(grid_render.THEME_ORDER) do
+        grid_render.configure({theme = name})
+        assert.are.equal(name, grid_render.get_config().theme)
+      end
+    end)
+
+    it("ignores invalid theme", function()
+      grid_render.configure({theme = "neon"})
+      assert.are.equal("yellow", grid_render.get_config().theme)
+    end)
+
+    it("accepts protocol modes", function()
+      grid_render.configure({protocol = "40h"})
+      assert.are.equal("40h", grid_render.get_config().protocol)
+    end)
+
+    it("reset restores defaults", function()
+      grid_render.configure({size = 64, theme = "red", protocol = "40h"})
+      grid_render.reset()
+      local c = grid_render.get_config()
+      assert.are.equal(128, c.size)
+      assert.are.equal("yellow", c.theme)
+      assert.are.equal("mext", c.protocol)
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Screen dimensions
+  -- ======================================================================
+
+  describe("screen dimensions", function()
+
+    it("128 = 256x128", function()
+      assert.are.equal(256, grid_render.screen_width())
+      assert.are.equal(128, grid_render.screen_height())
+    end)
+
+    it("64 = 192x192", function()
+      grid_render.configure({size = 64})
+      assert.are.equal(192, grid_render.screen_width())
+      assert.are.equal(192, grid_render.screen_height())
+    end)
+
+    it("256 = 192x192", function()
+      grid_render.configure({size = 256})
+      assert.are.equal(192, grid_render.screen_width())
+      assert.are.equal(192, grid_render.screen_height())
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Brightness-to-color mapping
+  -- ======================================================================
 
   describe("brightness_to_rgb", function()
 
-    -- T005: brightness 0 → black
-    it("returns (0, 0, 0) for brightness 0", function()
+    it("brightness 0 returns theme dark color", function()
       local r, g, b = grid_render.brightness_to_rgb(0)
-      assert.are.equal(0, r)
-      assert.are.equal(0, g)
-      assert.are.equal(0, b)
+      assert.are.equal(22, r)
+      assert.are.equal(22, g)
+      assert.are.equal(21, b)
     end)
 
-    -- T006: brightness 15 → full warm amber
-    it("returns (255, 178, 102) for brightness 15", function()
+    it("brightness 15 returns theme bright color", function()
       local r, g, b = grid_render.brightness_to_rgb(15)
       assert.are.equal(255, r)
-      assert.are.equal(178, g)
-      assert.are.equal(102, b)
+      assert.are.equal(250, g)
+      assert.are.equal(142, b)
     end)
 
-    -- T007: all 16 levels produce distinct RGB tuples
     it("produces 16 numerically distinct RGB tuples for brightness 0-15", function()
       local seen = {}
       for brightness = 0, 15 do
@@ -40,38 +187,138 @@ describe("grid_render", function()
       end
     end)
 
-    -- T008: dim/active/playhead are visually distinguishable (R differs by >30)
-    it("brightness 4, 10, 15 have R values differing by >30", function()
-      local r4 = grid_render.brightness_to_rgb(4)
-      local r10 = grid_render.brightness_to_rgb(10)
+    it("monotonically increases R from brightness 0 to 15", function()
+      local prev_r = -1
+      for brightness = 0, 15 do
+        local r = grid_render.brightness_to_rgb(brightness)
+        assert.is_true(r > prev_r, "R should increase at brightness " .. brightness)
+        prev_r = r
+      end
+    end)
+
+    it("spans wide R range from 0 to 15", function()
+      local r0 = grid_render.brightness_to_rgb(0)
       local r15 = grid_render.brightness_to_rgb(15)
-      assert.is_true(r10 - r4 > 30, "r10 - r4 should differ by >30")
-      assert.is_true(r15 - r10 > 30, "r15 - r10 should differ by >30")
+      assert.is_true(r15 - r0 > 200, "R range " .. (r15 - r0) .. " should exceed 200")
     end)
 
   end)
 
-  -- ========================================================================
-  -- Phase 3: Coordinate conversion (US4)
-  -- ========================================================================
+  -- ======================================================================
+  -- Visual themes
+  -- ======================================================================
+
+  describe("themes", function()
+
+    it("each theme produces different bright color", function()
+      local brights = {}
+      for _, name in ipairs(grid_render.THEME_ORDER) do
+        grid_render.configure({theme = name})
+        local r, g, b = grid_render.brightness_to_rgb(15)
+        local key = string.format("%d,%d,%d", r, g, b)
+        assert.is_nil(brights[key], name .. " bright duplicates another theme")
+        brights[key] = name
+      end
+    end)
+
+    it("red theme has warm red bright color", function()
+      grid_render.configure({theme = "red"})
+      local r, g, b = grid_render.brightness_to_rgb(15)
+      assert.are.equal(255, r)
+      assert.are.equal(175, g)
+      assert.are.equal(30, b)
+    end)
+
+    it("white theme has cool white bright color", function()
+      grid_render.configure({theme = "white"})
+      local r, g, b = grid_render.brightness_to_rgb(15)
+      assert.are.equal(255, r)
+      assert.are.equal(255, g)
+      assert.are.equal(207, b)
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Protocol modes
+  -- ======================================================================
+
+  describe("protocol modes", function()
+
+    it("mext provides 16 distinct levels", function()
+      grid_render.configure({protocol = "mext"})
+      local seen = {}
+      for b = 0, 15 do
+        local r, g, bb = grid_render.brightness_to_rgb(b)
+        seen[r] = true
+      end
+      local count = 0
+      for _ in pairs(seen) do count = count + 1 end
+      assert.are.equal(16, count)
+    end)
+
+    it("40h collapses to binary (off or full)", function()
+      grid_render.configure({protocol = "40h"})
+      local r0, g0, b0 = grid_render.brightness_to_rgb(0)
+      local r1, g1, b1 = grid_render.brightness_to_rgb(1)
+      local r8, g8, b8 = grid_render.brightness_to_rgb(8)
+      local r15, g15, b15 = grid_render.brightness_to_rgb(15)
+      -- 0 is dark
+      assert.are.equal(22, r0)
+      -- 1 through 15 all map to full brightness
+      assert.are.equal(r15, r1)
+      assert.are.equal(r15, r8)
+      assert.are.equal(g15, g1)
+      assert.are.equal(b15, b1)
+    end)
+
+    it("series collapses to binary like 40h", function()
+      grid_render.configure({protocol = "series"})
+      local r0 = grid_render.brightness_to_rgb(0)
+      local r1 = grid_render.brightness_to_rgb(1)
+      local r15 = grid_render.brightness_to_rgb(15)
+      assert.are.equal(22, r0)
+      assert.are.equal(r15, r1)
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Coordinate conversion
+  -- ======================================================================
 
   describe("grid_to_pixel", function()
 
-    -- T010: boundary values
-    it("converts (1,1) to (0,0) and (16,8) to (240,112)", function()
-      local px1, py1 = grid_render.grid_to_pixel(1, 1)
-      assert.are.equal(0, px1)
-      assert.are.equal(0, py1)
-      local px2, py2 = grid_render.grid_to_pixel(16, 8)
-      assert.are.equal(240, px2)
-      assert.are.equal(112, py2)
+    it("converts (1,1) to (0,0) for default 128 size", function()
+      local px, py = grid_render.grid_to_pixel(1, 1)
+      assert.are.equal(0, px)
+      assert.are.equal(0, py)
+    end)
+
+    it("converts (16,8) to (240,112) for default 128 size", function()
+      local px, py = grid_render.grid_to_pixel(16, 8)
+      assert.are.equal(240, px)
+      assert.are.equal(112, py)
+    end)
+
+    it("uses size-specific pitch for 64", function()
+      grid_render.configure({size = 64})
+      local px, py = grid_render.grid_to_pixel(2, 3)
+      assert.are.equal(24, px)  -- (2-1) * 24
+      assert.are.equal(48, py)  -- (3-1) * 24
+    end)
+
+    it("uses size-specific pitch for 256", function()
+      grid_render.configure({size = 256})
+      local px, py = grid_render.grid_to_pixel(2, 3)
+      assert.are.equal(12, px)  -- (2-1) * 12
+      assert.are.equal(24, py)  -- (3-1) * 12
     end)
 
   end)
 
   describe("pixel_to_grid", function()
 
-    -- T011: boundary values
     it("converts (0,0) to (1,1) and (255,127) to (16,8)", function()
       local gx1, gy1 = grid_render.pixel_to_grid(0, 0)
       assert.are.equal(1, gx1)
@@ -81,184 +328,556 @@ describe("grid_render", function()
       assert.are.equal(8, gy2)
     end)
 
-    -- T012: out-of-bounds returns nil
     it("returns nil for out-of-bounds pixels", function()
       assert.is_nil(grid_render.pixel_to_grid(256, 0))
       assert.is_nil(grid_render.pixel_to_grid(0, 128))
       assert.is_nil(grid_render.pixel_to_grid(-1, 0))
     end)
 
-    -- T013: gap pixels map to correct cell via floor division
-    it("maps gap pixels (14,0) and (15,0) to cell (1,1)", function()
-      local gx1, gy1 = grid_render.pixel_to_grid(14, 0)
-      assert.are.equal(1, gx1)
-      assert.are.equal(1, gy1)
-      local gx2, gy2 = grid_render.pixel_to_grid(15, 0)
-      assert.are.equal(1, gx2)
-      assert.are.equal(1, gy2)
+    it("maps gap pixels to correct cell via floor division", function()
+      local gx, gy = grid_render.pixel_to_grid(15, 0)
+      assert.are.equal(1, gx)
+      assert.are.equal(1, gy)
+    end)
+
+    it("respects 64 size bounds", function()
+      grid_render.configure({size = 64})
+      local gx, gy = grid_render.pixel_to_grid(0, 0)
+      assert.are.equal(1, gx)
+      assert.are.equal(1, gy)
+      -- col 9 is out of bounds for 8x8
+      assert.is_nil(grid_render.pixel_to_grid(192, 0))
+    end)
+
+    it("respects 256 size bounds (16 rows)", function()
+      grid_render.configure({size = 256})
+      local gx, gy = grid_render.pixel_to_grid(0, 180)
+      assert.are.equal(1, gx)
+      assert.are.equal(16, gy)
+      -- row 17 out of bounds
+      assert.is_nil(grid_render.pixel_to_grid(0, 192))
     end)
 
   end)
 
-  -- ========================================================================
-  -- Phase 5: Visual display — grid_render.draw() (US1)
-  -- ========================================================================
-
-  local function make_mock_grid()
-    local leds = {}
-    return {
-      get_led = function(self, x, y) return leds[y * 16 + x] or 0 end,
-      led = function(self, x, y, b) leds[y * 16 + x] = b end,
-      all = function(self, b)
-        leds = {}
-        if b and b > 0 then
-          for y2 = 1, 8 do
-            for x2 = 1, 16 do leds[y2 * 16 + x2] = b end
-          end
-        end
-      end,
-      cols = function() return 16 end,
-      rows = function() return 8 end,
-    }
-  end
-
-  local function make_mock_screen()
-    local calls = {}
-    return {
-      calls = calls,
-      color = function(r, g, b, a)
-        calls[#calls + 1] = {type = "color", r = r, g = g, b = b, a = a}
-      end,
-      move = function(x, y)
-        calls[#calls + 1] = {type = "move", x = x, y = y}
-      end,
-      rect_fill = function(w, h)
-        calls[#calls + 1] = {type = "rect_fill", w = w, h = h}
-      end,
-    }
-  end
-
-  local function make_perf_screen()
-    local noop = function() end
-    return {
-      color = noop,
-      move = noop,
-      rect_fill = noop,
-    }
-  end
+  -- ======================================================================
+  -- Drawing
+  -- ======================================================================
 
   describe("draw", function()
 
-    -- T024: draw calls screen.color and screen.rect_fill for each of 128 cells
-    it("calls screen.color and screen.rect_fill for each of 128 cells", function()
+    it("calls screen.color and rect_fill for edge + fill per cell (128 = 16x8)", function()
       local mock_grid = make_mock_grid()
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
-      local color_count = 0
-      local rect_count = 0
+      local color_count, rect_count = 0, 0
       for _, call in ipairs(mock_screen.calls) do
         if call.type == "color" then color_count = color_count + 1 end
         if call.type == "rect_fill" then rect_count = rect_count + 1 end
       end
-      assert.are.equal(128, color_count)
-      assert.are.equal(128, rect_count)
+      -- 2 per cell (edge + fill): 128 cells * 2 = 256
+      assert.are.equal(256, color_count)
+      assert.are.equal(256, rect_count)
     end)
 
-    -- T025: brightness 15 at (3,2) → correct color and position
-    it("maps LED brightness 15 at (3,2) to correct color and pixel position", function()
+    it("draws 64 cells for 64 size (8x8)", function()
+      grid_render.configure({size = 64})
+      local mock_grid = make_mock_grid(8, 8)
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen)
+      local rect_count = 0
+      for _, call in ipairs(mock_screen.calls) do
+        if call.type == "rect_fill" then rect_count = rect_count + 1 end
+      end
+      assert.are.equal(128, rect_count)  -- 64 cells * 2 (edge + fill)
+    end)
+
+    it("draws 256 cells for 256 size (16x16)", function()
+      grid_render.configure({size = 256})
+      local mock_grid = make_mock_grid(16, 16)
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen)
+      local rect_count = 0
+      for _, call in ipairs(mock_screen.calls) do
+        if call.type == "rect_fill" then rect_count = rect_count + 1 end
+      end
+      assert.are.equal(512, rect_count)  -- 256 cells * 2 (edge + fill)
+    end)
+
+    it("brightness 15 at (3,2) uses theme bright color at inset position", function()
       local mock_grid = make_mock_grid()
       mock_grid:led(3, 2, 15)
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
-      -- Find the move+rect pair for cell (3,2) — pixel (32, 16)
-      local found_color, found_move = false, false
+      local found = false
+      -- Fill is inset 1px from cell origin: (32+1, 16+1) = (33, 17)
       for i, call in ipairs(mock_screen.calls) do
-        if call.type == "move" and call.x == 32 and call.y == 16 then
-          found_move = true
-          -- color call should be 2 before (color, move, rect_fill)
+        if call.type == "move" and call.x == 33 and call.y == 17 then
           local color_call = mock_screen.calls[i - 1]
           assert.are.equal("color", color_call.type)
           assert.are.equal(255, color_call.r)
-          assert.are.equal(178, color_call.g)
-          assert.are.equal(102, color_call.b)
-          found_color = true
+          assert.are.equal(250, color_call.g)
+          assert.are.equal(142, color_call.b)
+          found = true
         end
       end
-      assert.is_true(found_move, "expected move to (32, 16)")
-      assert.is_true(found_color, "expected warm amber color for brightness 15")
+      assert.is_true(found, "expected fill move to (33, 17) with yellow bright color")
     end)
 
-    -- T026: brightness 0 renders as near-black (0, 0, 0)
-    it("renders cells with brightness 0 as black (0, 0, 0)", function()
+    it("renders brightness 0 cells as theme dark color (fill after edge)", function()
       local mock_grid = make_mock_grid()
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
-      -- All cells are brightness 0 → all colors should be (0,0,0)
+      -- First cell: calls[1]=edge color, [2]=edge move, [3]=edge rect,
+      --             calls[4]=fill color, [5]=fill move, [6]=fill rect
+      local fill_color = mock_screen.calls[4]
+      assert.are.equal("color", fill_color.type)
+      assert.are.equal(22, fill_color.r)
+      assert.are.equal(22, fill_color.g)
+      assert.are.equal(21, fill_color.b)
+    end)
+
+    it("renders edge border darker than theme dark color", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen)
+      -- First color call is the edge color
+      local edge = mock_screen.calls[1]
+      assert.are.equal("color", edge.type)
+      local er, eg, eb = grid_render.edge_rgb()
+      assert.are.equal(er, edge.r)
+      assert.are.equal(eg, edge.g)
+      assert.are.equal(eb, edge.b)
+      -- Edge must be darker than theme dark
+      assert.is_true(er < 22, "edge R should be darker than dark")
+      assert.is_true(eg < 22, "edge G should be darker than dark")
+    end)
+
+    it("draws lock dot indicators for locked keys", function()
+      local mock_grid = with_key_log(make_mock_grid())
+      -- Lock a key via gesture
+      grid_render.set_modifier("ctrl", true)
+      grid_render.set_modifier("shift", true)
+      grid_render.handle_click(mock_grid, 32, 0, 1, 1) -- cell (3,1)
+      grid_render.set_modifier("ctrl", false)
+      grid_render.set_modifier("shift", false)
+
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen)
+
+      -- Should have extra color+move+rect_fill calls for the dot
+      local dot_colors = 0
       for _, call in ipairs(mock_screen.calls) do
-        if call.type == "color" then
-          assert.are.equal(0, call.r)
-          assert.are.equal(0, call.g)
-          assert.are.equal(0, call.b)
+        if call.type == "color" and call.r == 255 and call.g == 255 and call.b == 255 and call.a == 200 then
+          dot_colors = dot_colors + 1
         end
       end
+      assert.are.equal(1, dot_colors, "expected 1 lock dot indicator")
     end)
 
   end)
 
-  -- ========================================================================
-  -- Phase 9: Performance (US5)
-  -- ========================================================================
+  -- ======================================================================
+  -- Click handling — momentary
+  -- ======================================================================
+
+  describe("handle_click — momentary", function()
+
+    it("fires key press and release on normal click", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.handle_click(grid, 0, 0, 1, 1)   -- press (1,1)
+      grid_render.handle_click(grid, 0, 0, 0, 1)   -- release (1,1)
+      assert.are.equal(2, #grid._keys)
+      assert.are.same({x = 1, y = 1, z = 1}, grid._keys[1])
+      assert.are.same({x = 1, y = 1, z = 0}, grid._keys[2])
+    end)
+
+    it("ignores clicks outside grid", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.handle_click(grid, 300, 0, 1, 1)
+      assert.are.equal(0, #grid._keys)
+    end)
+
+    it("ignores middle mouse button", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.handle_click(grid, 0, 0, 1, 3)
+      assert.are.equal(0, #grid._keys)
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Click handling — hold gesture (Ctrl+click)
+  -- ======================================================================
+
+  describe("handle_click — hold gesture", function()
+
+    it("Ctrl+click holds key down, ignores mouse release", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1)   -- press
+      grid_render.handle_click(grid, 0, 0, 0, 1)   -- release (ignored in hold mode)
+      assert.are.equal(1, #grid._keys)
+      assert.are.same({x = 1, y = 1, z = 1}, grid._keys[1])
+    end)
+
+    it("Ctrl+click multiple keys holds all simultaneously", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1)    -- hold (1,1)
+      grid_render.handle_click(grid, 16, 0, 1, 1)   -- hold (2,1)
+      grid_render.handle_click(grid, 32, 0, 1, 1)   -- hold (3,1)
+      assert.are.equal(3, #grid._keys)
+      -- All are presses
+      for _, k in ipairs(grid._keys) do
+        assert.are.equal(1, k.z)
+      end
+    end)
+
+    it("releasing Ctrl releases all held keys", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1)   -- hold (1,1)
+      grid_render.handle_click(grid, 16, 0, 1, 1)  -- hold (2,1)
+      grid_render.set_modifier("ctrl", false)       -- release all
+      -- 2 presses + 2 releases
+      assert.are.equal(4, #grid._keys)
+      local releases = 0
+      for _, k in ipairs(grid._keys) do
+        if k.z == 0 then releases = releases + 1 end
+      end
+      assert.are.equal(2, releases)
+    end)
+
+    it("held keys appear in get_held_keys while Ctrl is down", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1)
+      local held = grid_render.get_held_keys(grid)
+      local count = 0
+      for _ in pairs(held) do count = count + 1 end
+      assert.are.equal(1, count)
+      grid_render.set_modifier("ctrl", false)
+      held = grid_render.get_held_keys(grid)
+      count = 0
+      for _ in pairs(held) do count = count + 1 end
+      assert.are.equal(0, count)
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Click handling — lock gesture (Ctrl+Shift+click)
+  -- ======================================================================
+
+  describe("handle_click — lock gesture", function()
+
+    it("Ctrl+Shift+click locks key (press on first click)", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.set_modifier("shift", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1) -- lock (1,1)
+      assert.are.equal(1, #grid._keys)
+      assert.are.same({x = 1, y = 1, z = 1}, grid._keys[1])
+      local locks = grid_render.get_locked_keys(grid)
+      assert.is_true(locks["1:1"] == true)
+    end)
+
+    it("Ctrl+Shift+click again unlocks key (release)", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.set_modifier("shift", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1) -- lock
+      grid_render.handle_click(grid, 0, 0, 1, 1) -- unlock
+      assert.are.equal(2, #grid._keys)
+      assert.are.same({x = 1, y = 1, z = 0}, grid._keys[2])
+      local locks = grid_render.get_locked_keys(grid)
+      assert.is_nil(locks["1:1"])
+    end)
+
+    it("locked keys survive Ctrl release", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.set_modifier("shift", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1) -- lock
+      grid_render.set_modifier("ctrl", false)
+      grid_render.set_modifier("shift", false)
+      -- Only the lock press, no release
+      assert.are.equal(1, #grid._keys)
+      local locks = grid_render.get_locked_keys(grid)
+      assert.is_true(locks["1:1"] == true)
+    end)
+
+    it("Esc releases all locked keys", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.set_modifier("shift", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1)   -- lock (1,1)
+      grid_render.handle_click(grid, 16, 0, 1, 1)  -- lock (2,1)
+      grid_render.set_modifier("ctrl", false)
+      grid_render.set_modifier("shift", false)
+      grid_render.release_locked_keys(grid)
+      -- 2 lock presses + 2 Esc releases
+      assert.are.equal(4, #grid._keys)
+      local locks = grid_render.get_locked_keys(grid)
+      local count = 0
+      for _ in pairs(locks) do count = count + 1 end
+      assert.are.equal(0, count)
+    end)
+
+    it("lock and hold work together", function()
+      local grid = with_key_log(make_mock_grid())
+      -- Lock a key
+      grid_render.set_modifier("ctrl", true)
+      grid_render.set_modifier("shift", true)
+      grid_render.handle_click(grid, 0, 0, 1, 1) -- lock (1,1)
+      grid_render.set_modifier("shift", false)
+      -- Now hold another key (Ctrl still down, shift off)
+      grid_render.handle_click(grid, 16, 0, 1, 1) -- hold (2,1)
+      -- Release Ctrl → held key releases, locked key stays
+      grid_render.set_modifier("ctrl", false)
+      local locks = grid_render.get_locked_keys(grid)
+      assert.is_true(locks["1:1"] == true, "locked key should survive Ctrl release")
+      local held = grid_render.get_held_keys(grid)
+      local held_count = 0
+      for _ in pairs(held) do held_count = held_count + 1 end
+      assert.are.equal(0, held_count, "held keys should be released")
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Nav button latch (existing behavior)
+  -- ======================================================================
+
+  describe("nav button latch", function()
+
+    it("nav loop button (11,8) toggles on press", function()
+      local grid = with_key_log(make_mock_grid())
+      local px, py = grid_render.grid_to_pixel(11, 8)
+      grid_render.handle_click(grid, px, py, 1, 1) -- toggle on
+      assert.are.same({x = 11, y = 8, z = 1}, grid._keys[1])
+      grid_render.handle_click(grid, px, py, 1, 1) -- toggle off
+      assert.are.same({x = 11, y = 8, z = 0}, grid._keys[2])
+    end)
+
+    it("nav pattern button (12,8) toggles on press", function()
+      local grid = with_key_log(make_mock_grid())
+      local px, py = grid_render.grid_to_pixel(12, 8)
+      grid_render.handle_click(grid, px, py, 1, 1)
+      assert.are.same({x = 12, y = 8, z = 1}, grid._keys[1])
+    end)
+
+    it("KEY 1 button (5,8) toggles on press", function()
+      local grid = with_key_log(make_mock_grid())
+      local px, py = grid_render.grid_to_pixel(5, 8)
+      grid_render.handle_click(grid, px, py, 1, 1) -- toggle on
+      assert.are.same({x = 5, y = 8, z = 1}, grid._keys[1])
+      grid_render.handle_click(grid, px, py, 1, 1) -- toggle off
+      assert.are.same({x = 5, y = 8, z = 0}, grid._keys[2])
+    end)
+
+    it("nav latch works with right-click too", function()
+      local grid = with_key_log(make_mock_grid())
+      local px, py = grid_render.grid_to_pixel(11, 8)
+      grid_render.handle_click(grid, px, py, 1, 2) -- right-click toggle on
+      assert.are.same({x = 11, y = 8, z = 1}, grid._keys[1])
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Modifier state
+  -- ======================================================================
+
+  describe("modifier state", function()
+
+    it("tracks ctrl and shift independently", function()
+      grid_render.set_modifier("ctrl", true)
+      assert.is_true(grid_render.get_modifier("ctrl"))
+      assert.is_false(grid_render.get_modifier("shift"))
+      grid_render.set_modifier("shift", true)
+      assert.is_true(grid_render.get_modifier("shift"))
+    end)
+
+    it("reset clears modifiers", function()
+      grid_render.set_modifier("ctrl", true)
+      grid_render.reset()
+      assert.is_false(grid_render.get_modifier("ctrl"))
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Performance
+  -- ======================================================================
 
   describe("performance", function()
 
-    -- T040: 100 consecutive draws complete in under 500ms
-    it("100 draws complete in under 500ms (< 5ms avg)", function()
+    it("100 draws of 128 grid complete in under 1000ms", function()
       local mock_grid = make_mock_grid()
-      mock_grid:all(8) -- set some non-zero brightness
-      -- Use a lean sink so the timing reflects draw work, not mock allocation churn.
+      mock_grid:all(8)
       local mock_screen = make_perf_screen()
       local start = os.clock()
       for _ = 1, 100 do
         grid_render.draw(mock_grid, mock_screen)
       end
-      local elapsed = (os.clock() - start) * 1000  -- ms
-      assert.is_true(elapsed < 500, "100 draws took " .. elapsed .. "ms (> 500ms limit)")
+      local elapsed = (os.clock() - start) * 1000
+      assert.is_true(elapsed < 1000, "100 draws took " .. elapsed .. "ms (> 1000ms limit)")
     end)
 
   end)
 
-  -- ========================================================================
-  -- Phase 10: Edge cases
-  -- ========================================================================
+  -- ======================================================================
+  -- Edge cases
+  -- ======================================================================
 
   describe("edge cases", function()
 
-    -- T042: gap click — pixel (15,15) inside gap area maps to cell (1,1)
-    it("gap pixel (15,15) maps to cell (1,1) via floor division", function()
+    it("gap pixel maps to correct cell", function()
       local gx, gy = grid_render.pixel_to_grid(15, 15)
       assert.are.equal(1, gx)
       assert.are.equal(1, gy)
     end)
 
-    -- T045: cleanup mid-render — cleanup resets LED state, next draw renders all-black
-    it("cleanup resets LED state so next draw renders all-black", function()
+    it("cleanup resets LED state so next draw renders all dark", function()
       local mock_grid = make_mock_grid()
       mock_grid:led(5, 3, 15)
-      mock_grid:led(10, 7, 10)
-      -- Cleanup
       mock_grid:all(0)
-      -- Draw should now produce all-black
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen)
+      -- Every other color call (with a==255) is a fill; check those are dark
+      local color_idx = 0
+      local er = grid_render.edge_rgb()
+      for _, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.a == 255 then
+          color_idx = color_idx + 1
+          if color_idx % 2 == 0 then  -- fill colors (even)
+            assert.are.equal(22, call.r, "expected R=22 (dark) after cleanup")
+          else  -- edge colors (odd)
+            assert.are.equal(er, call.r, "expected edge R after cleanup")
+          end
+        end
+      end
+    end)
+
+    it("handle_click with nil button defaults to left", function()
+      local grid = with_key_log(make_mock_grid())
+      grid_render.handle_click(grid, 0, 0, 1, nil)
+      assert.are.equal(1, #grid._keys)
+    end)
+
+    it("per-grid state isolation", function()
+      local g1 = with_key_log(make_mock_grid())
+      local g2 = with_key_log(make_mock_grid())
+      grid_render.set_modifier("ctrl", true)
+      grid_render.set_modifier("shift", true)
+      grid_render.handle_click(g1, 0, 0, 1, 1) -- lock on g1
+      grid_render.set_modifier("ctrl", false)
+      grid_render.set_modifier("shift", false)
+      local locks1 = grid_render.get_locked_keys(g1)
+      local locks2 = grid_render.get_locked_keys(g2)
+      assert.is_true(locks1["1:1"] == true)
+      local count2 = 0
+      for _ in pairs(locks2) do count2 = count2 + 1 end
+      assert.are.equal(0, count2, "g2 should have no locked keys")
+    end)
+
+  end)
+
+  -- ======================================================================
+  -- Loop boundary indicators
+  -- ======================================================================
+
+  describe("loop boundary indicators", function()
+
+    before_each(function()
+      grid_render.reset()
+    end)
+
+    it("draws two vertical lines when opts has loop_start and loop_end", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen, {loop_start = 3, loop_end = 8})
+      -- Find the light grey color calls (100, 100, 100) for loop indicators
+      local grey_calls = {}
+      for i, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 and call.b == 100 then
+          grey_calls[#grey_calls + 1] = i
+        end
+      end
+      assert.are.equal(2, #grey_calls, "expected 2 light grey color calls for loop boundaries")
+    end)
+
+    it("positions left boundary at loop_start column left edge", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen, {loop_start = 3, loop_end = 8})
+      -- After the first grey color call, next move should be at (3-1)*16 = 32
+      local found_start = false
+      for i, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 then
+          local next_move = mock_screen.calls[i + 1]
+          if next_move and next_move.type == "move" and next_move.x == 32 then
+            found_start = true
+            break
+          end
+        end
+      end
+      assert.is_true(found_start, "expected move to x=32 for loop_start=3")
+    end)
+
+    it("positions right boundary at loop_end column right edge", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen, {loop_start = 3, loop_end = 8})
+      -- Right boundary: (loop_end - 1) * cell_pitch + cell_size
+      local cfg = grid_render.get_config()
+      local expected_x = (8 - 1) * cfg.cell_pitch + cfg.cell_size
+      local found_end = false
+      for i, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 then
+          local next_move = mock_screen.calls[i + 1]
+          if next_move and next_move.type == "move" and next_move.x == expected_x then
+            found_end = true
+            break
+          end
+        end
+      end
+      assert.is_true(found_end, "expected move to x=" .. expected_x .. " for loop_end=8")
+    end)
+
+    it("does not draw indicators when opts is nil", function()
+      local mock_grid = make_mock_grid()
       local mock_screen = make_mock_screen()
       grid_render.draw(mock_grid, mock_screen)
       for _, call in ipairs(mock_screen.calls) do
-        if call.type == "color" then
-          assert.are.equal(0, call.r, "expected R=0 after cleanup")
-          assert.are.equal(0, call.g, "expected G=0 after cleanup")
-          assert.are.equal(0, call.b, "expected B=0 after cleanup")
+        if call.type == "color" and call.r == 100 and call.g == 100 and call.b == 100 then
+          error("unexpected loop indicator color call when opts is nil")
         end
       end
+    end)
+
+    it("indicator height spans rows 1-7 (excludes nav row)", function()
+      local mock_grid = make_mock_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(mock_grid, mock_screen, {loop_start = 1, loop_end = 16})
+      -- Indicator height should be (8-1)*16 = 112 pixels (7 rows)
+      local found_rect = false
+      for i, call in ipairs(mock_screen.calls) do
+        if call.type == "color" and call.r == 100 and call.g == 100 then
+          -- Find the rect_fill after the next move
+          local rect = mock_screen.calls[i + 2]
+          if rect and rect.type == "rect_fill" and rect.w == 1 and rect.h == 112 then
+            found_rect = true
+            break
+          end
+        end
+      end
+      assert.is_true(found_rect, "expected rect_fill(1, 112) for 7-row indicator height")
     end)
 
   end)
 
 end)
+

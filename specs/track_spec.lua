@@ -164,6 +164,7 @@ describe("track", function()
       assert.is_true(names["ratchet"])
       assert.is_true(names["alt_note"])
       assert.is_true(names["glide"])
+      assert.is_true(names["probability"])
       assert.equals(9, #track.PARAM_NAMES)
     end)
 
@@ -276,7 +277,7 @@ describe("track", function()
       assert.are.same({15, 16, 15, 16, 15, 16}, vals)
     end)
 
-    it("T006: polymetric independence — 8 params with different loop lengths", function()
+    it("T006: polymetric independence — 9 params with different loop lengths", function()
       local t = track.new_track(1)
       -- set each param to a different loop length
       local lengths = {2, 3, 4, 5, 6, 7, 8, 16, 9}

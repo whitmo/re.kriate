@@ -209,51 +209,44 @@ describe("integration", function()
 
   end)
 
-  describe("pattern persistence params", function()
+  describe("pattern persistence helpers", function()
+    -- The pattern_persistence param group was removed (re-2yn): preset
+    -- persistence owns unified save/load. The underlying app.save_pattern_bank
+    -- helpers remain for keyboard shortcuts and internal use.
 
-    it("saves and loads the current bank through params actions", function()
+    it("saves and loads the current bank via app helpers", function()
       local ctx = make_app()
       ctx.tracks[1].division = 6
       ctx.tracks[2].params.note.steps[3] = 5
-      params:set("pattern_bank_name", "menu-bank")
-      params:set("pattern_bank_save", 2)
+
+      assert.is_true(app.save_pattern_bank(ctx, "menu-bank"))
       assert.are.equal("saved bank", ctx.pattern_message.text)
 
       ctx.tracks = track_mod.new_tracks()
       assert.are.equal(1, ctx.tracks[1].division)
 
-      params:set("pattern_bank_load", 2)
-
+      assert.is_true(app.load_pattern_bank(ctx, "menu-bank"))
       assert.are.equal(6, ctx.tracks[1].division)
       assert.are.equal(5, ctx.tracks[2].params.note.steps[3])
       assert.are.equal("loaded bank", ctx.pattern_message.text)
-      assert.are.equal(1, params:get("pattern_bank_save"))
-      assert.are.equal(1, params:get("pattern_bank_load"))
     end)
 
-    it("lists saved banks through params actions", function()
+    it("lists saved banks via app helpers", function()
       local ctx = make_app()
-      params:set("pattern_bank_name", "alpha-bank")
-      params:set("pattern_bank_save", 2)
-      params:set("pattern_bank_name", "beta-bank")
-      params:set("pattern_bank_save", 2)
+      assert.is_true(app.save_pattern_bank(ctx, "alpha-bank"))
+      assert.is_true(app.save_pattern_bank(ctx, "beta-bank"))
 
-      params:set("pattern_bank_list", 2)
-
+      app.list_pattern_banks(ctx)
       assert.are.equal("banks: alpha-bank, beta-bank", ctx.pattern_message.text)
-      assert.are.equal(1, params:get("pattern_bank_list"))
     end)
 
-    it("deletes the current bank through params actions", function()
+    it("deletes a bank via app helpers", function()
       local ctx = make_app()
-      params:set("pattern_bank_name", "trash-bank")
-      params:set("pattern_bank_save", 2)
+      assert.is_true(app.save_pattern_bank(ctx, "trash-bank"))
 
-      params:set("pattern_bank_delete", 2)
-      params:set("pattern_bank_list", 2)
-
+      assert.is_true(app.delete_pattern_bank(ctx, "trash-bank"))
+      app.list_pattern_banks(ctx)
       assert.are.equal("banks: none", ctx.pattern_message.text)
-      assert.are.equal(1, params:get("pattern_bank_delete"))
     end)
 
   end)
@@ -427,6 +420,105 @@ describe("integration", function()
 
   end)
 
+  describe("app.redraw page indicator tray (re-egv)", function()
+    local captured_texts, captured_levels
+
+    -- Temporarily install a capturing screen mock
+    local function install_capture()
+      captured_texts = {}
+      captured_levels = {}
+      local cur_level = 0
+      screen.level = function(l) cur_level = l end
+      screen.text = function(s)
+        table.insert(captured_texts, s)
+        table.insert(captured_levels, cur_level)
+      end
+    end
+
+    local function restore_screen()
+      screen.level = function() end
+      screen.text = function() end
+    end
+
+    after_each(function() restore_screen() end)
+
+    it("renders all 9 page group labels", function()
+      local ctx = make_app()
+      install_capture()
+      app.redraw(ctx)
+      -- Check that tray labels appear in captured text
+      local expected = {"tr", "no", "oc", "du", "ve", "pr", "at", "mp", "sc"}
+      for _, label in ipairs(expected) do
+        local found = false
+        for _, t in ipairs(captured_texts) do
+          if t == label then found = true; break end
+        end
+        assert.is_true(found, "expected page label '" .. label .. "' in tray")
+      end
+    end)
+
+    it("highlights active page at level 15", function()
+      local ctx = make_app()
+      ctx.active_page = "note"
+      install_capture()
+      app.redraw(ctx)
+      for i, t in ipairs(captured_texts) do
+        if t == "no" then
+          assert.are.equal(15, captured_levels[i],
+            "active page label 'no' should be level 15")
+          return
+        end
+      end
+      error("label 'no' not found")
+    end)
+
+    it("dims inactive pages at level 3", function()
+      local ctx = make_app()
+      ctx.active_page = "trigger"
+      install_capture()
+      app.redraw(ctx)
+      for i, t in ipairs(captured_texts) do
+        if t == "du" then
+          assert.are.equal(3, captured_levels[i],
+            "inactive page label 'du' should be level 3")
+          return
+        end
+      end
+      error("label 'du' not found")
+    end)
+
+    it("shows extended label when on ratchet page", function()
+      local ctx = make_app()
+      ctx.active_page = "ratchet"
+      install_capture()
+      app.redraw(ctx)
+      local found_ra = false
+      for i, t in ipairs(captured_texts) do
+        if t == "ra" then
+          found_ra = true
+          assert.are.equal(15, captured_levels[i])
+        end
+      end
+      assert.is_true(found_ra, "expected 'ra' label when on ratchet page")
+    end)
+
+    it("shows extended label when on glide page", function()
+      local ctx = make_app()
+      ctx.active_page = "glide"
+      install_capture()
+      app.redraw(ctx)
+      local found_gl = false
+      for i, t in ipairs(captured_texts) do
+        if t == "gl" then
+          found_gl = true
+          assert.are.equal(15, captured_levels[i])
+        end
+      end
+      assert.is_true(found_gl, "expected 'gl' label when on glide page")
+    end)
+
+  end)
+
   describe("app.key (T065)", function()
 
     it("K2 toggles play state", function()
@@ -488,7 +580,7 @@ describe("integration", function()
       app.enc(ctx, 2, -10)
       assert.are.equal("trigger", ctx.active_page)
       app.enc(ctx, 2, 100)
-      assert.are.equal("alt_track", ctx.active_page)
+      assert.are.equal("scale", ctx.active_page)
     end)
 
   end)
@@ -537,6 +629,7 @@ describe("integration", function()
       ctx.tracks[1].params.trigger.steps[1] = 1
       ctx.tracks[1].params.trigger.pos = 1
       ctx.tracks[1].params.ratchet.steps[1] = 3
+      ctx.tracks[1].params.ratchet.bits[1] = 7  -- 0b111: all 3 sub-gates active
       ctx.tracks[1].params.ratchet.pos = 1
 
       -- Override clock.run to execute synchronously (ratchet uses clock.run+clock.sleep)

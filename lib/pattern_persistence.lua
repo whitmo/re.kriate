@@ -233,17 +233,79 @@ local function ensure_probability(track)
   }
 end
 
-local function ensure_probability_slots(slots)
+local MAX_RATCHET = 5
+
+local function ensure_ratchet_bits(track)
+  if not track or not track.params then return end
+  local ratchet = track.params.ratchet
+  if not ratchet then return end
+  -- Clamp values to new max range
+  for i = 1, 16 do
+    if ratchet.steps[i] then
+      ratchet.steps[i] = math.max(1, math.min(MAX_RATCHET, ratchet.steps[i]))
+    end
+  end
+  -- Add bits array if missing
+  if not ratchet.bits then
+    ratchet.bits = {}
+    for i = 1, 16 do
+      local count = ratchet.steps[i] or 1
+      ratchet.bits[i] = (1 << count) - 1  -- all subdivisions active
+    end
+  end
+end
+
+-- Snapshot meta-sequencer state for persistence.
+-- Only durable fields are saved; runtime playback state (active, pos,
+-- loop_counter, cued_slot) is intentionally omitted so a loaded bank never
+-- resumes mid-playback.
+local function snapshot_meta(meta)
+  if type(meta) ~= "table" then return nil end
+  return {
+    steps = deep_copy(meta.steps),
+    length = meta.length,
+    selected_step = meta.selected_step,
+  }
+end
+
+-- Restore meta-sequencer state from a payload snapshot. Runtime fields are
+-- reset to safe defaults; existing ctx.meta is replaced in-place so external
+-- references remain valid.
+local function apply_meta(ctx, saved)
+  if not ctx or type(saved) ~= "table" then return end
+  local target = ctx.meta
+  if type(target) ~= "table" then
+    target = {}
+    ctx.meta = target
+  end
+  target.steps = deep_copy(saved.steps)
+  target.length = saved.length or 0
+  target.selected_step = saved.selected_step or 1
+  target.pos = 1
+  target.loop_counter = 0
+  target.active = false
+  target.cued_slot = nil
+end
+
+local function ensure_slots_migrated(slots)
   if not slots then return end
   for _, slot in pairs(slots) do
     if slot.tracks then
       for _, track in pairs(slot.tracks) do
         ensure_probability(track)
+        ensure_ratchet_bits(track)
       end
     end
   end
 end
 
+local function ensure_tracks_migrated(tracks)
+  if type(tracks) ~= "table" then return end
+  for _, track in pairs(tracks) do
+    ensure_probability(track)
+    ensure_ratchet_bits(track)
+  end
+end
 
 local function decode_payload(path)
   if tab and tab.load then
@@ -277,20 +339,25 @@ function pattern_persistence.save(ctx, name)
     return nil, "ctx_missing"
   end
 
-  -- Always snapshot current tracks into slot 1 so save captures live state
-  if ctx.tracks then
-    ctx.patterns[1] = ctx.patterns[1] or {}
-    ctx.patterns[1].tracks = deep_copy(ctx.tracks)
-    ctx.patterns[1].populated = true
-  end
-
   local payload = {
     version = 1,
-    saved_slot = 1,
     slots = deep_copy(ctx.patterns),
   }
 
-  -- pick first populated slot as default loaded slot
+  -- FR-007b: store live track state outside the 16 visible pattern slots so
+  -- save never mutates a user-authored slot as an implementation detail.
+  if ctx.tracks then
+    payload.tracks = deep_copy(ctx.tracks)
+  end
+
+  local meta_snapshot = snapshot_meta(ctx.meta)
+  if meta_snapshot then
+    payload.meta = meta_snapshot
+  end
+
+  -- Legacy metadata: pick the first populated slot as the "default" loaded
+  -- slot when older loaders fall back to slot-based track restoration.
+  payload.saved_slot = 1
   for i = 1, #payload.slots do
     if payload.slots[i].populated then
       payload.saved_slot = i
@@ -326,15 +393,28 @@ function pattern_persistence.load(ctx, name)
   end
 
   if not data.slots then return nil, "invalid_payload" end
-  ensure_probability_slots(data.slots)
+  ensure_slots_migrated(data.slots)
+  ensure_tracks_migrated(data.tracks)
 
   local slots = data.slots
   ctx.patterns = deep_copy(slots)
 
-  -- restore tracks from saved_slot if populated
-  local slot_num = data.saved_slot or 1
-  if slots[slot_num] and slots[slot_num].populated and slots[slot_num].tracks then
-    ctx.tracks = deep_copy(slots[slot_num].tracks)
+  -- Restore live tracks. Prefer the top-level payload.tracks snapshot
+  -- (FR-007b); legacy banks that predate this field fall back to the
+  -- saved_slot convention so older .krp files still round-trip.
+  if type(data.tracks) == "table" then
+    ctx.tracks = deep_copy(data.tracks)
+  else
+    local slot_num = data.saved_slot or 1
+    if slots[slot_num] and slots[slot_num].populated and slots[slot_num].tracks then
+      ctx.tracks = deep_copy(slots[slot_num].tracks)
+    end
+  end
+
+  -- restore meta-sequencer state when present. Banks saved before this field
+  -- existed simply leave ctx.meta untouched so in-memory chains survive load.
+  if type(data.meta) == "table" then
+    apply_meta(ctx, data.meta)
   end
 
   return true
@@ -374,6 +454,5 @@ end
 function pattern_persistence._test_set_fs(fs_impl)
   fs_override = fs_impl
 end
-
 
 return pattern_persistence

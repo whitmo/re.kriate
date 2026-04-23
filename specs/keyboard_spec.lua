@@ -145,11 +145,12 @@ describe("keyboard", function()
       assert.are.equal(ctx.active_page, "velocity")
     end)
 
-    it("ctrl+p jumps to probability page and sets status", function()
+    it("ctrl+p toggles probability modifier", function()
       local ctx = make_ctx()
       keyboard.key(ctx, "p", {ctrl = true}, false, 1)
-      assert.are.equal("probability", ctx.active_page)
-      assert.are.equal("probability page", ctx.pattern_message.text)
+      assert.is_true(ctx.prob_held)
+      keyboard.key(ctx, "p", {ctrl = true}, false, 1)
+      assert.is_false(ctx.prob_held)
     end)
 
   end)
@@ -192,22 +193,20 @@ describe("keyboard", function()
 
   describe("pattern persistence shortcuts", function()
 
-    it("ctrl+s saves the current bank using the configured name", function()
+    it("ctrl+s saves the current bank to the default name", function()
       local ctx = make_ctx()
       ctx.tracks[1].division = 7
-      params:set("pattern_bank_name", "shortcut-bank")
 
       keyboard.key(ctx, "s", {ctrl = true}, false, 1)
 
-      local fh = io.open(persistence_tmp .. "/shortcut-bank.krp", "r")
+      local fh = io.open(persistence_tmp .. "/default.krp", "r")
       assert.is_not_nil(fh)
       fh:close()
       assert.are.equal("saved bank", ctx.pattern_message.text)
     end)
 
-    it("ctrl+l reloads the configured bank into ctx", function()
+    it("ctrl+l reloads the default bank into ctx", function()
       local ctx = make_ctx()
-      params:set("pattern_bank_name", "reload-bank")
       ctx.tracks[1].division = 8
       keyboard.key(ctx, "s", {ctrl = true}, false, 1)
 
@@ -220,10 +219,10 @@ describe("keyboard", function()
 
     it("ctrl+b lists saved banks", function()
       local ctx = make_ctx()
-      params:set("pattern_bank_name", "alpha-bank")
-      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
-      params:set("pattern_bank_name", "beta-bank")
-      keyboard.key(ctx, "s", {ctrl = true}, false, 1)
+      -- Seed two banks via the library directly so ctrl+b has something to list
+      ctx.tracks[1].division = 3
+      assert.is_true(pattern_persistence.save(ctx, "alpha-bank"))
+      assert.is_true(pattern_persistence.save(ctx, "beta-bank"))
 
       keyboard.key(ctx, "b", {ctrl = true}, false, 1)
 
@@ -231,9 +230,8 @@ describe("keyboard", function()
     end)
 
 
-    it("ctrl+shift+d deletes the configured bank and removes it from the list", function()
+    it("ctrl+shift+d deletes the default bank and removes it from the list", function()
       local ctx = make_ctx()
-      params:set("pattern_bank_name", "delete-bank")
       keyboard.key(ctx, "s", {ctrl = true}, false, 1)
 
       keyboard.key(ctx, "d", {ctrl = true, shift = true}, false, 1)
@@ -244,8 +242,7 @@ describe("keyboard", function()
 
     it("ctrl+shift+d reports delete failures", function()
       local ctx = make_ctx()
-      params:set("pattern_bank_name", "missing-bank")
-
+      -- Nothing saved; deleting the default bank reports not_found.
       keyboard.key(ctx, "d", {ctrl = true, shift = true}, false, 1)
 
       assert.are.equal("delete failed: not_found", ctx.pattern_message.text)
@@ -366,6 +363,59 @@ describe("keyboard", function()
 
   end)
 
+  describe("ansible key emulation", function()
+    -- seamstress delivers F-keys as tables ({name = "F1"}), not strings.
+    -- The keyboard handler must accept the table form; string "f1" never
+    -- arrives from the real runtime.
+    local F1 = {name = "F1"}
+    local F2 = {name = "F2"}
+
+    it("F1 toggles time_held on", function()
+      local ctx = make_ctx()
+      ctx.time_held = false
+      keyboard.key(ctx, F1, {}, false, 1)
+      assert.is_true(ctx.time_held)
+    end)
+
+    it("F1 toggles time_held off", function()
+      local ctx = make_ctx()
+      ctx.time_held = true
+      keyboard.key(ctx, F1, {}, false, 1)
+      assert.is_false(ctx.time_held)
+    end)
+
+    it("F1 marks grid dirty so the time page redraws", function()
+      local ctx = make_ctx()
+      ctx.grid_dirty = false
+      keyboard.key(ctx, F1, {}, false, 1)
+      assert.is_true(ctx.grid_dirty)
+    end)
+
+    it("F2 switches to alt_track page", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      keyboard.key(ctx, F2, {}, false, 1)
+      assert.are.equal("alt_track", ctx.active_page)
+    end)
+
+    it("F2 from any page switches to alt_track", function()
+      local ctx = make_ctx()
+      ctx.active_page = "note"
+      keyboard.key(ctx, F2, {}, false, 1)
+      assert.are.equal("alt_track", ctx.active_page)
+    end)
+
+    it("unknown table-form keycodes are ignored", function()
+      local ctx = make_ctx()
+      ctx.time_held = false
+      ctx.active_page = "trigger"
+      keyboard.key(ctx, {name = "F5"}, {}, false, 1)
+      assert.is_false(ctx.time_held)
+      assert.are.equal("trigger", ctx.active_page)
+    end)
+
+  end)
+
   describe("direction cycling", function()
 
     it("d cycles direction from forward to reverse", function()
@@ -414,6 +464,24 @@ describe("keyboard", function()
       assert.are.equal(ctx.active_track, 1)
       assert.are.equal(ctx.active_page, "trigger")
       assert.is_false(ctx.playing)
+    end)
+
+    it("ignores nil char (unmapped keycodes like page up/down)", function()
+      local ctx = make_ctx()
+      keyboard.key(ctx, nil, {}, false, 1)
+      assert.are.equal(1, ctx.active_track)
+      assert.are.equal("trigger", ctx.active_page)
+      assert.is_false(ctx.playing)
+      assert.is_false(ctx.grid_dirty)
+    end)
+
+    it("ignores table char (named keys not handled by keyboard)", function()
+      local ctx = make_ctx()
+      keyboard.key(ctx, {name = "up"}, {}, false, 1)
+      assert.are.equal(1, ctx.active_track)
+      assert.are.equal("trigger", ctx.active_page)
+      assert.is_false(ctx.playing)
+      assert.is_false(ctx.grid_dirty)
     end)
 
   end)

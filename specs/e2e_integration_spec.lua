@@ -31,6 +31,9 @@ rawset(_G, "params", {
   add_number = function(self, id, name, min, max, default, units, formatter)
     param_store[id] = default
   end,
+  add_text = function(self, id, name, default)
+    param_store[id] = default
+  end,
   add_option = function(self, id, name, options, default)
     param_store[id] = default
   end,

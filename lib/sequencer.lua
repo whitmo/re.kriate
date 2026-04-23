@@ -4,7 +4,10 @@
 local track_mod = require("lib/track")
 local scale_mod = require("lib/scale")
 local direction_mod = require("lib/direction")
+local meta_pattern = require("lib/meta_pattern")
+local pattern_mod = require("lib/pattern")
 local log = require("lib/log")
+local clock_sync = require("lib/clock_sync")
 
 local M = {}
 local function roll(ctx)
@@ -62,10 +65,45 @@ end
 -- Number of scale degrees in a heptatonic scale
 local SCALE_DEGREES = 7
 
+-- Per-param probability fail-outcomes. On probability fail, each param emits:
+--   "last" (new/last): hold current step (peek)
+--   "null" (shift/not, play/not, slide/not): emit a no-effect value
+-- Trigger uses "play/not" directly (vals.trigger set to 0 on fail).
+M.PROB_FAIL_BEHAVIOR = {
+  note     = "last",  -- pitch: new/last
+  velocity = "last",  -- velocity: new/last
+  duration = "last",  -- duration: new/last
+  alt_note = "null",  -- alt_pitch: shift/not
+  octave   = "null",  -- octave: shift/not
+  glide    = "null",  -- glide: slide/not
+  ratchet  = "null",  -- ratchet: play/not
+}
+
+-- No-effect values for "null" fail behavior.
+M.PROB_NULL_VALUES = {
+  alt_note = 1,  -- no pitch offset
+  octave   = 4,  -- center octave (no shift)
+  glide    = 1,  -- no portamento
+  ratchet  = 1,  -- single note (no subdivisions)
+}
+
 function M.start(ctx)
   if ctx.playing then return end
   ctx.playing = true
   if ctx.events then ctx.events:emit("sequencer:start", {}) end
+  -- MIDI clock output: send Start before first pulse (FR-006) and spawn
+  -- a 24 PPQ pulse emitter coroutine.
+  if ctx.clock_sync then
+    clock_sync.send_start(ctx.clock_sync)
+    if ctx.clock_sync.output_enabled then
+      ctx.clock_out_id = clock.run(log.wrap(function()
+        while ctx.playing and ctx.clock_sync and ctx.clock_sync.output_enabled do
+          clock.sync(1 / clock_sync.PPQ)
+          clock_sync.send_pulse(ctx.clock_sync)
+        end
+      end, "clock_out"))
+    end
+  end
   -- one clock coroutine per track
   ctx.clock_ids = {}
   for t = 1, track_mod.NUM_TRACKS do
@@ -79,6 +117,14 @@ function M.stop(ctx)
   if not ctx.playing then return end
   ctx.playing = false
   if ctx.events then ctx.events:emit("sequencer:stop", {}) end
+  -- MIDI clock output: stop pulse emitter and send Stop message (FR-007)
+  if ctx.clock_out_id then
+    clock.cancel(ctx.clock_out_id)
+    ctx.clock_out_id = nil
+  end
+  if ctx.clock_sync then
+    clock_sync.send_stop(ctx.clock_sync)
+  end
   if ctx.clock_ids then
     for _, id in ipairs(ctx.clock_ids) do
       clock.cancel(id)
@@ -106,15 +152,16 @@ function M.stop(ctx)
 end
 
 function M.track_clock(ctx, track_num)
-  local track = ctx.tracks[track_num]
   local step_count = 0
   while ctx.playing do
+    -- Re-read track each iteration to pick up meta-pattern switches
+    local track = ctx.tracks[track_num]
     local div = M.DIVISION_MAP[track.division] or M.DIVISION_MAP[1]
     step_count = step_count + 1
     local is_odd = (step_count % 2 == 1)
     clock.sync(M.swing_duration(div, track.swing or 0, is_odd))
     if ctx.playing then
-      M.step_track(ctx, track_num)  -- always advance, mute checked inside
+      M.step_track(ctx, track_num)
     end
   end
 end
@@ -123,15 +170,75 @@ function M.step_track(ctx, track_num)
   local track = ctx.tracks[track_num]
   local dir = track.direction  -- nil defaults to "forward" inside direction.advance
 
-  -- advance params independently, respecting per-param clock division
+  -- advance trigger first (always ticks independently)
   local vals = {}
-  for _, name in ipairs(track_mod.PARAM_NAMES) do
-    local p = track.params[name]
-    if track_mod.should_advance(p) then
-      vals[name] = direction_mod.advance(p, dir)
-    else
-      vals[name] = track_mod.peek(p)
+  local trig_param = track.params.trigger
+  local old_trig_pos = trig_param.pos
+  if track_mod.should_advance(trig_param) then
+    vals.trigger = direction_mod.advance(trig_param, dir)
+  else
+    vals.trigger = track_mod.peek(trig_param)
+  end
+
+  -- when trig_clock is enabled and trigger didn't fire, freeze all non-trigger params
+  local trig_gates = track.trig_clock and vals.trigger ~= 1
+
+  -- advance probability param (no self-referencing gate, subject to trigger clocking)
+  local prob_param = track.params.probability
+  local prob_val
+  if trig_gates then
+    prob_val = track_mod.peek(prob_param)
+  elseif track_mod.should_advance(prob_param) then
+    prob_val = direction_mod.advance(prob_param, dir)
+  else
+    prob_val = track_mod.peek(prob_param)
+  end
+  vals.probability = prob_val
+
+  -- trigger probability gate (play/not): roll once for firing decision.
+  -- Trigger position has already advanced; only the firing outcome is gated.
+  local prob_pct = track_mod.PROBABILITY_MAP[prob_val] or 100
+  if vals.trigger == 1 and prob_pct < 100 then
+    if prob_pct <= 0 or roll(ctx) > prob_pct then
+      vals.trigger = 0
     end
+  end
+
+  -- Save ratchet position before advancement (used for ratchet_bits lookup)
+  local ratchet_read_pos = track.params.ratchet and track.params.ratchet.pos
+
+  -- advance remaining params with trigger clocking + per-param probability outcomes.
+  -- "last" params hold their position and peek on fail (new/last).
+  -- "null" params hold position but emit a defined no-effect value on fail (shift/not, play/not).
+  local ratchet_prob_failed = false
+  for _, name in ipairs(track_mod.PARAM_NAMES) do
+    if name ~= "trigger" and name ~= "probability" then
+      local p = track.params[name]
+      local behavior = M.PROB_FAIL_BEHAVIOR[name] or "last"
+      if trig_gates then
+        vals[name] = track_mod.peek(p)
+      elseif track_mod.should_advance(p) then
+        if roll(ctx) <= prob_pct then
+          vals[name] = direction_mod.advance(p, dir)
+        elseif behavior == "null" then
+          vals[name] = M.PROB_NULL_VALUES[name]
+          if name == "ratchet" then ratchet_prob_failed = true end
+        else
+          vals[name] = track_mod.peek(p)
+        end
+      else
+        vals[name] = track_mod.peek(p)
+      end
+    end
+  end
+
+  -- Read ratchet_bits from the saved position (before advancement).
+  -- On ratchet prob fail, force single-note so the whole step plays flat (play/not).
+  local ratchet_param = track.params.ratchet
+  if ratchet_prob_failed then
+    vals.ratchet_bits = 1
+  elseif ratchet_param and ratchet_param.bits and ratchet_read_pos then
+    vals.ratchet_bits = ratchet_param.bits[ratchet_read_pos]
   end
 
   -- emit step event (before mute check so listeners see all steps)
@@ -139,19 +246,13 @@ function M.step_track(ctx, track_num)
     ctx.events:emit("sequencer:step", {track=track_num, step=track.params.trigger.pos, vals=vals})
   end
 
-  -- fire note on trigger
+  -- fire note on trigger (probability already applied per-param above)
   if vals.trigger == 1 then
-    local prob = vals.probability or 100
-    local r = roll(ctx)
-    if r > prob then
-      ctx.grid_dirty = true
-      return
-    end
     local duration = track_mod.DURATION_MAP[vals.duration] or track_mod.DURATION_MAP[3]
 
-    -- if muted, skip audio but still fire ghost sprite
+    -- if muted, skip audio but still fire ghost sprite (mute takes precedence over probability)
     if track.muted then
-      M.play_sprite(ctx, track_num, vals, duration, {muted = true})
+      M.play_sprite(ctx, track_num, vals, duration, {muted = true, step = trig_param.pos, loop_len = trig_param.loop_end})
       ctx.grid_dirty = true
       return
     end
@@ -176,28 +277,46 @@ function M.step_track(ctx, track_num)
       end
     end
 
-    -- ratchet: subdivide into N evenly-spaced notes
+    -- ratchet: subdivide into N evenly-spaced sub-gates
+    -- Each sub-gate checks ratchet_bits to decide whether to fire or rest
     local ratchet_count = vals.ratchet or 1
+    local ratchet_bits = vals.ratchet_bits or ((1 << ratchet_count) - 1)
     if ratchet_count > 1 then
       local sub_dur = duration / ratchet_count
       clock.run(log.wrap(function()
         for i = 1, ratchet_count do
-          M.play_note(ctx, track_num, midi_note, velocity, sub_dur)
+          local bit_idx = i - 1
+          if (ratchet_bits >> bit_idx) & 1 == 1 then
+            M.play_note(ctx, track_num, midi_note, velocity, sub_dur)
+          end
           if i < ratchet_count then
             clock.sync(sub_dur)
           end
         end
       end, "ratchet:" .. track_num))
     else
-      M.play_note(ctx, track_num, midi_note, velocity, duration)
+      if (ratchet_bits & 1) == 1 then
+        M.play_note(ctx, track_num, midi_note, velocity, duration)
+      end
     end
 
     -- sprite voice: fire with raw kria vals (additive, alongside audio)
-    M.play_sprite(ctx, track_num, vals, duration)
+    M.play_sprite(ctx, track_num, vals, duration, {step = trig_param.pos, loop_len = trig_param.loop_end})
   elseif track.muted then
     -- muted track with no trigger: just mark grid dirty
     ctx.grid_dirty = true
     return
+  end
+
+  -- Pattern transitions on track-1 trigger loop wrap (quantized boundary).
+  -- Meta-pattern, when active, owns transitions (including its own cueing).
+  -- Otherwise, apply any direct pattern cue queued by the grid pattern UI.
+  if track_num == 1 and trig_param.pos == trig_param.loop_start and old_trig_pos ~= trig_param.loop_start then
+    if ctx.meta and ctx.meta.active then
+      meta_pattern.on_loop_complete(ctx.meta, ctx)
+    elseif ctx.cued_pattern_slot then
+      pattern_mod.apply_cue(ctx)
+    end
   end
 
   -- request grid redraw
@@ -207,7 +326,15 @@ end
 function M.play_note(ctx, track_num, note, velocity, duration)
   local voice = ctx.voices and ctx.voices[track_num]
   if voice then
-    voice:play_note(note, velocity, duration)
+    -- Scale by mixer level (default 1.0; 0.0 fully silences the voice).
+    local level = 1.0
+    if ctx.mixer and ctx.mixer.level and ctx.mixer.level[track_num] ~= nil then
+      level = ctx.mixer.level[track_num]
+    end
+    local scaled_vel = velocity * level
+    if scaled_vel < 0 then scaled_vel = 0 end
+    if scaled_vel > 1 then scaled_vel = 1 end
+    voice:play_note(note, scaled_vel, duration)
   end
 end
 
@@ -226,6 +353,7 @@ function M.reset(ctx)
       track.params[name].tick = 0
     end
   end
+  if ctx.events then ctx.events:emit("sequencer:reset", {}) end
 end
 
 return M

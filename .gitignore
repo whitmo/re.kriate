@@ -10,3 +10,37 @@ Thumbs.db
 .idea/
 .ralph/agent/review-cycle/
 specs/tmp/
+
+# Beads runtime state — never commit (re-p1d).
+# gt-pvx safety net has historically captured Dolt binaries from crew
+# workspaces where rekriate is nested; these patterns match at any depth so
+# a `rekriate/.beads/embeddeddolt/...` path is also covered.
+**/.beads/dolt/
+**/.beads/embeddeddolt/
+**/.beads/backup/
+**/.beads/export-state/
+**/.beads/.locks/
+**/.beads/locks/
+**/.beads/*.lock
+**/.beads/*.log
+**/.beads/*.pid
+**/.beads/*.port
+**/.beads/*.activity
+**/.beads/*.sock
+**/.beads/*.sock.startlock
+**/.beads/interactions.jsonl
+**/.beads/sync-state.json
+**/.beads/push-state.json
+**/.beads/last-touched
+**/.beads/.beads-credential-key
+**/.beads/.local_version
+**/.beads/.env
+**/.beads/ephemeral.sqlite3
+**/.beads/ephemeral.sqlite3-journal
+**/.beads/ephemeral.sqlite3-wal
+**/.beads/ephemeral.sqlite3-shm
+**/.beads/*.db
+**/.beads/*.db-journal
+**/.beads/*.db-wal
+**/.beads/*.db-shm
+**/.beads/*.corrupt.backup/

@@ -251,16 +251,30 @@ describe("events integration", function()
       assert.are.equal(received.prev, "trigger")
     end)
 
-    it("does not emit page:select when page stays the same", function()
+    it("does not emit page:select for blank nav positions", function()
       local ctx = make_ctx({active_page = "duration"})
       local received = nil
       ctx.events:on("page:select", function(data)
         received = data
       end)
-      -- Press duration page button (x=9) when already on duration
-      grid_ui.key(ctx, 9, 8, 1)
-      -- duration has no extended page, so it stays the same
+      -- Press KEY 1 (x=5): time modifier, no page change
+      grid_ui.key(ctx, 5, 8, 1)
       assert.is_nil(received)
+      -- Press blank position x=14
+      grid_ui.key(ctx, 14, 8, 1)
+      assert.is_nil(received)
+    end)
+
+    it("KEY 2 (x=10) emits page:select when switching to alt_track", function()
+      local ctx = make_ctx({active_page = "duration"})
+      local received = nil
+      ctx.events:on("page:select", function(data)
+        received = data
+      end)
+      grid_ui.key(ctx, 10, 8, 1)
+      assert.is_not_nil(received)
+      assert.are.equal("alt_track", received.page)
+      assert.are.equal("duration", received.prev)
     end)
 
     it("works without events on ctx", function()
@@ -279,21 +293,21 @@ describe("events integration", function()
 
   describe("mute toggle", function()
 
-    it("toggles mute on active track via x=5 row 8", function()
+    it("toggles mute on active track via x=13 row 8", function()
       local ctx = make_ctx()
       assert.is_false(ctx.tracks[1].muted)
       -- Press mute button
-      grid_ui.key(ctx, 5, 8, 1)
+      grid_ui.key(ctx, 13, 8, 1)
       assert.is_true(ctx.tracks[1].muted)
       -- Press again to unmute
-      grid_ui.key(ctx, 5, 8, 1)
+      grid_ui.key(ctx, 13, 8, 1)
       assert.is_false(ctx.tracks[1].muted)
     end)
 
     it("mutes the active track, not always track 1", function()
       local ctx = make_ctx({active_track = 3})
       assert.is_false(ctx.tracks[3].muted)
-      grid_ui.key(ctx, 5, 8, 1)
+      grid_ui.key(ctx, 13, 8, 1)
       assert.is_true(ctx.tracks[3].muted)
       -- Track 1 should be unaffected
       assert.is_false(ctx.tracks[1].muted)
@@ -305,7 +319,7 @@ describe("events integration", function()
       ctx.events:on("track:mute", function(data)
         received = data
       end)
-      grid_ui.key(ctx, 5, 8, 1)
+      grid_ui.key(ctx, 13, 8, 1)
       assert.is_not_nil(received)
       assert.are.equal(received.track, 1)
       assert.is_true(received.muted)
@@ -318,23 +332,23 @@ describe("events integration", function()
       ctx.events:on("track:mute", function(data)
         received = data
       end)
-      grid_ui.key(ctx, 5, 8, 1)
+      grid_ui.key(ctx, 13, 8, 1)
       assert.is_not_nil(received)
       assert.is_false(received.muted)
     end)
 
-    it("draws mute indicator bright when muted", function()
+    it("draws mute indicator bright when muted (x=13)", function()
       local ctx, g = make_ctx()
       ctx.tracks[1].muted = true
       grid_ui.redraw(ctx)
-      assert.are.equal(g:get_led(5, 8), 12)
+      assert.are.equal(g:get_led(13, 8), 12)
     end)
 
-    it("draws mute indicator dim when not muted", function()
+    it("draws mute indicator dim when not muted (x=13)", function()
       local ctx, g = make_ctx()
       ctx.tracks[1].muted = false
       grid_ui.redraw(ctx)
-      assert.are.equal(g:get_led(5, 8), 3)
+      assert.are.equal(g:get_led(13, 8), 3)
     end)
 
   end)
@@ -345,17 +359,17 @@ describe("events integration", function()
 
   describe("pattern grid controls", function()
 
-    it("x=14 row 8 sets pattern_held on press", function()
+    it("x=12 row 8 sets pattern_held on press", function()
       local ctx = make_ctx()
       assert.is_false(ctx.pattern_held)
-      grid_ui.key(ctx, 14, 8, 1)
+      grid_ui.key(ctx, 12, 8, 1)
       assert.is_true(ctx.pattern_held)
     end)
 
-    it("x=14 row 8 clears pattern_held on release", function()
+    it("x=12 row 8 clears pattern_held on release", function()
       local ctx = make_ctx()
       ctx.pattern_held = true
-      grid_ui.key(ctx, 14, 8, 0)
+      grid_ui.key(ctx, 12, 8, 0)
       assert.is_false(ctx.pattern_held)
     end)
 
@@ -422,14 +436,14 @@ describe("events integration", function()
       local ctx, g = make_ctx()
       ctx.pattern_held = true
       grid_ui.redraw(ctx)
-      assert.are.equal(g:get_led(14, 8), 12)
+      assert.are.equal(g:get_led(12, 8), 12)
     end)
 
     it("draws pattern indicator dim when not held", function()
       local ctx, g = make_ctx()
       ctx.pattern_held = false
       grid_ui.redraw(ctx)
-      assert.are.equal(g:get_led(14, 8), 3)
+      assert.are.equal(g:get_led(12, 8), 3)
     end)
 
     it("draws pattern slots when pattern_held", function()
