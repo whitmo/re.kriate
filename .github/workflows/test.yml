@@ -14,17 +14,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Lua 5.4
-        run: sudo apt-get update && sudo apt-get install -y lua5.4 liblua5.4-dev
+      - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
 
-      - name: Install luarocks
-        run: sudo apt-get install -y luarocks
+      - uses: leafo/gh-actions-luarocks@v4
 
       - name: Install busted and luacov
-        run: sudo luarocks install busted && sudo luarocks install luacov
+        run: luarocks install busted && luarocks install luacov
 
       - name: Lint - syntax check all Lua files
-        run: find . -name '*.lua' -not -path './.git/*' -not -path './.specify/*' -exec luac5.4 -p {} +
+        run: find . -name '*.lua' -not -path './.git/*' -not -path './.specify/*' -exec luac -p {} +
 
       - name: Run tests with coverage
         run: |
