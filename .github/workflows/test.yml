@@ -24,7 +24,7 @@ jobs:
         run: sudo luarocks install busted && sudo luarocks install luacov
 
       - name: Lint - syntax check all Lua files
-        run: find . -name '*.lua' -not -path './.git/*' -not -path './.specify/*' -exec luac -p {} +
+        run: find . -name '*.lua' -not -path './.git/*' -not -path './.specify/*' -exec luac5.4 -p {} +
 
       - name: Run tests with coverage
         run: |
