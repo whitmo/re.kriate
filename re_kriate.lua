@@ -67,5 +67,6 @@ function cleanup()
     ctx.screen_metro:stop()
   end
   app.cleanup(ctx)
+  log.info("cleanup complete")
   log.close()
 end
