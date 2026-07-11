@@ -528,7 +528,7 @@ function M.draw_nav(ctx, g)
   g:led(NAV_PROB, y, ctx.prob_held and 12 or 3)
   -- scale (x=15)
   g:led(NAV_SCALE, y, ctx.active_page == "scale" and 12 or 3)
-  -- meta (x=15): alt-track or meta-pattern
+  -- meta (x=16): alt-track or meta-pattern
   local meta_active = ctx.active_page == "alt_track" or ctx.active_page == "meta_pattern"
   g:led(NAV_META, y, meta_active and 12 or 3)
   -- x=16: blank (no LED)
@@ -630,7 +630,7 @@ function M.nav_key(ctx, x, z)
       ctx.events:emit("track:mute", {track=ctx.active_track, muted=track.muted})
     end
   end
-  -- scale (x=14)
+  -- scale (x=15)
   if x == NAV_SCALE and z == 1 then
     local old_page = ctx.active_page
     ctx.active_page = "scale"
@@ -638,7 +638,7 @@ function M.nav_key(ctx, x, z)
       ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
     end
   end
-  -- meta / alt-track (x=15): double-press toggles alt_track <-> meta_pattern
+  -- meta / alt-track (x=16): double-press toggles alt_track <-> meta_pattern
   if x == NAV_META and z == 1 then
     local old_page = ctx.active_page
     if ctx.active_page == "alt_track" then
