@@ -515,4 +515,56 @@ describe("events", function()
     end)
   end)
 
+  describe("multi-level wildcards (unsupported)", function()
+    -- Wildcard matching only ever looks at the FIRST colon-delimited segment
+    -- of the emitted event name (see emit()'s prefix extraction). A pattern
+    -- like "cmd:transport:*" stores its wildcard under the prefix
+    -- "cmd:transport", but emit() will only ever compute a prefix up to the
+    -- first colon ("cmd"), so that subscription can never fire. Rather than
+    -- let callers register that silent no-op, on()/once() reject any
+    -- wildcard pattern with more than one colon before the trailing "*".
+
+    it("on() raises a clear error for a two-colon-plus-wildcard pattern", function()
+      local ok, err = pcall(function()
+        bus:on("cmd:transport:*", function() end)
+      end)
+      assert.is_false(ok)
+      assert.matches("multi%-level wildcard", err)
+      assert.matches("cmd:transport:%*", err)
+    end)
+
+    it("on() still accepts a single-level wildcard", function()
+      local ok = pcall(function()
+        bus:on("cmd:*", function() end)
+      end)
+      assert.is_true(ok)
+    end)
+
+    it("once() raises the same error for a two-colon-plus-wildcard pattern", function()
+      local ok, err = pcall(function()
+        bus:once("cmd:transport:*", function() end)
+      end)
+      assert.is_false(ok)
+      assert.matches("multi%-level wildcard", err)
+    end)
+
+    it("rejects patterns nested even deeper than two colons", function()
+      local ok = pcall(function()
+        bus:on("a:b:c:*", function() end)
+      end)
+      assert.is_false(ok)
+    end)
+
+    it("gives the same actionable error for a leading-colon pattern", function()
+      -- ":a:*" has no non-colon first segment, so the "use 'x:*' instead"
+      -- suggestion can't be derived from it; the error must still be the
+      -- multi-level-wildcard message, not a crash inside its construction.
+      local ok, err = pcall(function()
+        bus:on(":a:*", function() end)
+      end)
+      assert.is_false(ok)
+      assert.matches("multi%-level wildcard", err)
+    end)
+  end)
+
 end)

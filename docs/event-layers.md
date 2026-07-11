@@ -54,6 +54,14 @@ stream regardless of source interface. That is the seam for a macro recorder,
 an undo log, a command monitor in the side panel, or an OSC bridge that
 forwards commands to a second machine.
 
+Only a *single* trailing wildcard segment is supported — `"cmd:*"` matches
+`cmd:transport:play`, `cmd:note:play`, and any other `cmd:...` event, however
+deep. A narrower-looking pattern like `"cmd:transport:*"` is not a more
+specific subscription; `lib/events.lua`'s `Bus:on()` raises an error for it,
+because emit() only ever checks the first colon-delimited segment, so that
+subscription could never fire. Filter inside the `"cmd:*"` handler on the
+`event_name` argument it receives instead.
+
 **Abstract events expand, they don't implement.** `behavior.define(bus,
 "section:break", {…})` registers an expansion: when `section:break` is
 emitted, its constituent `cmd:*` events are re-emitted. Expansions nest
