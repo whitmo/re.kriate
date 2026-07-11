@@ -145,6 +145,19 @@ describe("meta_pattern", function()
       assert.are.equal(2, ctx.tracks[1].division)
     end)
 
+    it("clears any pending track-pattern cue so it can't fire unexpectedly after meta later stops", function()
+      -- A track-pattern cue (grid pattern-mode hold, distinct from meta's
+      -- own cued_slot) queued just before meta starts must not linger and
+      -- fire at some loop boundary long after meta deactivates.
+      local ctx = make_ctx()
+      ctx.cued_pattern_slot = 7
+      meta_pattern.set_step(ctx.meta, 1, 2, 3)
+
+      meta_pattern.start(ctx.meta, ctx)
+
+      assert.is_nil(ctx.cued_pattern_slot)
+    end)
+
     it("skips empty first steps", function()
       local ctx = make_ctx()
       meta_pattern.set_step(ctx.meta, 3, 1, 2)

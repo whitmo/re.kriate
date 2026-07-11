@@ -84,15 +84,19 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     ctx.events:emit("cmd:transport:reset", {})
   elseif char >= "1" and char <= "9" and modifiers and modifiers.ctrl and ctx.patterns then
     local slot = tonumber(char)
-    pattern.save(ctx, slot)
+    ctx.events:emit("cmd:pattern:save", {slot = slot})
     ctx.active_pattern = slot
     ctx.pattern_message = {text = "saved " .. slot, time = os.clock()}
   elseif char >= "1" and char <= "9" and modifiers and modifiers.shift and ctx.patterns then
     local slot = tonumber(char)
     if pattern.is_populated(ctx.patterns, slot) then
-      pattern.load(ctx, slot)
+      ctx.events:emit("cmd:pattern:load", {slot = slot})
       ctx.active_pattern = slot
-      ctx.pattern_message = {text = "loaded " .. slot, time = os.clock()}
+      -- cmd:pattern:load resolves synchronously (Bus:emit calls handlers
+      -- inline), so ctx.cued_pattern_slot already reflects the outcome:
+      -- cued (still playing, quantized) vs. loaded (stopped, immediate).
+      local text = (ctx.cued_pattern_slot == slot) and ("cued " .. slot) or ("loaded " .. slot)
+      ctx.pattern_message = {text = text, time = os.clock()}
     end
   elseif char >= "1" and char <= "4" then
     ctx.active_track = tonumber(char)

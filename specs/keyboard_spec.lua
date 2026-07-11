@@ -244,6 +244,15 @@ describe("keyboard", function()
       assert.are.equal(7, ctx.patterns[9].tracks[1].division)
     end)
 
+    it("ctrl+1 works by EMITTING cmd:pattern:save (adapter contract)", function()
+      local ctx = make_ctx()
+      local emitted = nil
+      ctx.events:on("cmd:pattern:save", function(data) emitted = data end)
+      keyboard.key(ctx, "1", {ctrl = true}, false, 1)
+      assert.is_not_nil(emitted)
+      assert.are.equal(1, emitted.slot)
+    end)
+
   end)
 
   describe("pattern persistence shortcuts", function()
@@ -343,6 +352,16 @@ describe("keyboard", function()
       keyboard.key(ctx, "2", {shift = true}, false, 1)
 
       assert.are.equal(99, ctx.tracks[1].division) -- unchanged
+    end)
+
+    it("shift+1 works by EMITTING cmd:pattern:load (adapter contract)", function()
+      local ctx = make_ctx()
+      pattern.save(ctx, 1)
+      local emitted = nil
+      ctx.events:on("cmd:pattern:load", function(data) emitted = data end)
+      keyboard.key(ctx, "1", {shift = true}, false, 1)
+      assert.is_not_nil(emitted)
+      assert.are.equal(1, emitted.slot)
     end)
 
   end)

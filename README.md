@@ -127,7 +127,7 @@ Row 8 layout:
 
 **Probability overlay (hold x=14):** hold the probability modifier to see and edit per-step trigger probability without leaving the current page.
 
-**Pattern mode (hold x=12):** rows 1-2 become 16 pattern slots. Press a slot to load it. While the sequencer is playing, the load is *queued* and transitions at the next track-1 loop boundary (quantized cueing); cued slots render at brightness 13. When stopped, loads are immediate. Latch pattern hold by right-clicking the nav button (simulated grid).
+**Pattern mode (hold x=12):** rows 1-2 become 16 pattern slots. A quick tap on a slot loads it. While the sequencer is playing, the load is *queued* and transitions at the next track-1 loop boundary (quantized cueing); cued slots render at brightness 13. When stopped, loads are immediate. **Holding a slot for half a second before releasing saves** the current tracks into it, regardless of transport state — no keyboard needed. Latch pattern hold by right-clicking the nav button (simulated grid).
 
 **Right-click latches (simulated grid):** right-click nav `x=11` to latch/unlatch loop hold, `x=12` for pattern hold, `x=14` for probability hold.
 

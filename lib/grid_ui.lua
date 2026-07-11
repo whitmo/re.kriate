@@ -654,13 +654,14 @@ function M.nav_key(ctx, x, z)
 end
 
 function M.grid_key(ctx, x, y, z)
-  if z == 0 then return end -- only act on press
-
-  -- pattern slot selection mode
+  -- pattern slot selection mode: needs both press and release to tell a
+  -- quick tap (load/cue) from a long-press (save)
   if ctx.pattern_held then
-    M.pattern_key(ctx, x, y)
+    M.pattern_key(ctx, x, y, z)
     return
   end
+
+  if z == 0 then return end -- only act on press for all other modes
 
   -- time modifier: set per-param clock division
   if ctx.time_held then
@@ -831,29 +832,44 @@ function M.loop_key(ctx, x, y, page)
   end
 end
 
--- Pattern slot selection: rows 1-2, cols 1-8 = 16 slots
--- When playing: queue a quantized transition (applied at next track-1 loop
--- boundary). Pressing the current or already-cued slot cancels the cue.
--- When stopped: load immediately so patterns can be auditioned.
-function M.pattern_key(ctx, x, y)
+-- Holding a pattern slot at least this long before release saves into it
+-- instead of loading/cueing it (any transport state).
+local PATTERN_SAVE_HOLD = 0.5
+
+-- Pattern slot selection: rows 1-2, cols 1-8 = 16 slots.
+-- A quick tap (press+release under PATTERN_SAVE_HOLD) loads/cues:
+--   when playing: queues a quantized transition (applied at next track-1
+--   loop boundary); pressing the current or already-cued slot cancels it.
+--   when stopped: loads immediately so patterns can be auditioned.
+-- Holding a slot for PATTERN_SAVE_HOLD+ before releasing saves the
+-- current tracks into it instead -- the only way to capture a pattern
+-- from the grid (no player without a keyboard could save one otherwise).
+function M.pattern_key(ctx, x, y, z)
   if x < 1 or x > 8 or y < 1 or y > 2 then return end
   local slot = (y - 1) * 8 + x
 
-  if not ctx.playing then
+  if z == 1 then
+    ctx.pattern_press = ctx.pattern_press or {}
+    ctx.pattern_press[slot] = os.clock()
+    return
+  end
+
+  -- Release: only act if this slot was actually pressed (defensive against
+  -- a release with no matching press, e.g. a stray event).
+  local pressed_at = ctx.pattern_press and ctx.pattern_press[slot]
+  if not pressed_at then return end
+  ctx.pattern_press[slot] = nil
+
+  if os.clock() - pressed_at >= PATTERN_SAVE_HOLD then
     ctx.pattern_slot = slot
-    pattern.load(ctx, slot)
+    pattern.save(ctx, slot)
     if ctx.events then
-      ctx.events:emit("pattern:load", {slot=slot})
+      ctx.events:emit("pattern:save", {slot=slot})
     end
     return
   end
 
-  -- Playing: cue quantized transition
-  if slot == ctx.pattern_slot or slot == ctx.cued_pattern_slot then
-    pattern.cancel_cue(ctx)
-  else
-    pattern.cue(ctx, slot)
-  end
+  pattern.resolve_tap(ctx, slot)
 end
 
 -- Alt-track interaction

@@ -101,4 +101,30 @@ function M.apply_cue(ctx)
   return true
 end
 
+--- Resolve a quick tap on a pattern slot: load it immediately when
+--- stopped, or cue/cancel a quantized transition when playing. The
+--- meta-sequencer, when active, owns pattern transitions instead, so a
+--- tap is a no-op then (see M.start's note on cued_pattern_slot).
+--- Shared by the grid pattern page (lib/grid_ui.lua) and the
+--- cmd:pattern:load command handler (lib/behavior.lua) so this decision
+--- lives in exactly one place.
+function M.resolve_tap(ctx, slot)
+  if ctx.meta and ctx.meta.active then return end
+
+  if not ctx.playing then
+    ctx.pattern_slot = slot
+    M.load(ctx, slot)
+    if ctx.events then
+      ctx.events:emit("pattern:load", {slot=slot})
+    end
+    return
+  end
+
+  if slot == ctx.pattern_slot or slot == ctx.cued_pattern_slot then
+    M.cancel_cue(ctx)
+  else
+    M.cue(ctx, slot)
+  end
+end
+
 return M
