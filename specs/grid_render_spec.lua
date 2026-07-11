@@ -478,6 +478,46 @@ describe("grid_render", function()
   end)
 
   -- ======================================================================
+  -- Drawing — provider without LED readback (re-#3)
+  -- ======================================================================
+  -- Real hardware providers (monome, midigrid) don't implement get_led().
+  -- If a user switches the grid_provider param to one of these while
+  -- seamstress is running, grid_render.draw must not error every frame.
+
+  describe("draw — provider missing get_led", function()
+
+    local function make_no_readback_grid()
+      return {
+        led = function(self, x, y, b) end,
+        all = function(self, b) end,
+        refresh = function(self) end,
+        cols = function() return 16 end,
+        rows = function() return 8 end,
+        key = nil,
+        -- deliberately no get_led
+      }
+    end
+
+    it("does not error when the grid has no get_led method", function()
+      local grid = make_no_readback_grid()
+      local mock_screen = make_mock_screen()
+      assert.has_no.errors(function()
+        grid_render.draw(grid, mock_screen)
+      end)
+    end)
+
+    it("draws nothing on the grid cells (no LED readback to render)", function()
+      local grid = make_no_readback_grid()
+      local mock_screen = make_mock_screen()
+      grid_render.draw(grid, mock_screen)
+      for _, call in ipairs(mock_screen.calls) do
+        assert.is_not.equal("rect_fill", call.type)
+      end
+    end)
+
+  end)
+
+  -- ======================================================================
   -- Click handling — momentary
   -- ======================================================================
 

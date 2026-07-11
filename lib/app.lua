@@ -64,9 +64,12 @@ local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 local CLOCK_SOURCE_OPTIONS = {"internal", "external MIDI"}
 local CLOCK_OUTPUT_OPTIONS = {"off", "on"}
 
--- Grid provider selector options (user-facing labels → registry names)
-local GRID_PROVIDER_OPTIONS = {"monome", "midigrid", "push2", "launchpad pro", "virtual"}
-local GRID_PROVIDER_REGISTRY = {"monome", "midigrid", "push2", "launchpad_pro", "virtual"}
+-- Grid provider selector options (user-facing labels → registry names).
+-- "simulated" (seamstress's screen-rendered grid, lib/grid_provider.lua)
+-- is appended rather than inserted in registration order so existing
+-- saved option indices (e.g. MIDI-mapped) don't shift.
+local GRID_PROVIDER_OPTIONS = {"monome", "midigrid", "push2", "launchpad pro", "virtual", "simulated"}
+local GRID_PROVIDER_REGISTRY = {"monome", "midigrid", "push2", "launchpad_pro", "virtual", "simulated"}
 
 local DEFAULT_PRESET_NAME = "default"
 local PRESET_MESSAGE_KEY = "preset" .. "_message"
@@ -355,12 +358,17 @@ local function add_clock_sync_params(ctx)
 end
 
 --- Connect (or reconnect) the grid based on config + provider selection.
---- Cleanly tears down any existing grid before swapping in a new one.
+--- Connects the NEW provider first and only tears down the old one once
+--- that succeeds, so a failed connect (e.g. an uninstalled midigrid) leaves
+--- the existing, working grid completely untouched. Callers that want to
+--- swap providers at runtime (see add_grid_params) should call this inside
+--- a pcall — on failure ctx.g is guaranteed unchanged.
 local function connect_grid(ctx, provider_name, opts)
+  local new_grid = grid_provider.connect(provider_name, opts or {})
   if ctx.g and ctx.g.cleanup then
     pcall(function() ctx.g:cleanup() end)
   end
-  ctx.g = grid_provider.connect(provider_name, opts or {})
+  ctx.g = new_grid
   ctx.g.key = log.wrap(function(x, y, z)
     grid_ui.key(ctx, x, y, z)
     ctx.grid_dirty = true
