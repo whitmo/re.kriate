@@ -43,6 +43,7 @@ local sequencer = require("lib/sequencer")
 local pattern = require("lib/pattern")
 local track_mod = require("lib/track")
 local mixer = require("lib/mixer")
+local preset = require("lib/preset")
 
 local M = {}
 
@@ -77,8 +78,11 @@ M.VOCAB = {
   { name = "cmd:transport:play", layer = "behavioral", mood = "command",
     payload = {}, status = "implemented" },
   { name = "cmd:transport:pause", layer = "behavioral", mood = "command",
-    payload = {}, status = "planned",
-    note = "sequencer has no pause-distinct-from-stop yet; declared so interfaces can target it" },
+    payload = {}, status = "implemented",
+    note = "sequencer has no pause-distinct-from-stop state; aliased to the "
+      .. "same handler as cmd:transport:stop, which only halts the clock "
+      .. "coroutines and never touches pos/tick, so playheads survive a "
+      .. "pause the way they would a real pause" },
   { name = "cmd:transport:stop", layer = "behavioral", mood = "command",
     payload = {}, status = "implemented" },
   { name = "cmd:transport:reset", layer = "behavioral", mood = "command",
@@ -98,8 +102,9 @@ M.VOCAB = {
   { name = "cmd:note:play", layer = "behavioral", mood = "command",
     payload = {"track", "note", "vel", "dur"}, status = "implemented" },
   { name = "cmd:option:change", layer = "behavioral", mood = "command",
-    payload = {"name", "value"}, status = "planned",
-    note = "params-menu options as behavioral events; wiring goes through params:set" },
+    payload = {"name", "value"}, status = "implemented",
+    note = "wired straight to params:set(name, value); a no-op when params "
+      .. "or the named option is unavailable (standalone/test contexts)" },
 
   -- ---- L1 commands: reset family ----
   { name = "cmd:reset:track", layer = "behavioral", mood = "command",
@@ -108,18 +113,26 @@ M.VOCAB = {
     payload = {}, status = "implemented",
     note = "alias of cmd:transport:reset kept for vocabulary symmetry with the reset family" },
   { name = "cmd:reset:pattern", layer = "behavioral", mood = "command",
-    payload = {}, status = "planned" },
+    payload = {}, status = "implemented",
+    note = "conservative choice, documented at the wire site: reverts the "
+      .. "current pattern slot's tracks to their last-saved state "
+      .. "(discarding unsaved edits), falling back to fresh musical "
+      .. "defaults if the slot was never saved. Does not touch other slots" },
   { name = "cmd:reset:time", layer = "behavioral", mood = "command",
-    payload = {}, status = "planned",
-    note = "reset per-param clock_div ticks to realign polymetric phase" },
+    payload = {}, status = "implemented",
+    note = "clears every param's clock_div tick counter (not pos) across "
+      .. "all tracks to realign polymetric phase; distinct from "
+      .. "cmd:reset:global/transport:reset, which also snaps pos to loop_start" },
 
   -- ---- L1 commands: persistence ----
   { name = "cmd:load:preset", layer = "behavioral", mood = "command",
-    payload = {"name"}, status = "planned",
-    note = "lib/preset.lua load; wiring deferred until its ctx requirements are reviewed" },
+    payload = {"name"}, status = "implemented",
+    note = "lib/preset.lua load by name; stops playback first (mirrors "
+      .. "app.lua's M.load_preset FR-010 guard) so the load doesn't race "
+      .. "clock coroutines. No-op without a name" },
   { name = "cmd:save:state", layer = "behavioral", mood = "command",
-    payload = {"name"}, status = "planned",
-    note = "full-session save via lib/preset.lua" },
+    payload = {"name"}, status = "implemented",
+    note = "full-session save via lib/preset.lua, by name. No-op without a name" },
 
   -- ---- L1 facts: emitted by modules today ----
   { name = "sequencer:start", layer = "behavioral", mood = "fact",
@@ -212,6 +225,11 @@ function M.wire_commands(ctx)
 
   wire("cmd:transport:play", function() sequencer.start(ctx) end)
   wire("cmd:transport:stop", function() sequencer.stop(ctx) end)
+  -- No pause-distinct-from-stop state exists yet; sequencer.stop() only
+  -- cancels the clock coroutines and never touches param pos/tick, so
+  -- aliasing pause to stop already gives "resume where you left off"
+  -- behavior. See the cmd:transport:pause VOCAB note.
+  wire("cmd:transport:pause", function() sequencer.stop(ctx) end)
   wire("cmd:transport:reset", function() sequencer.reset(ctx) end)
 
   wire("cmd:pattern:save", function(data)
@@ -259,6 +277,61 @@ function M.wire_commands(ctx)
     end
   end)
   wire("cmd:reset:global", function() sequencer.reset(ctx) end)
+
+  -- "Reset pattern": conservative and defensible semantics, chosen because
+  -- there's no existing precedent for what a pattern-scoped reset means.
+  -- Revert the CURRENT pattern slot's tracks to their last-saved state
+  -- (discarding unsaved edits), same as pattern.load would. If the current
+  -- slot has never been saved, fall back to fresh musical defaults so the
+  -- command is never a silent no-op. Other slots are left untouched.
+  wire("cmd:reset:pattern", function()
+    local slot = ctx.pattern_slot
+    if slot and pattern.is_populated(ctx.patterns, slot) then
+      pattern.load(ctx, slot)
+    else
+      ctx.tracks = track_mod.new_tracks()
+    end
+  end)
+
+  -- "Reset time": realign polymetric phase by clearing every param's
+  -- clock_div tick counter (the "which tick within the division cycle"
+  -- counter from track_mod.new_param/M.should_advance), WITHOUT touching
+  -- pos. This is deliberately narrower than cmd:reset:global/transport:reset
+  -- (sequencer.reset), which also snaps pos back to loop_start and so
+  -- restarts patterns from the top.
+  wire("cmd:reset:time", function()
+    for _, track in ipairs(ctx.tracks) do
+      for _, name in ipairs(track_mod.PARAM_NAMES) do
+        track.params[name].tick = 0
+      end
+    end
+  end)
+
+  wire("cmd:option:change", function(data)
+    if not data.name then return end
+    local p = rawget(_G, "params")
+    if not p or not p.lookup or not p.set then return end
+    if not p.lookup[data.name] then return end
+    p:set(data.name, data.value)
+  end)
+
+  wire("cmd:save:state", function(data)
+    if not data.name then return end
+    preset.save(ctx, data.name)
+  end)
+
+  wire("cmd:load:preset", function(data)
+    if not data.name then return end
+    -- Stop playback first so the load doesn't race clock coroutines,
+    -- mirroring app.lua's M.load_preset guard (FR-010). Unlike that
+    -- params-menu action, this command's payload always carries an
+    -- explicit name, so there's no params-configured-name fallback to
+    -- replicate here.
+    if ctx.playing then
+      sequencer.stop(ctx)
+    end
+    preset.load(ctx, data.name)
+  end)
 
   return function()
     for _, unsub in ipairs(unsubs) do unsub() end

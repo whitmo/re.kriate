@@ -31,6 +31,7 @@ local behavior = require("lib/behavior")
 local events = require("lib/events")
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
+local preset = require("lib/preset")
 local recorder_voice = require("lib/voices/recorder")
 
 local function make_ctx()
@@ -238,6 +239,122 @@ describe("behavior", function()
       unwire()
       ctx.events:emit("cmd:transport:play", {})
       assert.is_false(ctx.playing)
+    end)
+
+    -- ------------------------------------------------------------------------
+    -- Newly wired commands (formerly "planned" in VOCAB; see re-#20)
+    -- ------------------------------------------------------------------------
+
+    it("cmd:transport:pause aliases to stop (no pause-distinct state yet)", function()
+      local ctx = make_ctx()
+      behavior.wire_commands(ctx)
+      ctx.events:emit("cmd:transport:play", {})
+      ctx.tracks[1].params.trigger.pos = 5
+      ctx.events:emit("cmd:transport:pause", {})
+      assert.is_false(ctx.playing)
+      -- sequencer.stop() only halts the clock; it never touches pos, so the
+      -- alias genuinely behaves like a pause (resume would pick up where it
+      -- left off), not a reset-to-start.
+      assert.are.equal(5, ctx.tracks[1].params.trigger.pos)
+    end)
+
+    it("cmd:option:change calls params:set when the option exists", function()
+      local ctx = make_ctx()
+      behavior.wire_commands(ctx)
+      local saved_params = _G.params
+      local set_calls = {}
+      _G.params = {
+        lookup = {tempo = {id = "tempo"}},
+        set = function(_, id, val) set_calls[#set_calls + 1] = {id = id, val = val} end,
+      }
+      ctx.events:emit("cmd:option:change", {name = "tempo", value = 120})
+      _G.params = saved_params
+      assert.are.equal(1, #set_calls)
+      assert.are.equal("tempo", set_calls[1].id)
+      assert.are.equal(120, set_calls[1].val)
+    end)
+
+    it("cmd:option:change is a no-op when params or the option is unavailable", function()
+      local ctx = make_ctx()
+      behavior.wire_commands(ctx)
+      local saved_params = _G.params
+      _G.params = nil
+      assert.has_no.errors(function()
+        ctx.events:emit("cmd:option:change", {name = "tempo", value = 1})
+      end)
+      _G.params = {lookup = {}, set = function() error("should not be called") end}
+      assert.has_no.errors(function()
+        ctx.events:emit("cmd:option:change", {name = "unknown_option", value = 1})
+      end)
+      _G.params = saved_params
+    end)
+
+    it("cmd:reset:time clears tick counters across all tracks without moving playheads", function()
+      local ctx = make_ctx()
+      behavior.wire_commands(ctx)
+      ctx.tracks[1].params.trigger.tick = 3
+      ctx.tracks[1].params.trigger.pos = 7
+      ctx.tracks[2].params.note.tick = 5
+      ctx.events:emit("cmd:reset:time", {})
+      assert.are.equal(0, ctx.tracks[1].params.trigger.tick)
+      assert.are.equal(7, ctx.tracks[1].params.trigger.pos)
+      assert.are.equal(0, ctx.tracks[2].params.note.tick)
+    end)
+
+    it("cmd:reset:pattern reverts the current slot to its last-saved state", function()
+      local ctx = make_ctx()
+      behavior.wire_commands(ctx)
+      ctx.pattern_slot = 4
+      -- track 1's default trigger.steps[1] is 1; save that, then mutate it
+      -- away before resetting so we can tell a revert happened.
+      pattern.save(ctx, 4)
+      ctx.tracks[1].params.trigger.steps[1] = 0
+      ctx.events:emit("cmd:reset:pattern", {})
+      assert.are.equal(1, ctx.tracks[1].params.trigger.steps[1])
+    end)
+
+    it("cmd:reset:pattern falls back to fresh defaults when the current slot is unpopulated", function()
+      local ctx = make_ctx()
+      behavior.wire_commands(ctx)
+      ctx.pattern_slot = 9 -- never saved
+      ctx.tracks[1].params.octave.steps[1] = 7
+      ctx.events:emit("cmd:reset:pattern", {})
+      assert.are.equal(4, ctx.tracks[1].params.octave.steps[1])
+    end)
+
+    describe("cmd:load:preset / cmd:save:state", function()
+      local tmp_root = "specs/tmp/behavior_preset"
+
+      before_each(function()
+        os.execute("rm -rf " .. tmp_root)
+        os.execute("mkdir -p " .. tmp_root)
+        preset._test_set_data_dir(tmp_root)
+      end)
+
+      after_each(function()
+        preset._test_set_data_dir(nil)
+        os.execute("rm -rf " .. tmp_root)
+      end)
+
+      it("cmd:save:state then cmd:load:preset roundtrips track state by name", function()
+        local ctx = make_ctx()
+        behavior.wire_commands(ctx)
+        ctx.tracks[1].params.trigger.steps[1] = 1
+        ctx.events:emit("cmd:save:state", {name = "spec-roundtrip"})
+        ctx.tracks[1].params.trigger.steps[1] = 0
+        ctx.events:emit("cmd:load:preset", {name = "spec-roundtrip"})
+        assert.are.equal(1, ctx.tracks[1].params.trigger.steps[1])
+      end)
+
+      it("cmd:load:preset stops playback before loading (mirrors app.lua's FR-010 guard)", function()
+        local ctx = make_ctx()
+        behavior.wire_commands(ctx)
+        ctx.events:emit("cmd:save:state", {name = "spec-stop-guard"})
+        ctx.events:emit("cmd:transport:play", {})
+        assert.is_true(ctx.playing)
+        ctx.events:emit("cmd:load:preset", {name = "spec-stop-guard"})
+        assert.is_false(ctx.playing)
+      end)
     end)
 
   end)
