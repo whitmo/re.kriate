@@ -184,6 +184,25 @@ M.VOCAB = {
   { name = "scale:type", layer = "behavioral", mood = "fact",
     payload = {"scale_type"}, status = "implemented",
     note = "command-intent hybrid; see scale:root" },
+  { name = "track:direction", layer = "behavioral", mood = "fact",
+    payload = {"track", "value"}, status = "implemented",
+    note = "command-intent hybrid; see scale:root. grid_ui.alt_track_key and "
+      .. "seamstress/keyboard's 'd' handler mutate ctx.tracks[t].direction (a "
+      .. "string, see lib/direction.lua's MODES) then emit; app.lua's subscriber "
+      .. "reverse-looks-up the string to the direction_N option index before "
+      .. "params:set. Closes the one-directional (params->ctx only) sync gap "
+      .. "that let a grid/keyboard edit go stale in the params menu and be "
+      .. "stomped by a preset reload (assessment #22, root cause of #8)" },
+  { name = "track:division", layer = "behavioral", mood = "fact",
+    payload = {"track", "value"}, status = "implemented",
+    note = "command-intent hybrid; see track:direction. division_N stores the "
+      .. "same raw option index (1-7) as ctx.tracks[t].division, so no "
+      .. "conversion is needed before params:set" },
+  { name = "track:swing", layer = "behavioral", mood = "fact",
+    payload = {"track", "value"}, status = "implemented",
+    note = "command-intent hybrid; see track:direction. swing_N is a plain "
+      .. "0-100 number on both sides, so no conversion is needed before "
+      .. "params:set" },
   { name = "app:ready", layer = "behavioral", mood = "fact",
     payload = {}, status = "implemented",
     note = "emitted at the end of app.init (which also sets ctx.ready for "

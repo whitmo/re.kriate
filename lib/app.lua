@@ -625,6 +625,31 @@ function M.init(config)
     end
   end)
 
+  -- sync grid/keyboard direction/division/swing edits back to params (#22,
+  -- root cause of #8: without this, a preset reload's apply_params re-fires
+  -- the stale direction_N/division_N/swing_N set_actions and stomps a
+  -- grid-made edit). Same one-directional ctx -> params push as scale:root/
+  -- type above: the params set_action only mutates ctx, it never re-emits
+  -- these facts, so there's no feedback loop.
+  ctx.events:on("track:direction", function(data)
+    -- ctx.tracks[t].direction is the string form (direction.MODES[idx]);
+    -- direction_N wants the raw option index, so reverse-look-it-up.
+    for idx, mode in ipairs(direction.MODES) do
+      if mode == data.value then
+        params:set("direction_" .. data.track, idx)
+        break
+      end
+    end
+  end)
+  ctx.events:on("track:division", function(data)
+    -- ctx.tracks[t].division already IS the raw division_N option index.
+    params:set("division_" .. data.track, data.value)
+  end)
+  ctx.events:on("track:swing", function(data)
+    -- ctx.tracks[t].swing already IS the plain 0-100 swing_N number.
+    params:set("swing_" .. data.track, data.value)
+  end)
+
   -- grid (pluggable: config.grid_provider selects backend; runtime switching via
   -- the "grid provider" param — see add_grid_params / connect_grid).
   ctx._grid_provider_name = config.grid_provider or "monome"

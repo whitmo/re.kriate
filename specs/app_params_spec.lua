@@ -302,6 +302,68 @@ describe("app params", function()
   end)
 
   -- ========================================================================
+  -- Grid/keyboard -> params sync-back for direction/division/swing
+  -- (assessment finding #22, root cause of #8)
+  -- ========================================================================
+
+  describe("track:direction/division/swing facts sync back into params", function()
+
+    it("converts the direction string to the direction_N option index", function()
+      local ctx = app.init({})
+
+      -- direction.MODES = {"forward", "reverse", "pendulum", "drunk", "random"}
+      ctx.events:emit("track:direction", {track = 2, value = "pendulum"})
+      assert.are.equal(3, param_store["direction_2"])
+
+      ctx.events:emit("track:direction", {track = 3, value = "random"})
+      assert.are.equal(5, param_store["direction_3"])
+
+      ctx.events:emit("track:direction", {track = 1, value = "reverse"})
+      assert.are.equal(2, param_store["direction_1"])
+
+      app.cleanup(ctx)
+    end)
+
+    it("pushes the division_N raw option index straight through (no conversion)", function()
+      local ctx = app.init({})
+
+      ctx.events:emit("track:division", {track = 4, value = 5})
+      assert.are.equal(5, param_store["division_4"])
+
+      app.cleanup(ctx)
+    end)
+
+    it("pushes the swing_N raw 0-100 number straight through (no conversion)", function()
+      local ctx = app.init({})
+
+      ctx.events:emit("track:swing", {track = 1, value = 50})
+      assert.are.equal(50, param_store["swing_1"])
+
+      app.cleanup(ctx)
+    end)
+
+    it("round-trips through the real set_actions without re-emitting (no feedback loop)", function()
+      -- The params:set_action for direction_N/division_N/swing_N only
+      -- mutates ctx.tracks[t]; it never re-emits track:*, so pushing the
+      -- converted value back through params here also lands back on
+      -- ctx.tracks[t] as the equivalent value.
+      local ctx = app.init({})
+
+      ctx.events:emit("track:direction", {track = 2, value = "drunk"})
+      assert.are.equal("drunk", ctx.tracks[2].direction)
+
+      ctx.events:emit("track:division", {track = 2, value = 3})
+      assert.are.equal(3, ctx.tracks[2].division)
+
+      ctx.events:emit("track:swing", {track = 2, value = 75})
+      assert.are.equal(75, ctx.tracks[2].swing)
+
+      app.cleanup(ctx)
+    end)
+
+  end)
+
+  -- ========================================================================
   -- Grid provider param safety (re-# assessment findings #3, #12)
   -- ========================================================================
 

@@ -509,6 +509,59 @@ describe("grid_ui", function()
       assert.is_true(ctx.tracks[3].muted)
     end)
 
+    it("emits track:direction/division/swing facts with {track, value} payload", function()
+      local ctx = make_ctx({active_page = "alt_track"})
+      ctx.events = events.new()
+      local received = {}
+      ctx.events:on("track:direction", function(data) table.insert(received, {"direction", data}) end)
+      ctx.events:on("track:division", function(data) table.insert(received, {"division", data}) end)
+      ctx.events:on("track:swing", function(data) table.insert(received, {"swing", data}) end)
+
+      grid_ui.alt_track_key(ctx, 3, 2)   -- direction pendulum, track 2
+      grid_ui.alt_track_key(ctx, 10, 2)  -- division col 10 => 5, track 2
+      grid_ui.alt_track_key(ctx, 14, 2)  -- swing 50, track 2
+
+      assert.are.equal(3, #received)
+
+      assert.are.equal("direction", received[1][1])
+      assert.are.equal(2, received[1][2].track)
+      assert.are.equal("pendulum", received[1][2].value)
+
+      assert.are.equal("division", received[2][1])
+      assert.are.equal(2, received[2][2].track)
+      assert.are.equal(5, received[2][2].value)
+
+      assert.are.equal("swing", received[3][1])
+      assert.are.equal(2, received[3][2].track)
+      assert.are.equal(50, received[3][2].value)
+    end)
+
+    it("mute toggle does not emit track:direction/division/swing facts", function()
+      local ctx = make_ctx({active_page = "alt_track"})
+      ctx.events = events.new()
+      local fired = false
+      ctx.events:on("track:direction", function() fired = true end)
+      ctx.events:on("track:division", function() fired = true end)
+      ctx.events:on("track:swing", function() fired = true end)
+
+      grid_ui.alt_track_key(ctx, 16, 3) -- mute toggle only
+
+      assert.is_false(fired)
+    end)
+
+    it("alt_track_key works without an events bus", function()
+      local ctx = make_ctx({active_page = "alt_track"})
+      ctx.events = nil
+      -- Should not error even though direction/division/swing writes would
+      -- otherwise try to emit.
+      grid_ui.alt_track_key(ctx, 3, 2)
+      grid_ui.alt_track_key(ctx, 10, 2)
+      grid_ui.alt_track_key(ctx, 14, 2)
+      assert.are.equal("pendulum", ctx.tracks[2].direction)
+      assert.are.equal(5, ctx.tracks[2].division)
+      assert.are.equal(50, ctx.tracks[2].swing)
+    end)
+
   end)
 
   -- ========================================================================

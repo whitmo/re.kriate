@@ -112,6 +112,9 @@ function M.key(ctx, char, modifiers, is_repeat, state)
       if m == cur then idx = i; break end
     end
     track.direction = modes[(idx % #modes) + 1]
+    if ctx.events then
+      ctx.events:emit("track:direction", {track = ctx.active_track, value = track.direction})
+    end
   elseif char == "l" and not (modifiers and modifiers.ctrl) then
     ctx.loop_held = not ctx.loop_held
     if not ctx.loop_held then

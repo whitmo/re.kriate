@@ -516,6 +516,17 @@ describe("keyboard", function()
       assert.are.equal("reverse", ctx.tracks[2].direction)
     end)
 
+    it("d emits a track:direction fact with {track, value} payload", function()
+      local ctx = make_ctx()
+      ctx.active_track = 2
+      local received = nil
+      ctx.events:on("track:direction", function(data) received = data end)
+      keyboard.key(ctx, "d", {}, false, 1)
+      assert.is_not_nil(received)
+      assert.are.equal(2, received.track)
+      assert.are.equal("reverse", received.value)
+    end)
+
   end)
 
   describe("input filtering", function()
