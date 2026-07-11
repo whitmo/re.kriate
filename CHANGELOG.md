@@ -154,6 +154,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   early-returned on non-string chars before reaching the F1/F2 branches.
   F1 now toggles `time_held` and F2 switches to alt_track as intended. (re-di2)
 
+## [2026-07-11]
+
+Today's stack: a layered, declarative event/UI architecture plus the
+integration boundaries it was designed to make mechanical.
+
+### Added
+- Declarative nav-row spec (`lib/ui_spec.lua`, renamed from `nav_spec.lua`):
+  every row-8 control (track select, modifiers, page switches, cycles)
+  declared as data — kind, target page(s), modifier hold-precedence — and
+  tested for internal consistency against runtime behavior, closing the
+  drift between nav docs, code, and tests. (#143)
+- Layered button/context event model (`lib/button_events.lua` +
+  `lib/ui_spec.lua`): a `press`/`double_press`/`combo`/`is_down()`
+  classifier decoupled from what a press *means* on the current page.
+  Extended the declarative approach to the grid body (`BODY_PAGES` /
+  `VALUE_BARGRAPH_PAGES`) — trigger page, and the shared value/bargraph
+  handler covering note/octave/duration/velocity/probability/alt_note/glide.
+  (#144)
+- Behavioral event layer (`lib/behavior.lua`): a `cmd:*`/fact vocabulary
+  catalog with drift-alarm test coverage, `wire_commands`, and `define()`
+  stacking so higher-level abstractions (song sections, fills, arpeggios)
+  can build on the same command/fact stream interfaces already emit.
+  (#147)
+- Integration boundaries for extending re.kriate by others: a voice
+  registry (`lib/voice_registry.lua`, one `register()` call to add an
+  instrument) and a platform boundary (`lib/platform.lua`, environment
+  detection + host stubs) backing a third entrypoint, `standalone.lua` —
+  boots the full app in bare Lua with no norns or seamstress host, doubling
+  as a CI-runnable smoke test. (#148)
+- Five-pass project assessment (`docs/assessment-2026-07-11.md`): broken /
+  incomplete / missing / test-gap / architecture-debt findings with file
+  references and a suggested PR sequencing. (#149)
+
+### Changed
+- Track-scoped params visibility tightened, with expanded test coverage.
+  (#139)
+- Archived dead spec-kit convention directories and superseded spec
+  templates; general docs accuracy pass (mixer page, meta-sequencer button,
+  ratchet range). (#141)
+- Untracked agent runtime state and removed abandoned review-cycle scripts.
+  (#140)
+- Logged known issues from live manual testing to `feature-queue.md`
+  (tracking only, not yet fixed). (#142)
+
+### Fixed
+- Simulated grid renderer state now resets between specs, closing a
+  test-isolation leak that could bleed grid state across spec files under
+  `--no-auto-insulate`. (#138)
+
 ## [2026-04-03]
 
 ### Added
