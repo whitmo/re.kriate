@@ -9,17 +9,11 @@
 --   bus:emit("voice:note", {track = 1, note = 60})
 --   unsub()
 --
--- Event taxonomy (colon-separated namespaces):
---   sequencer:start       -- playback started
---   sequencer:stop        -- playback stopped
---   sequencer:reset       -- playheads reset
---   sequencer:step        -- {track, step, vals}      a track advanced one step
---   voice:note            -- {track, note, vel, dur}  a note was played
---   grid:key              -- {x, y, z}                grid key press/release
---   track:select          -- {track}                  active track changed
---   track:mute            -- {track, muted}           track mute toggled
---   page:select           -- {page, prev}             active page changed
---   pattern:load          -- {slot}                   pattern loaded
+-- Event taxonomy: the authoritative catalog of every event name, payload
+-- shape, and layer/mood lives in lib/behavior.lua (M.VOCAB), validated by
+-- specs/behavior_spec.lua. Namespaces are colon-separated; wildcards
+-- subscribe on the first-colon prefix ("cmd:*" matches "cmd:transport:play").
+-- See docs/event-layers.md for the interface/behavioral/abstract layer model.
 
 local M = {}
 

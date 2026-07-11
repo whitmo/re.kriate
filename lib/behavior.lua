@@ -1,0 +1,304 @@
+-- lib/behavior.lua
+-- The behavioral event layer: an interface-agnostic vocabulary of sequencer
+-- commands and facts on the ctx.events bus, plus the mechanism for stacking
+-- abstract behavioral events on top of it.
+--
+-- Layer model (full rationale in docs/event-layers.md):
+--
+--   L0 interface events   grid keys, keyboard chars, mouse clicks, OSC
+--                         messages. One adapter per interface. The grid is
+--                         just one interface — a voice-command listener, a
+--                         TUI, or a knob/slider controller would each be a
+--                         peer adapter emitting the same L1 commands, never
+--                         reaching into grid_ui or sequencer directly.
+--
+--   L1 behavioral events  this module's vocabulary, in two moods:
+--                           commands ("cmd:" prefix)  requests to act, e.g.
+--                                     cmd:transport:play. wire_commands()
+--                                     subscribes them to the real modules.
+--                           facts    (no prefix)      notifications of what
+--                                     happened or emerged from state+clock,
+--                                     e.g. sequencer:step, voice:note.
+--                         The cmd: prefix means one bus:on("cmd:*") sees
+--                         every command regardless of interface — the
+--                         events bus matches wildcards on the first-colon
+--                         prefix — which is what a remote bridge, macro
+--                         recorder, or undo log would subscribe to.
+--
+--   L2 abstract events    compositions built with M.define(): an abstract
+--                         event ("section:chorus", "fill", "arp:up",
+--                         "song:start") expands into a list of L1 commands
+--                         or other L2 events. Expansions nest; a depth
+--                         guard stops runaway cycles. This is how song
+--                         structure, fills, and arpeggios become
+--                         implementable later as pure vocabulary — no new
+--                         plumbing.
+--
+-- Voice behavior follows the same principle: voices are driven through the
+-- behavioral layer (cmd:note:play -> voice + voice:note fact) rather than
+-- interfaces calling voice methods directly, so anything that can emit an
+-- event can play a note — including an L2 arpeggio expansion.
+
+local sequencer = require("lib/sequencer")
+local pattern = require("lib/pattern")
+local track_mod = require("lib/track")
+local mixer = require("lib/mixer")
+
+local M = {}
+
+-- Maximum nesting depth for define() expansions. Deep enough for any sane
+-- song-structure stack (song -> section -> phrase -> commands is 3), small
+-- enough that an accidental cycle dies fast and visibly.
+M.MAX_DEPTH = 8
+
+-- ============================================================================
+-- Vocabulary catalog
+-- ============================================================================
+-- Every behavioral event, declared as data so tests (specs/behavior_spec.lua)
+-- can check the vocabulary for consistency and completeness, and so docs and
+-- future interface adapters have one authoritative list.
+--
+-- Fields:
+--   name    canonical bus event name
+--   layer   "interface" | "behavioral" | "abstract"
+--   mood    "command" (cmd: prefix, requests an action)
+--           | "fact" (notification of what happened)
+--   payload ordered list of payload field names
+--   status  "implemented" (wired/emitted today)
+--           | "planned" (declared vocabulary, wiring to come)
+--   note    optional clarification
+
+M.VOCAB = {
+  -- ---- L0: interface events (facts about raw input) ----
+  { name = "grid:key", layer = "interface", mood = "fact",
+    payload = {"x", "y", "z"}, status = "implemented" },
+
+  -- ---- L1 commands: transport ----
+  { name = "cmd:transport:play", layer = "behavioral", mood = "command",
+    payload = {}, status = "implemented" },
+  { name = "cmd:transport:pause", layer = "behavioral", mood = "command",
+    payload = {}, status = "planned",
+    note = "sequencer has no pause-distinct-from-stop yet; declared so interfaces can target it" },
+  { name = "cmd:transport:stop", layer = "behavioral", mood = "command",
+    payload = {}, status = "implemented" },
+  { name = "cmd:transport:reset", layer = "behavioral", mood = "command",
+    payload = {}, status = "implemented" },
+
+  -- ---- L1 commands: pattern ----
+  { name = "cmd:pattern:load", layer = "behavioral", mood = "command",
+    payload = {"slot"}, status = "implemented" },
+  { name = "cmd:pattern:save", layer = "behavioral", mood = "command",
+    payload = {"slot"}, status = "implemented" },
+
+  -- ---- L1 commands: track / loop / note / settings ----
+  { name = "cmd:track:set_mute", layer = "behavioral", mood = "command",
+    payload = {"track", "muted"}, status = "implemented" },
+  { name = "cmd:loop:set", layer = "behavioral", mood = "command",
+    payload = {"track", "param", "loop_start", "loop_end"}, status = "implemented" },
+  { name = "cmd:note:play", layer = "behavioral", mood = "command",
+    payload = {"track", "note", "vel", "dur"}, status = "implemented" },
+  { name = "cmd:option:change", layer = "behavioral", mood = "command",
+    payload = {"name", "value"}, status = "planned",
+    note = "params-menu options as behavioral events; wiring goes through params:set" },
+
+  -- ---- L1 commands: reset family ----
+  { name = "cmd:reset:track", layer = "behavioral", mood = "command",
+    payload = {"track"}, status = "implemented" },
+  { name = "cmd:reset:global", layer = "behavioral", mood = "command",
+    payload = {}, status = "implemented",
+    note = "alias of cmd:transport:reset kept for vocabulary symmetry with the reset family" },
+  { name = "cmd:reset:pattern", layer = "behavioral", mood = "command",
+    payload = {}, status = "planned" },
+  { name = "cmd:reset:time", layer = "behavioral", mood = "command",
+    payload = {}, status = "planned",
+    note = "reset per-param clock_div ticks to realign polymetric phase" },
+
+  -- ---- L1 commands: persistence ----
+  { name = "cmd:load:preset", layer = "behavioral", mood = "command",
+    payload = {"name"}, status = "planned",
+    note = "lib/preset.lua load; wiring deferred until its ctx requirements are reviewed" },
+  { name = "cmd:save:state", layer = "behavioral", mood = "command",
+    payload = {"name"}, status = "planned",
+    note = "full-session save via lib/preset.lua" },
+
+  -- ---- L1 facts: emitted by modules today ----
+  { name = "sequencer:start", layer = "behavioral", mood = "fact",
+    payload = {}, status = "implemented" },
+  { name = "sequencer:stop", layer = "behavioral", mood = "fact",
+    payload = {}, status = "implemented" },
+  { name = "sequencer:reset", layer = "behavioral", mood = "fact",
+    payload = {}, status = "implemented" },
+  { name = "sequencer:step", layer = "behavioral", mood = "fact",
+    payload = {"track", "step", "vals"}, status = "implemented" },
+  { name = "voice:note", layer = "behavioral", mood = "fact",
+    payload = {"track", "note", "vel", "dur"}, status = "implemented" },
+  { name = "track:select", layer = "behavioral", mood = "fact",
+    payload = {"track"}, status = "implemented" },
+  { name = "track:mute", layer = "behavioral", mood = "fact",
+    payload = {"track", "muted"}, status = "implemented" },
+  { name = "page:select", layer = "behavioral", mood = "fact",
+    payload = {"page", "prev"}, status = "implemented" },
+  { name = "pattern:load", layer = "behavioral", mood = "fact",
+    payload = {"slot"}, status = "implemented" },
+  { name = "pattern:save", layer = "behavioral", mood = "fact",
+    payload = {"slot"}, status = "implemented" },
+  { name = "pattern:cue", layer = "behavioral", mood = "fact",
+    payload = {"slot"}, status = "implemented" },
+  { name = "pattern:cue_cancel", layer = "behavioral", mood = "fact",
+    payload = {"slot"}, status = "implemented" },
+  { name = "pattern:cue_applied", layer = "behavioral", mood = "fact",
+    payload = {"slot"}, status = "implemented" },
+  { name = "mixer:level", layer = "behavioral", mood = "fact",
+    payload = {"track", "level"}, status = "implemented" },
+  { name = "mixer:pan", layer = "behavioral", mood = "fact",
+    payload = {"track", "pan"}, status = "implemented" },
+  { name = "mixer:mute", layer = "behavioral", mood = "fact",
+    payload = {"track", "muted"}, status = "implemented" },
+  { name = "meta:start", layer = "behavioral", mood = "fact",
+    payload = {"pos", "slot"}, status = "implemented" },
+  { name = "meta:step", layer = "behavioral", mood = "fact",
+    payload = {"pos", "slot", "loops"}, status = "implemented" },
+  { name = "meta:cue_applied", layer = "behavioral", mood = "fact",
+    payload = {"slot"}, status = "implemented" },
+  { name = "meta:edit", layer = "behavioral", mood = "fact",
+    payload = {"step", "slot"}, status = "implemented" },
+  { name = "scale:root", layer = "behavioral", mood = "fact",
+    payload = {"root_note"}, status = "implemented",
+    note = "command-intent hybrid: grid_ui mutates ctx then emits; app.lua's "
+      .. "subscriber does the effective work (params sync + rebuild_scale). "
+      .. "The one pre-existing precedent for the cmd: pattern; successor is "
+      .. "cmd:option:change once wired" },
+  { name = "scale:type", layer = "behavioral", mood = "fact",
+    payload = {"scale_type"}, status = "implemented",
+    note = "command-intent hybrid; see scale:root" },
+  { name = "app:ready", layer = "behavioral", mood = "fact",
+    payload = {}, status = "planned",
+    note = "emitted once init completes, so adapters/compositions can defer setup" },
+
+  -- ---- L2: abstract events (examples; created via M.define by features) ----
+  { name = "song:start", layer = "abstract", mood = "command",
+    payload = {}, status = "planned",
+    note = "worked example in specs/behavior_spec.lua: pattern load + transport play" },
+  { name = "song:stop", layer = "abstract", mood = "command",
+    payload = {}, status = "planned" },
+  { name = "section:change", layer = "abstract", mood = "command",
+    payload = {"section"}, status = "planned",
+    note = "intro/verse/chorus/bridge/break as expansions over pattern + mute commands" },
+  { name = "fill", layer = "abstract", mood = "command",
+    payload = {"track"}, status = "planned" },
+  { name = "arp:play", layer = "abstract", mood = "command",
+    payload = {"track", "root"}, status = "planned",
+    note = "worked example in specs/behavior_spec.lua: expansion into cmd:note:play events" },
+}
+
+-- ============================================================================
+-- Command wiring
+-- ============================================================================
+
+--- Subscribe every implemented cmd:* event to the module function that
+--- performs it. This is the single junction where interface adapters
+--- (grid, keyboard, OSC remote, future voice/TUI/controller) meet the
+--- sequencer: adapters emit commands; nothing else needs to know which
+--- module implements what.
+--- @param ctx table  application context (must have ctx.events)
+--- @return function  unwire() — removes every handler this call installed
+function M.wire_commands(ctx)
+  local bus = ctx.events
+  local unsubs = {}
+  local function wire(name, fn)
+    unsubs[#unsubs + 1] = bus:on(name, fn)
+  end
+
+  wire("cmd:transport:play", function() sequencer.start(ctx) end)
+  wire("cmd:transport:stop", function() sequencer.stop(ctx) end)
+  wire("cmd:transport:reset", function() sequencer.reset(ctx) end)
+
+  wire("cmd:pattern:save", function(data)
+    if not data.slot then return end
+    pattern.save(ctx, data.slot)
+    ctx.pattern_slot = data.slot
+    bus:emit("pattern:save", {slot = data.slot})
+  end)
+  wire("cmd:pattern:load", function(data)
+    if not data.slot then return end
+    if not pattern.is_populated(ctx.patterns, data.slot) then return end
+    pattern.load(ctx, data.slot)
+    ctx.pattern_slot = data.slot
+    bus:emit("pattern:load", {slot = data.slot})
+  end)
+
+  wire("cmd:track:set_mute", function(data)
+    if not data.track then return end
+    mixer.set_mute(ctx, data.track, data.muted)
+  end)
+
+  wire("cmd:loop:set", function(data)
+    local track = data.track and ctx.tracks[data.track]
+    local param = track and data.param and track.params[data.param]
+    if not param then return end
+    track_mod.set_loop(param, data.loop_start, data.loop_end)
+  end)
+
+  wire("cmd:note:play", function(data)
+    if not (data.track and data.note) then return end
+    local vel, dur = data.vel or 0.75, data.dur or 0.25
+    sequencer.play_note(ctx, data.track, data.note, vel, dur)
+    -- play_note is the low-level "sound this" helper; the voice:note fact
+    -- is normally emitted by the step pipeline, so the command path emits
+    -- it here to keep the fact's meaning ("a note was played") intact.
+    bus:emit("voice:note", {track = data.track, note = data.note, vel = vel, dur = dur})
+  end)
+
+  wire("cmd:reset:track", function(data)
+    local track = data.track and ctx.tracks[data.track]
+    if not track then return end
+    for _, p in pairs(track.params) do
+      p.pos = p.loop_start
+      p.tick = 0
+    end
+  end)
+  wire("cmd:reset:global", function() sequencer.reset(ctx) end)
+
+  return function()
+    for _, unsub in ipairs(unsubs) do unsub() end
+  end
+end
+
+-- ============================================================================
+-- Stacking: abstract behavioral events
+-- ============================================================================
+
+-- Per-bus expansion depth, weakly keyed so buses can be garbage-collected.
+local depth_by_bus = setmetatable({}, {__mode = "k"})
+
+--- Define an abstract behavioral event: when `name` is emitted on `bus`,
+--- re-emit its expansion. `expansion` is either a static array of
+--- {name=, data=} steps or a function(data) returning such an array (so
+--- the expansion can read the triggering payload — e.g. an arpeggio
+--- reading its root note). Expansions nest: a step may itself be another
+--- define()d event. A depth guard (M.MAX_DEPTH) stops runaway cycles.
+--- @param bus table  an events bus (lib/events.lua)
+--- @param name string  the abstract event name
+--- @param expansion table|function  static steps or fn(data) -> steps
+--- @return function  unsubscribe
+function M.define(bus, name, expansion)
+  return bus:on(name, function(data)
+    local depth = depth_by_bus[bus] or 0
+    if depth >= M.MAX_DEPTH then
+      print("[behavior] max expansion depth (" .. M.MAX_DEPTH
+        .. ") reached at '" .. name .. "' — possible definition cycle")
+      return
+    end
+    depth_by_bus[bus] = depth + 1
+    local steps = expansion
+    if type(expansion) == "function" then
+      steps = expansion(data)
+    end
+    for _, step in ipairs(steps or {}) do
+      bus:emit(step.name, step.data)
+    end
+    depth_by_bus[bus] = depth
+  end)
+end
+
+return M
