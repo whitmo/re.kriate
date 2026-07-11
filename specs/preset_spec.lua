@@ -3,26 +3,46 @@
 
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
+local host_stubs = require("specs/lib/host_stubs")
+
+-- Host globals this spec fakes; snapshotted/restored per-test (see
+-- specs/lib/host_stubs.lua) so the fakes don't leak into whichever spec
+-- file happens to run next under --no-auto-insulate.
+local HOST_GLOBALS = {"params", "clock"}
+
 -- Minimal params mock so the module under test can snapshot/apply values.
 local param_store = {}
 local param_lookup = {}
-rawset(_G, "params", {
-  lookup = param_lookup,
-  add = function(self, id, default)
-    param_store[id] = default
-    param_lookup[id] = { id = id }
-  end,
-  get = function(self, id) return param_store[id] end,
-  set = function(self, id, val) param_store[id] = val end,
-})
 
--- Minimal clock mock (track.lua doesn't need it but some transitive deps do).
-rawset(_G, "clock", {
-  run = function() end,
-  sync = function() end,
-  cancel = function() end,
-  get_beats = function() return 0 end,
-})
+local function install_host_fakes()
+  rawset(_G, "params", {
+    lookup = param_lookup,
+    add = function(self, id, default)
+      param_store[id] = default
+      param_lookup[id] = { id = id }
+    end,
+    get = function(self, id) return param_store[id] end,
+    set = function(self, id, val) param_store[id] = val end,
+  })
+
+  -- Minimal clock mock (track.lua doesn't need it but some transitive deps do).
+  rawset(_G, "clock", {
+    run = function() end,
+    sync = function() end,
+    cancel = function() end,
+    get_beats = function() return 0 end,
+  })
+end
+
+local restore_host
+
+before_each(function()
+  restore_host = host_stubs.stub(HOST_GLOBALS, install_host_fakes)
+end)
+
+after_each(function()
+  restore_host()
+end)
 
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
