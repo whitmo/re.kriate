@@ -3,6 +3,15 @@
 
 package.path = package.path .. ";./?.lua"
 
+local host_stubs = require("specs/lib/host_stubs")
+
+-- Host globals this spec fakes; snapshotted/restored per-test (see
+-- specs/lib/host_stubs.lua) so the fakes don't leak into whichever spec
+-- file happens to run next under --no-auto-insulate. This file runs FIRST
+-- alphabetically among the spec suite, so a leaked fake here would have the
+-- widest possible blast radius.
+local HOST_GLOBALS = {"clock", "params", "osc", "grid", "metro", "screen", "util"}
+
 local next_coro_id = 1
 local param_store = {}
 local param_actions = {}
@@ -44,102 +53,104 @@ local function register_group_param(id, default)
   end
 end
 
-rawset(_G, "clock", {
-  get_beats = function() return 0 end,
-  run = function(fn)
-    local id = next_coro_id
-    next_coro_id = next_coro_id + 1
-    return id
-  end,
-  cancel = function(id) end,
-  sync = function() end,
-})
+local function install_host_fakes()
+  rawset(_G, "clock", {
+    get_beats = function() return 0 end,
+    run = function(fn)
+      local id = next_coro_id
+      next_coro_id = next_coro_id + 1
+      return id
+    end,
+    cancel = function(id) end,
+    sync = function() end,
+  })
 
-rawset(_G, "params", {
-  add_separator = function(self, id, name) end,
-  add_group = function(self, id, name, n)
-    group_sizes[id] = n
-    group_members[id] = {}
-    open_group_id = id
-    open_group_remaining = n
-  end,
-  add_number = function(self, id, name, min, max, default)
-    register_group_param(id, default)
-  end,
-  add_text = function(self, id, name, default)
-    register_group_param(id, default)
-  end,
-  add_option = function(self, id, name, options, default)
-    register_group_param(id, default)
-  end,
-  add_control = function(self, id, name, spec)
-    register_group_param(id, 0)
-  end,
-  set_action = function(self, id, fn)
-    param_actions[id] = fn
-  end,
-  get = function(self, id)
-    return param_store[id]
-  end,
-  set = function(self, id, val)
-    param_store[id] = val
-    if param_actions[id] then
-      param_actions[id](val)
-    end
-  end,
-  show = function(self, id)
-    param_visibility[id] = true
-  end,
-  hide = function(self, id)
-    param_visibility[id] = false
-  end,
-})
+  rawset(_G, "params", {
+    add_separator = function(self, id, name) end,
+    add_group = function(self, id, name, n)
+      group_sizes[id] = n
+      group_members[id] = {}
+      open_group_id = id
+      open_group_remaining = n
+    end,
+    add_number = function(self, id, name, min, max, default)
+      register_group_param(id, default)
+    end,
+    add_text = function(self, id, name, default)
+      register_group_param(id, default)
+    end,
+    add_option = function(self, id, name, options, default)
+      register_group_param(id, default)
+    end,
+    add_control = function(self, id, name, spec)
+      register_group_param(id, 0)
+    end,
+    set_action = function(self, id, fn)
+      param_actions[id] = fn
+    end,
+    get = function(self, id)
+      return param_store[id]
+    end,
+    set = function(self, id, val)
+      param_store[id] = val
+      if param_actions[id] then
+        param_actions[id](val)
+      end
+    end,
+    show = function(self, id)
+      param_visibility[id] = true
+    end,
+    hide = function(self, id)
+      param_visibility[id] = false
+    end,
+  })
 
-rawset(_G, "osc", {
-  send = function(target, path, args) end,
-})
+  rawset(_G, "osc", {
+    send = function(target, path, args) end,
+  })
 
-rawset(_G, "grid", {
-  connect = function()
-    return {
-      key = nil,
-      led = function() end,
-      refresh = function() end,
-      all = function() end,
-      cleanup = function() end,
-    }
-  end,
-})
+  rawset(_G, "grid", {
+    connect = function()
+      return {
+        key = nil,
+        led = function() end,
+        refresh = function() end,
+        all = function() end,
+        cleanup = function() end,
+      }
+    end,
+  })
 
-rawset(_G, "metro", {
-  init = function()
-    return {
-      time = 0,
-      event = nil,
-      start = function() end,
-      stop = function() end,
-    }
-  end,
-})
+  rawset(_G, "metro", {
+    init = function()
+      return {
+        time = 0,
+        event = nil,
+        start = function() end,
+        stop = function() end,
+      }
+    end,
+  })
 
-rawset(_G, "screen", {
-  clear = function() end,
-  color = function() end,
-  move = function() end,
-  text = function() end,
-  rect_fill = function() end,
-  refresh = function() end,
-  level = function() end,
-  update = function() end,
-})
+  rawset(_G, "screen", {
+    clear = function() end,
+    color = function() end,
+    move = function() end,
+    text = function() end,
+    rect_fill = function() end,
+    refresh = function() end,
+    level = function() end,
+    update = function() end,
+  })
 
-rawset(_G, "util", {
-  clamp = function(val, min, max)
-    if val < min then return min end
-    if val > max then return max end
-    return val
-  end,
-})
+  rawset(_G, "util", {
+    clamp = function(val, min, max)
+      if val < min then return min end
+      if val > max then return max end
+      return val
+    end,
+  })
+end
 
 package.loaded["musicutil"] = {
   generate_scale = function(root, scale_type, octaves)
@@ -175,13 +186,16 @@ local function cleanup_dummy_voices()
 end
 
 describe("app params", function()
+  local restore_host
+
   before_each(function()
+    restore_host = host_stubs.stub(HOST_GLOBALS, install_host_fakes)
     reset_params()
     next_coro_id = 1
   end)
 
-  teardown(function()
-    _G.params = nil
+  after_each(function()
+    restore_host()
   end)
 
   it("keeps track params inside each per-track group", function()

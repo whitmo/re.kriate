@@ -13,56 +13,106 @@
 
 package.path = package.path .. ";./?.lua"
 
--- Mock clock (sequencer + voice backends use this indirectly).
-rawset(_G, "clock", {
-  get_beats = function() return 0 end,
-  run = function(fn) return 1 end,
-  cancel = function(id) end,
-  sync = function() end,
-})
+local host_stubs = require("specs/lib/host_stubs")
 
--- Mock osc send (captured for set_level / set_pan assertions).
+-- Host globals this spec fakes; snapshotted/restored per-test (see
+-- specs/lib/host_stubs.lua) so the fakes don't leak into whichever spec
+-- file happens to run next under --no-auto-insulate.
+local HOST_GLOBALS = {"clock", "osc", "params", "grid", "metro", "util", "screen", "midi"}
+
+-- Captured for set_level / set_pan assertions; reset in reset_params_mock.
 local osc_sent = {}
-rawset(_G, "osc", {
-  send = function(target, path, args)
-    table.insert(osc_sent, {target = target, path = path, args = args})
-  end,
-})
 
 -- Minimal params mock used for action-driven tests. Some tests stub
 -- `params` directly or avoid it entirely (see reset_params_mock below).
 local param_store, param_actions, param_defs = {}, {}, {}
-rawset(_G, "params", {
-  lookup = {},
-  add_separator = function(self, id, name) end,
-  add_group = function(self, id, name, n) end,
-  add_number = function(self, id, name, min, max, default)
-    param_store[id] = default
-    param_defs[id] = {type = "number", min = min, max = max, default = default}
-    self.lookup[id] = true
-  end,
-  add_option = function(self, id, name, options, default)
-    param_store[id] = default
-    param_defs[id] = {type = "option", options = options, default = default}
-    self.lookup[id] = true
-  end,
-  add_text = function(self, id, name, default)
-    param_store[id] = default
-    param_defs[id] = {type = "text", default = default}
-    self.lookup[id] = true
-  end,
-  add_control = function(self, id, name, spec)
-    param_store[id] = (spec and spec.default) or 0
-    param_defs[id] = {type = "control"}
-    self.lookup[id] = true
-  end,
-  set_action = function(self, id, fn) param_actions[id] = fn end,
-  get = function(self, id) return param_store[id] end,
-  set = function(self, id, val)
-    param_store[id] = val
-    if param_actions[id] then param_actions[id](val) end
-  end,
-})
+
+local function install_host_fakes()
+  -- Mock clock (sequencer + voice backends use this indirectly).
+  rawset(_G, "clock", {
+    get_beats = function() return 0 end,
+    run = function(fn) return 1 end,
+    cancel = function(id) end,
+    sync = function() end,
+  })
+
+  -- Mock osc send (captured for set_level / set_pan assertions).
+  rawset(_G, "osc", {
+    send = function(target, path, args)
+      table.insert(osc_sent, {target = target, path = path, args = args})
+    end,
+  })
+
+  rawset(_G, "params", {
+    lookup = {},
+    add_separator = function(self, id, name) end,
+    add_group = function(self, id, name, n) end,
+    add_number = function(self, id, name, min, max, default)
+      param_store[id] = default
+      param_defs[id] = {type = "number", min = min, max = max, default = default}
+      self.lookup[id] = true
+    end,
+    add_option = function(self, id, name, options, default)
+      param_store[id] = default
+      param_defs[id] = {type = "option", options = options, default = default}
+      self.lookup[id] = true
+    end,
+    add_text = function(self, id, name, default)
+      param_store[id] = default
+      param_defs[id] = {type = "text", default = default}
+      self.lookup[id] = true
+    end,
+    add_control = function(self, id, name, spec)
+      param_store[id] = (spec and spec.default) or 0
+      param_defs[id] = {type = "control"}
+      self.lookup[id] = true
+    end,
+    set_action = function(self, id, fn) param_actions[id] = fn end,
+    get = function(self, id) return param_store[id] end,
+    set = function(self, id, val)
+      param_store[id] = val
+      if param_actions[id] then param_actions[id](val) end
+    end,
+  })
+
+  -- Mock grid.connect for app.init
+  rawset(_G, "grid", {
+    connect = function()
+      return {
+        key = nil,
+        led = function(self, x, y, val) end,
+        refresh = function(self) end,
+        all = function(self, val) end,
+      }
+    end,
+  })
+
+  -- Mock metro for app.init grid redraw loop.
+  rawset(_G, "metro", {
+    init = function()
+      return {time = 0, event = nil, start = function(self) end, stop = function(self) end}
+    end,
+  })
+
+  -- Mock util/screen/midi.
+  rawset(_G, "util", {
+    clamp = function(v, lo, hi)
+      if v < lo then return lo end
+      if v > hi then return hi end
+      return v
+    end,
+  })
+  rawset(_G, "screen", setmetatable({}, {__index = function() return function() end end}))
+  rawset(_G, "midi", {
+    connect = function()
+      return {
+        note_on = function() end,
+        note_off = function() end,
+        cc = function() end,
+      }
+    end,
+  })
+end
 
 local function reset_params_mock()
   for k in pairs(param_store) do param_store[k] = nil end
@@ -72,43 +122,20 @@ local function reset_params_mock()
   osc_sent = {}
 end
 
--- Mock grid.connect for app.init
-rawset(_G, "grid", {
-  connect = function()
-    return {
-      key = nil,
-      led = function(self, x, y, val) end,
-      refresh = function(self) end,
-      all = function(self, val) end,
-    }
-  end,
-})
+-- File-level hooks apply to every describe/it in this file (busted runs
+-- before_each/after_each registered outside any describe as part of the
+-- implicit root context). Installing/restoring the host fakes here -- not
+-- at module load time -- keeps them from leaking into whichever spec file
+-- runs next under --no-auto-insulate.
+local restore_host
 
--- Mock metro for app.init grid redraw loop.
-rawset(_G, "metro", {
-  init = function()
-    return {time = 0, event = nil, start = function(self) end, stop = function(self) end}
-  end,
-})
+before_each(function()
+  restore_host = host_stubs.stub(HOST_GLOBALS, install_host_fakes)
+end)
 
--- Mock util/screen/midi.
-rawset(_G, "util", {
-  clamp = function(v, lo, hi)
-    if v < lo then return lo end
-    if v > hi then return hi end
-    return v
-  end,
-})
-rawset(_G, "screen", setmetatable({}, {__index = function() return function() end end}))
-rawset(_G, "midi", {
-  connect = function()
-    return {
-      note_on = function() end,
-      note_off = function() end,
-      cc = function() end,
-    }
-  end,
-})
+after_each(function()
+  restore_host()
+end)
 
 package.loaded["musicutil"] = {
   generate_scale = function(root, kind, octaves)
