@@ -135,6 +135,15 @@ describe("keyboard", function()
       assert.are.equal(ctx.active_track, 3)
     end)
 
+    it("emits track:select (re-23: keyboard was silent on the events bus)", function()
+      local ctx = make_ctx()
+      local received = nil
+      ctx.events:on("track:select", function(data) received = data end)
+      keyboard.key(ctx, "3", {}, false, 1)
+      assert.is_not_nil(received)
+      assert.are.equal(3, received.track)
+    end)
+
   end)
 
   describe("page select", function()
@@ -168,6 +177,27 @@ describe("keyboard", function()
       local ctx = make_ctx()
       keyboard.key(ctx, "y", {}, false, 1)
       assert.are.equal(ctx.active_page, "velocity")
+    end)
+
+    it("emits page:select (re-23: keyboard was silent on the events bus)", function()
+      local ctx = make_ctx()
+      ctx.active_page = "trigger"
+      local received = nil
+      ctx.events:on("page:select", function(data) received = data end)
+      keyboard.key(ctx, "w", {}, false, 1)
+      assert.is_not_nil(received)
+      assert.are.equal("note", received.page)
+      assert.are.equal("trigger", received.prev)
+    end)
+
+    it("does not emit page:select when the page doesn't change (duration has no extended page)", function()
+      local ctx = make_ctx()
+      ctx.active_page = "duration"
+      local received = nil
+      ctx.events:on("page:select", function(data) received = data end)
+      keyboard.key(ctx, "t", {}, false, 1)
+      assert.are.equal("duration", ctx.active_page)
+      assert.is_nil(received)
     end)
 
     it("ctrl+p toggles probability modifier", function()

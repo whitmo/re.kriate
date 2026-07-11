@@ -585,6 +585,41 @@ describe("integration", function()
       assert.are.equal("scale", ctx.active_page)
     end)
 
+    it("E1 emits track:select (re-23: norns encoders were silent on the events bus)", function()
+      local ctx = make_app()
+      local received = nil
+      ctx.events:on("track:select", function(data) received = data end)
+      app.enc(ctx, 1, 1)
+      assert.is_not_nil(received)
+      assert.are.equal(2, received.track)
+    end)
+
+    it("E1 does not emit track:select when clamped and unchanged", function()
+      local ctx = make_app()
+      local received = nil
+      ctx.events:on("track:select", function(data) received = data end)
+      app.enc(ctx, 1, -10) -- already at track 1, clamps to 1: no change
+      assert.is_nil(received)
+    end)
+
+    it("E2 emits page:select (re-23: norns encoders were silent on the events bus)", function()
+      local ctx = make_app()
+      local received = nil
+      ctx.events:on("page:select", function(data) received = data end)
+      app.enc(ctx, 2, 1)
+      assert.is_not_nil(received)
+      assert.are.equal("note", received.page)
+      assert.are.equal("trigger", received.prev)
+    end)
+
+    it("E2 does not emit page:select when clamped and unchanged", function()
+      local ctx = make_app()
+      local received = nil
+      ctx.events:on("page:select", function(data) received = data end)
+      app.enc(ctx, 2, -10) -- already at first page, clamps to same: no change
+      assert.is_nil(received)
+    end)
+
   end)
 
   describe("extended features integration (T064)", function()

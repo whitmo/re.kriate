@@ -877,7 +877,11 @@ end
 function M.enc(ctx, n, d)
   if n == 1 then
     -- E1: select track
+    local old_track = ctx.active_track
     ctx.active_track = util.clamp(ctx.active_track + d, 1, track_mod.NUM_TRACKS)
+    if ctx.active_track ~= old_track and ctx.events then
+      ctx.events:emit("track:select", {track=ctx.active_track})
+    end
   elseif n == 2 then
     -- E2: select page
     local pages = grid_ui.PAGES
@@ -885,8 +889,12 @@ function M.enc(ctx, n, d)
     for i, p in ipairs(pages) do
       if p == ctx.active_page then idx = i; break end
     end
+    local old_page = ctx.active_page
     idx = util.clamp(idx + d, 1, #pages)
     ctx.active_page = pages[idx]
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
   end
   ctx.grid_dirty = true
 end
