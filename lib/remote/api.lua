@@ -123,12 +123,13 @@ end
 handlers["/track/mute"] = function(ctx, args)
   local t, err = check_track(args)
   if not t then return nil, err end
-  local val = args[2]
-  if val == nil then
+  -- Route through lib/mixer (authoritative mutation + event emission) rather
+  -- than mutating ctx.tracks[t].muted here directly (assessment finding #21).
+  if args[2] == nil then
     -- toggle
-    ctx.tracks[t].muted = not ctx.tracks[t].muted
+    mixer.toggle_mute(ctx, t)
   else
-    ctx.tracks[t].muted = (tonumber(val) == 1)
+    mixer.set_mute(ctx, t, tonumber(args[2]) == 1)
   end
   ctx.grid_dirty = true
   return true
@@ -146,6 +147,11 @@ handlers["/track/direction"] = function(ctx, args)
     end
     if not valid then return nil, "invalid direction" end
     ctx.tracks[t].direction = dir
+    -- emit the fact so app.lua's listener syncs the direction_N param
+    -- (assessment finding #22; same shape as grid_ui.alt_track_key)
+    if ctx.events then
+      ctx.events:emit("track:direction", {track = t, value = dir})
+    end
     ctx.grid_dirty = true
     return true
   else
@@ -159,7 +165,13 @@ handlers["/track/division"] = function(ctx, args)
   local val = tonumber(args[2])
   if val then
     if val < 1 or val > 7 then return nil, "division must be 1-7" end
-    ctx.tracks[t].division = math.floor(val)
+    val = math.floor(val)
+    ctx.tracks[t].division = val
+    -- emit the fact so app.lua's listener syncs the division_N param
+    -- (assessment finding #22; same shape as grid_ui.alt_track_key)
+    if ctx.events then
+      ctx.events:emit("track:division", {track = t, value = val})
+    end
     ctx.grid_dirty = true
     return true
   else
