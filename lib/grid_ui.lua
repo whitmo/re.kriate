@@ -7,7 +7,6 @@
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
 local meta_pattern = require("lib/meta_pattern")
-local direction_mod = require("lib/direction")
 
 local M = {}
 
