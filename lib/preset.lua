@@ -2,6 +2,8 @@
 -- Full session preset persistence (save/restore tracks, patterns,
 -- meta-sequence, and re.kriate-owned params) with checksum guard.
 
+local mixer = require("lib/mixer")
+
 local preset = {}
 
 local tab = rawget(_G, "tab") -- norns utility (may be nil on seamstress)
@@ -357,6 +359,7 @@ local function build_payload(ctx)
     active_track = ctx.active_track,
     active_page = ctx.active_page,
     params = snapshot_params(),
+    mixer = mixer.snapshot(ctx),
   }
   return payload
 end
@@ -421,11 +424,24 @@ function preset.load(ctx, name)
     return nil, "checksum_mismatch"
   end
 
+  -- Reject files from a newer (or otherwise unrecognized) schema outright
+  -- rather than silently loading them as the current version.
+  if type(data.version) ~= "number" or data.version > PRESET_VERSION then
+    return nil, "unsupported_version"
+  end
+
   if type(data.tracks) ~= "table" then
     return nil, "invalid_payload"
   end
 
-  -- Commit atomically after validation.
+  -- Commit atomically after validation. Params are applied first so that the
+  -- tracks snapshot below is the last writer: some params (division_N,
+  -- direction_N, swing_N) carry set_actions that mirror their value onto
+  -- ctx.tracks[t], and that snapshot can be stale relative to grid/keyboard
+  -- edits that never round-tripped through params. Restoring tracks last
+  -- ensures the preset's own track data always wins.
+  apply_params(data.params)
+
   ctx.tracks = deep_copy(data.tracks)
   if type(data.patterns) == "table" then
     ctx.patterns = deep_copy(data.patterns)
@@ -437,7 +453,7 @@ function preset.load(ctx, name)
   if data.active_track ~= nil then ctx.active_track = data.active_track end
   if data.active_page ~= nil then ctx.active_page = data.active_page end
 
-  apply_params(data.params)
+  mixer.restore(ctx, data.mixer)
 
   ctx.grid_dirty = true
   return true, path

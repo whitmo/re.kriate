@@ -4,8 +4,12 @@
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
 -- Minimal params mock so the module under test can snapshot/apply values.
+-- set_action support mirrors lib/app.lua's real wiring (e.g. division_N /
+-- direction_N / swing_N set_actions mutate ctx.tracks as a side effect of
+-- params:set), so specs can faithfully reproduce that interaction.
 local param_store = {}
 local param_lookup = {}
+local param_actions = {}
 rawset(_G, "params", {
   lookup = param_lookup,
   add = function(self, id, default)
@@ -13,7 +17,13 @@ rawset(_G, "params", {
     param_lookup[id] = { id = id }
   end,
   get = function(self, id) return param_store[id] end,
-  set = function(self, id, val) param_store[id] = val end,
+  set = function(self, id, val)
+    param_store[id] = val
+    if param_actions[id] then param_actions[id](val) end
+  end,
+  set_action = function(self, id, fn)
+    param_actions[id] = fn
+  end,
 })
 
 -- Minimal clock mock (track.lua doesn't need it but some transitive deps do).
@@ -27,6 +37,7 @@ rawset(_G, "clock", {
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
 local meta_pattern = require("lib/meta_pattern")
+local mixer = require("lib/mixer")
 local preset = require("lib/preset")
 
 local tmp_root = "specs/tmp/preset"
@@ -39,6 +50,7 @@ local function reset_tmp()
   -- reset params
   for k in pairs(param_store) do param_store[k] = nil end
   for k in pairs(param_lookup) do param_lookup[k] = nil end
+  for k in pairs(param_actions) do param_actions[k] = nil end
 end
 
 local function add_param(id, default)
@@ -480,6 +492,126 @@ describe("preset", function()
       local ok, err = preset.load(fresh, "broken")
       assert.is_nil(ok)
       assert.are.equal("invalid_payload", err)
+    end)
+  end)
+
+  describe("mixer state", function()
+    it("round-trips level and pan through save/load", function()
+      add_all_preset_params()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+      mixer.set_level(ctx, 2, 0.42)
+      mixer.set_pan(ctx, 3, -0.65)
+
+      assert.is_true(preset.save(ctx, "mixer-jam"))
+
+      local fresh = make_ctx()
+      -- Explicitly reset to defaults so the assertions below prove the
+      -- values came from the preset, not from mixer.new() defaults.
+      mixer.set_level(fresh, 2, mixer.DEFAULT_LEVEL)
+      mixer.set_pan(fresh, 3, mixer.DEFAULT_PAN)
+
+      local ok = preset.load(fresh, "mixer-jam")
+      assert.is_true(ok)
+
+      assert.are.equal(0.42, mixer.get_level(fresh, 2))
+      assert.are.equal(-0.65, mixer.get_pan(fresh, 3))
+    end)
+  end)
+
+  describe("version guard", function()
+    it("rejects a preset with a version newer than supported", function()
+      add_all_preset_params()
+      local ctx = make_ctx()
+      fill_ctx(ctx)
+
+      local payload = {
+        version = 999,
+        tracks = ctx.tracks,
+      }
+      assert.is_true(preset.save_payload(payload, "futuristic"))
+
+      local fresh = make_ctx()
+      local ok, err = preset.load(fresh, "futuristic")
+      assert.is_nil(ok)
+      assert.are.equal("unsupported_version", err)
+    end)
+
+    it("rejects a preset with a missing version field", function()
+      -- Deliberately no "version" key at all (simulating a hypothetical
+      -- pre-versioning file). The checksum must be computed over exactly
+      -- what preset.lua's own serializer produces for the post-load table
+      -- (checksum field stripped), matching the "invalid payload" spec's
+      -- established technique below.
+      local path = tmp_root .. "/no-version.krs"
+      os.execute("mkdir -p " .. tmp_root)
+      local function cs(s)
+        local a, b = 1, 0
+        for i = 1, #s do
+          a = (a + string.byte(s, i)) % 65521
+          b = (b + a) % 65521
+        end
+        return tostring(b * 65536 + a)
+      end
+      local inner = 'return {\n  ["marker"] = 1,\n}'
+      local computed = cs(inner)
+      local body = 'return {\n  ["checksum"] = "' .. computed .. '",\n  ["marker"] = 1,\n}'
+      local f = assert(io.open(path, "w"))
+      f:write(body); f:close()
+
+      local fresh = make_ctx()
+      local ok, err = preset.load(fresh, "no-version")
+      assert.is_nil(ok)
+      assert.are.equal("unsupported_version", err)
+    end)
+  end)
+
+  describe("track precedence over stale params", function()
+    -- lib/grid_ui.lua's alt_track_key mutates ctx.tracks[t].direction
+    -- directly (a grid edit) without ever calling params:set, so the params
+    -- snapshot embedded in a preset file can be stale relative to the track
+    -- data captured in the same file. lib/app.lua's real direction_N
+    -- set_action mirrors params values back onto ctx.tracks[t].direction;
+    -- reproduce that wiring here so this spec exercises the actual
+    -- interaction instead of the inert mock default.
+    local DIRECTIONS = {"forward", "reverse", "pendulum", "drunk"}
+    local current_ctx
+
+    before_each(function()
+      current_ctx = nil
+      params:set_action("direction_2", function(val)
+        if current_ctx then
+          current_ctx.tracks[2].direction = DIRECTIONS[val] or current_ctx.tracks[2].direction
+        end
+      end)
+    end)
+
+    it("prefers the preset's own track data over a stale params snapshot", function()
+      add_all_preset_params()
+
+      -- ctx_a: a grid edit changed track 2's direction to "reverse" directly
+      -- (bypassing params), so param_store.direction_2 still holds its
+      -- untouched default ("forward" = 1). The saved file therefore
+      -- contains a track snapshot ("reverse") that disagrees with its own
+      -- params snapshot ("forward") -- exactly the scenario the fix
+      -- guards against.
+      local ctx_a = make_ctx()
+      fill_ctx(ctx_a)
+      current_ctx = ctx_a
+      ctx_a.tracks[2].direction = "reverse" -- direct mutation, like a grid edit
+      assert.are.equal(1, param_store.direction_2) -- untouched, still "forward"
+
+      assert.is_true(preset.save(ctx_a, "precedence"))
+
+      -- Load into a completely different ctx (a real save-then-load cycle,
+      -- not a same-ctx mutate-then-reload) so this documents what the
+      -- preset FILE contains, independent of any later unsaved edit.
+      local fresh = make_ctx()
+      current_ctx = fresh
+      local ok = preset.load(fresh, "precedence")
+      assert.is_true(ok)
+
+      assert.are.equal("reverse", fresh.tracks[2].direction)
     end)
   end)
 end)
