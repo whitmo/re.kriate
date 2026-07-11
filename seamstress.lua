@@ -25,6 +25,8 @@ local screen_ui = require("lib/seamstress/screen_ui")
 local track_mod = require("lib/track")
 local startup_info = require("lib/startup_info")
 local softcut_runtime = require("lib/voices/softcut_runtime")
+local clock_guard = require("lib/seamstress/clock_guard")
+local params_menu_patch = require("lib/seamstress/params_menu_patch")
 
 local SCRIPT_DIR = debug.getinfo(1, "S").source:match("@(.*/)") or "./"
 
@@ -33,18 +35,11 @@ local ctx
 function init()
   log.session_start()
 
-  -- Guard seamstress clock.resume against cancelled-but-still-scheduled coroutines.
-  -- clock.cancel nils the thread table entry, but the C scheduler may still fire
-  -- a wakeup for that id, causing coroutine.resume(nil) → crash.
-  -- This is exacerbated by ratchet's rapid fire-and-cancel pattern.
-  if _seamstress and _seamstress.clock then
-    local _clock = _seamstress.clock
-    local _original_resume = _clock.resume
-    _clock.resume = function(id, ...)
-      if _clock.threads[id] == nil then return end
-      return _original_resume(id, ...)
-    end
-  end
+  -- Seamstress-runtime monkey-patches (relocated to their own modules to keep
+  -- this entrypoint thin — see lib/seamstress/clock_guard.lua and
+  -- lib/seamstress/params_menu_patch.lua for the patched logic).
+  clock_guard.install()
+  params_menu_patch.install()
 
   -- Configure grid renderer (size, theme, protocol)
   grid_render.configure({
@@ -102,54 +97,6 @@ function init()
       sc_host, sc_port),
     softcut = softcut_runtime.status_string(),
   })
-
-  -- Patch params-menu key handler to support page up/down navigation
-  -- and guard against unmapped SDL keycodes that crash params-menu.lua:187
-  -- (seamstress keycodes.lua has no entries for page up/down, so char is nil)
-  local SDL_PAGEUP = 0x4000004B
-  local SDL_PAGEDOWN = 0x4000004E
-  local SDL_BACKSPACE = 8
-  local keycodes = require("keycodes")
-  local orig_screen_dispatch = _seamstress.screen.key
-  _seamstress.screen.key = function(symbol, modifiers_mask, is_repeat, state, window)
-    if window == 2 then
-      if symbol == SDL_PAGEUP and state == 1 then
-        -- Page Up: exit param group (go up to parent level)
-        paramsMenu.key({name = "backspace"}, keycodes.modifier(modifiers_mask), false, 1)
-        paramsMenu.redraw()
-        return
-      elseif symbol == SDL_PAGEDOWN and state == 1 then
-        -- Page Down: enter param group (drill into current item)
-        paramsMenu.key({name = "return"}, keycodes.modifier(modifiers_mask), false, 1)
-        paramsMenu.redraw()
-        return
-      elseif symbol == SDL_BACKSPACE then
-        -- Backspace: dispatch directly to params-menu instead of falling through
-        -- to orig_screen_dispatch (which may not reach paramsMenu.key if the
-        -- C runtime caches the pre-patch function reference)
-        paramsMenu.key({name = "backspace"}, keycodes.modifier(modifiers_mask), is_repeat, state)
-        paramsMenu.redraw()
-        return
-      elseif keycodes[symbol] == nil then
-        -- Unknown keycode (no entry in keycodes table) — consume to prevent crash
-        return
-      end
-      -- Escape in params edit/map modes: exit group (alt navigation for laptops)
-      -- Only intercept in mEDIT(1)/mMAP(2) where escape has no default action;
-      -- let it pass through for mTEXT/mPSETSAVE/mPSETEDIT where it cancels input
-      local char = keycodes[symbol]
-      if type(char) == "table" and char.name == "escape" and state == 1
-          and (paramsMenu.mode == 1 or paramsMenu.mode == 2) then
-        paramsMenu.key({name = "backspace"}, keycodes.modifier(modifiers_mask), false, 1)
-        paramsMenu.redraw()
-        return
-      end
-    elseif window == 1 and keycodes[symbol] == nil then
-      -- Unknown keycode in main window — consume (keyboard.lua also guards)
-      return
-    end
-    return orig_screen_dispatch(symbol, modifiers_mask, is_repeat, state, window)
-  end
 
   -- Keyboard input — track modifiers for grid gestures before forwarding
   screen.key = log.wrap(function(char, modifiers, is_repeat, state)

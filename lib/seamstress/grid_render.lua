@@ -219,6 +219,19 @@ end
 --- @param scr table  Screen object with color(), move(), rect_fill()
 --- @param opts table|nil  Optional {loop_start=N, loop_end=N} for boundary indicators
 function M.draw(grid, scr, opts)
+  -- Real hardware providers (monome, midigrid) don't implement LED readback.
+  -- If the grid_provider param is switched to one of these while seamstress
+  -- is running, this metro-driven draw would otherwise error every frame
+  -- and freeze the screen (re-#3). Skip the cell grid and leave a hint.
+  if not grid.get_led then
+    if scr.text then
+      scr.color(120, 120, 120, 255)
+      scr.move(2, 10)
+      scr.text("no LED readback")
+    end
+    return
+  end
+
   local locks = locked_keys[grid]
   local er, eg, eb = compute_edge_rgb()
   local fill_size = cell_size - EDGE_INSET * 2

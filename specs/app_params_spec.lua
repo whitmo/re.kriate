@@ -165,6 +165,7 @@ package.loaded["musicutil"] = {
 package.loaded["lib/app"] = nil
 local app = require("lib/app")
 local track_mod = require("lib/track")
+local grid_provider = require("lib/grid_provider")
 
 local function new_midi_dev()
   return {
@@ -298,5 +299,100 @@ describe("app params", function()
     local ctx = app.init({})
     assert.is_true(ctx.ready)
     app.cleanup(ctx)
+  end)
+
+  -- ========================================================================
+  -- Grid provider param safety (re-# assessment findings #3, #12)
+  -- ========================================================================
+
+  describe("grid provider param (#3: simulated boot provider)", function()
+
+    it("does not reconnect the grid when the default param index is re-applied " ..
+        "for a seamstress-style boot (grid_provider = \"simulated\")", function()
+      -- Before the fix, "simulated" is absent from GRID_PROVIDER_REGISTRY, so
+      -- add_grid_params's default_idx lookup falls back to index 1 ("monome")
+      -- even though ctx._grid_provider_name is "simulated". Re-applying the
+      -- param's own default value would then resolve to the wrong provider
+      -- name and force an unwanted reconnect (replacing the live grid).
+      local ctx = app.init({ grid_provider = "simulated", grid_opts = { cols = 16, rows = 8 } })
+      local old_g = ctx.g
+      assert.are.equal("simulated", ctx._grid_provider_name)
+
+      params:set("grid_provider", params:get("grid_provider"))
+
+      assert.are.equal(old_g, ctx.g)
+      app.cleanup(ctx)
+    end)
+
+    it("can cycle the grid provider away from and back to \"simulated\"", function()
+      local ctx = app.init({ grid_provider = "simulated", grid_opts = { cols = 16, rows = 8 } })
+
+      -- GRID_PROVIDER_OPTIONS = {monome, midigrid, push2, launchpad pro, virtual, simulated}
+      params:set("grid_provider", 5) -- virtual
+      assert.is_function(ctx.g.get_led, "virtual provider should implement get_led")
+
+      params:set("grid_provider", 6) -- simulated
+      assert.is_function(ctx.g.get_led, "should be able to return to the simulated provider")
+      assert.are.equal(16, ctx.g:cols())
+
+      app.cleanup(ctx)
+    end)
+
+  end)
+
+  describe("grid provider param (#12: failed reconnect must not tear down the old grid)", function()
+    local orig_connect
+    local orig_grid_connect
+
+    before_each(function()
+      orig_connect = grid_provider.connect
+      orig_grid_connect = _G.grid.connect
+    end)
+
+    after_each(function()
+      grid_provider.connect = orig_connect
+      _G.grid.connect = orig_grid_connect
+    end)
+
+    it("leaves ctx.g untouched (not even cleaned up) when the new provider fails to connect", function()
+      -- Instrument the "monome" boot grid so we can tell whether the OLD
+      -- grid's cleanup() fired. Identity alone can't catch this bug: the
+      -- pre-fix code calls ctx.g:cleanup() before attempting the new
+      -- connect, so the same table reference survives but its state has
+      -- already been torn down.
+      local cleanup_calls = 0
+      _G.grid.connect = function(device_num)
+        return {
+          key = nil,
+          led = function() end,
+          refresh = function() end,
+          all = function() end,
+          cleanup = function() cleanup_calls = cleanup_calls + 1 end,
+        }
+      end
+
+      local ctx = app.init({}) -- boots "monome" by default
+      local old_g = ctx.g
+      assert.are.equal("monome", ctx._grid_provider_name)
+
+      grid_provider.connect = function(name, opts)
+        if name == "midigrid" then
+          error("midigrid not found — install from github.com/jaggednz/midigrid")
+        end
+        return orig_connect(name, opts)
+      end
+
+      -- GRID_PROVIDER_OPTIONS index 2 = "midigrid"
+      params:set("grid_provider", 2)
+
+      assert.are.equal(old_g, ctx.g, "old grid must survive a failed reconnect attempt")
+      assert.are.equal("monome", ctx._grid_provider_name, "provider name must not update on failure")
+      assert.are.equal(0, cleanup_calls, "old grid's cleanup must not fire before the new provider is confirmed")
+      -- The surviving grid must still be functional (not torn down mid-swap).
+      assert.has_no.errors(function() ctx.g:led(1, 1, 15) end)
+
+      app.cleanup(ctx)
+    end)
+
   end)
 end)

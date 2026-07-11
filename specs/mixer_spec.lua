@@ -5,7 +5,8 @@
 --   1. Voice interface: set_level / set_pan on each backend voice module.
 --   2. Mixer state module: ctx.mixer level/pan, mute via ctx.tracks.muted,
 --      propagation to voices, snapshot/restore.
---   3. Sequencer: play_note scales velocity by mixer level.
+--   3. Sequencer: play_note does NOT re-scale velocity by mixer level (that
+--      would double-attenuate on top of voice:set_level).
 --   4. Grid: mixer page columns (level / pan / mute) and nav cycle membership.
 --   5. Remote OSC API: /mixer/level, /mixer/pan, /mixer/mute, /mixer/get,
 --      and inclusion in /state/snapshot.
@@ -388,7 +389,12 @@ end)
 -- Sequencer: velocity scaling
 --------------------------------------------------------------------------
 
-describe("mixer — sequencer velocity scaling", function()
+describe("mixer — sequencer velocity is NOT re-scaled by mixer level", function()
+  -- Mixer level attenuation is applied exactly once, via voice:set_level
+  -- (see mixer.set_level / mixer.apply_to_voice, called on every level change
+  -- and on every voice rebuild). play_note must NOT also scale velocity by
+  -- mixer.level -- doing so double-attenuates (a 0.5 fader would yield ~0.25
+  -- real loudness: velocity*0.5 here AND set_level(0.5) on the voice).
 
   local function recording_voice()
     local calls = {}
@@ -400,14 +406,14 @@ describe("mixer — sequencer velocity scaling", function()
     }
   end
 
-  it("scales velocity by mixer.level before dispatching to the voice", function()
+  it("passes velocity through unchanged when mixer level is 0.5 (attenuation happens via set_level only)", function()
     local ctx = make_ctx()
     ctx.voices[1] = recording_voice()
     ctx.mixer.level[1] = 0.5
     sequencer.play_note(ctx, 1, 60, 0.8, 0.25)
     assert.are.equal(1, #ctx.voices[1]._calls)
     assert.are.equal(60, ctx.voices[1]._calls[1].note)
-    assert.are.equal(0.4, ctx.voices[1]._calls[1].vel)
+    assert.are.equal(0.8, ctx.voices[1]._calls[1].vel)
   end)
 
   it("passes velocity through unchanged when level is 1.0", function()
@@ -418,21 +424,19 @@ describe("mixer — sequencer velocity scaling", function()
     assert.are.equal(0.7, ctx.voices[1]._calls[1].vel)
   end)
 
-  it("silences the voice when level is 0.0", function()
+  it("does not zero the velocity when level is 0.0 (set_level is what silences the voice)", function()
     local ctx = make_ctx()
     ctx.voices[1] = recording_voice()
     ctx.mixer.level[1] = 0.0
     sequencer.play_note(ctx, 1, 60, 1.0, 0.25)
     assert.are.equal(1, #ctx.voices[1]._calls)
-    assert.are.equal(0.0, ctx.voices[1]._calls[1].vel)
+    assert.are.equal(1.0, ctx.voices[1]._calls[1].vel)
   end)
 
-  it("clamps the scaled velocity to [0, 1] even when level > 1 is forced", function()
+  it("still clamps velocity itself to [0, 1], independent of mixer level", function()
     local ctx = make_ctx()
     ctx.voices[1] = recording_voice()
-    -- Bypass mixer.set_level clamping by writing directly (would never happen
-    -- via the public API, but proves the sequencer guardrail).
-    ctx.mixer.level[1] = 5.0
+    ctx.mixer.level[1] = 5.0  -- forced out-of-range level; must not affect vel at all
     sequencer.play_note(ctx, 1, 60, 1.0, 0.25)
     assert.are.equal(1.0, ctx.voices[1]._calls[1].vel)
   end)

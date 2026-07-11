@@ -96,6 +96,9 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     end
   elseif char >= "1" and char <= "4" then
     ctx.active_track = tonumber(char)
+    if ctx.events then
+      ctx.events:emit("track:select", {track=ctx.active_track})
+    end
   elseif char == "d" then
     local track = ctx.tracks[ctx.active_track]
     local modes = direction_mod.MODES
@@ -113,12 +116,16 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     end
   elseif KEY_PAGE[char] then
     local target = KEY_PAGE[char]
+    local old_page = ctx.active_page
     if ctx.active_page == target and grid_ui.EXTENDED_PAGES[target] then
       ctx.active_page = grid_ui.EXTENDED_PAGES[target]
     elseif EXTENDED_TO_PRIMARY[ctx.active_page] == target then
       ctx.active_page = target
     else
       ctx.active_page = target
+    end
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
     end
   end
 

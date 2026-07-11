@@ -309,3 +309,7 @@ All state flows through a single `ctx` table. No custom globals.
 - [zjb-s/n.kria](https://github.com/zjb-s/n.kria) — norns kria port
 - [Dewb/monome-rack](https://github.com/Dewb/monome-rack) — VCV Rack port
 - [kria docs](https://monome.org/docs/ansible/kria/) — behavioral reference
+
+## License
+
+[MIT](LICENSE)

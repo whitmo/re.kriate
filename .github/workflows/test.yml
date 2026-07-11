@@ -43,3 +43,6 @@ jobs:
             echo "FAIL: Coverage ${TOTAL}% is below 80% threshold"
             exit 1
           fi
+
+      - name: Smoke test standalone entrypoint
+        run: lua standalone.lua 16
