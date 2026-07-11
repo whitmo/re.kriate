@@ -119,6 +119,7 @@ describe("behavior", function()
         "voice:note",
         "grid:key", "page:select", "track:select", "track:mute",
         "scale:root", "scale:type",
+        "track:direction", "track:division", "track:swing",
       }
       local names = {}
       for _, entry in ipairs(behavior.VOCAB) do names[entry.name] = entry end

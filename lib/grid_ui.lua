@@ -888,6 +888,9 @@ function M.alt_track_key(ctx, x, y)
   if x >= 1 and x <= #ALT_DIRECTIONS then
     track.direction = ALT_DIRECTIONS[x]
     ctx.active_track = y
+    if ctx.events then
+      ctx.events:emit("track:direction", {track = y, value = track.direction})
+    end
     return
   end
 
@@ -896,6 +899,9 @@ function M.alt_track_key(ctx, x, y)
     if ALT_DIVISIONS[idx] then
       track.division = ALT_DIVISIONS[idx]
       ctx.active_track = y
+      if ctx.events then
+        ctx.events:emit("track:division", {track = y, value = track.division})
+      end
       return
     end
   end
@@ -905,6 +911,9 @@ function M.alt_track_key(ctx, x, y)
     if ALT_SWING[idx] ~= nil then
       track.swing = ALT_SWING[idx]
       ctx.active_track = y
+      if ctx.events then
+        ctx.events:emit("track:swing", {track = y, value = track.swing})
+      end
       return
     end
   end
