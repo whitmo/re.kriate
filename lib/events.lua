@@ -12,7 +12,11 @@
 -- Event taxonomy: the authoritative catalog of every event name, payload
 -- shape, and layer/mood lives in lib/behavior.lua (M.VOCAB), validated by
 -- specs/behavior_spec.lua. Namespaces are colon-separated; wildcards
--- subscribe on the first-colon prefix ("cmd:*" matches "cmd:transport:play").
+-- subscribe on the first-colon prefix only ("cmd:*" matches "cmd:transport:play"
+-- and every other "cmd:..." event, however deep). A wildcard with more than
+-- one colon before the "*" (e.g. "cmd:transport:*") can never match anything
+-- and Bus:on()/Bus:once() raise an error rather than register it silently --
+-- see the docstring on Bus:on() below for the full explanation.
 -- See docs/event-layers.md for the interface/behavioral/abstract layer model.
 
 local M = {}
@@ -41,14 +45,37 @@ local function next_id(self)
   return id
 end
 
---- Subscribe to an exact event name.
---- @param event string  Event name (e.g. "voice:note")
---- @param fn function   Handler receiving (data)
+--- Subscribe to an exact event name, or a wildcard prefix.
+---
+--- Wildcard matching is intentionally shallow: emit() only ever computes a
+--- prefix up to the FIRST colon in the emitted event name, so a subscribed
+--- wildcard prefix can only ever be a single segment.
+---   "cmd:*"            OK    — matches "cmd:transport:play", "cmd:note:play", ...
+---   "cmd:transport:*"  ERROR — would store prefix "cmd:transport", but emit()
+---                              only ever looks up the "cmd" prefix, so this
+---                              subscription could never fire. Rather than
+---                              silently register a dead listener, on()/once()
+---                              raise here: use "cmd:*" (and branch on the
+---                              event_name argument your handler receives) or
+---                              subscribe to the exact event name instead.
+--- @param event string  Event name (e.g. "voice:note") or wildcard ("cmd:*")
+--- @param fn function   Handler receiving (data), or (event_name, data) for wildcards
 --- @return function     Call to unsubscribe
 function Bus:on(event, fn)
   -- Detect wildcard subscriptions: "something:*"
   if event:sub(-2) == ":*" then
-    return self:_on_wild(event:sub(1, -3), fn)
+    local prefix = event:sub(1, -3)
+    if prefix:find(":", 1, true) then
+      error(
+        "events: multi-level wildcard '" .. event .. "' is not supported -- " ..
+        "matching only checks the first colon-delimited segment of the " ..
+        "emitted event name, so this subscription would never fire. " ..
+        "Use a single-level wildcard (e.g. '" .. prefix:match("^[^:]+") ..
+        ":*') or subscribe to the exact event name instead.",
+        2
+      )
+    end
+    return self:_on_wild(prefix, fn)
   end
 
   if not self._exact[event] then
