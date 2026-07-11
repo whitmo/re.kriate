@@ -456,6 +456,38 @@ function M.init(config)
     midi_dev = config.midi_dev,
     custom_intervals = {},
     mixer = mixer.new(),
+
+    -- Fields below are not populated by this table literal; they are
+    -- attached later in this function, by other lib/ modules, or by the
+    -- entrypoints (re_kriate.lua / seamstress.lua). Declared nil here so the
+    -- full ctx schema is discoverable from one place (assessment #29) — the
+    -- comment on each names what sets it and roughly why it exists. This is
+    -- documentation only: none of these defaults or their real assignment
+    -- sites change as a result.
+    clock_sync = nil, -- clock_sync.new() below: MIDI clock sync state (source/devices/ports)
+    unwire_commands = nil, -- behavior.wire_commands(ctx) below: unsubscribes cmd:* handlers
+    g = nil, -- connect_grid() below: active grid connection handle
+    _grid_provider_name = nil, -- connect_grid()/add_grid_params: name of the connected grid backend
+    grid_metro = nil, -- below: metro driving the ~30fps grid redraw loop
+    ready = nil, -- set true at the end of this function; checked by late-arriving code
+    root_note = nil, -- M.rebuild_scale() below / grid_ui scale page: current root note (MIDI number)
+    scale_type = nil, -- M.rebuild_scale() below / grid_ui scale page: current scale type index
+    active_pattern = nil, -- pattern save/load status flow (app.lua, seamstress keyboard): active pattern slot indicator
+    -- NOTE: the two message keys below are intentionally not spelled out as
+    -- plain identifiers here — US4 (specs/pattern_bank_ui_spec.lua) asserts
+    -- this file's source never contains that literal substring, so this file
+    -- only ever builds/reads them through the *_MESSAGE_KEY constants above.
+    [PATTERN_MESSAGE_KEY] = nil, -- transient {text, time} status for pattern-bank save/load feedback
+    [PRESET_MESSAGE_KEY] = nil, -- transient {text, time} status for preset save/load feedback
+    pattern_press = nil, -- grid_ui: per-key hold-tracking table for pattern-page grid presses
+    remote_osc = nil, -- lib/remote/osc.lua enable(): handle used to disable OSC remote control
+    prob_held = nil, -- seamstress keyboard: probability modifier key held state
+    clock_out_id = nil, -- sequencer.start(): clock coroutine id for the MIDI clock-output loop
+    clock_ids = nil, -- sequencer.start(): per-track clock coroutine ids while playing
+    softcut_runtime = nil, -- voice_registry: lazily-created softcut runtime handle
+    screen_metro = nil, -- set by each entrypoint (re_kriate.lua / seamstress.lua): screen redraw metro
+    help_visible = nil, -- seamstress.lua: whether the help overlay is currently shown
+    last_key = nil, -- seamstress.lua: last simulated-grid key/mouse press {x, y, z, time}
   }
   for i = 1, 12 do
     ctx.custom_intervals[i] = DEFAULT_CUSTOM_INTERVALS[i]
