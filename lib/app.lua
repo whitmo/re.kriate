@@ -25,13 +25,13 @@ local PAGE_TRAY = {
   {pages = {"trigger", "ratchet"},    labels = {"tr", "ra"}},
   {pages = {"note", "alt_note"},      labels = {"no", "an"}},
   {pages = {"octave", "glide"},       labels = {"oc", "gl"}},
-  {pages = {"duration"},              labels = {"du"}},
-  {pages = {"velocity"},              labels = {"ve"}},
-  {pages = {"probability"},           labels = {"pr"}},
-  {pages = {"mixer"},                 labels = {"mx"}},
-  {pages = {"alt_track"},             labels = {"at"}},
-  {pages = {"meta_pattern"},          labels = {"mp"}},
-  {pages = {"scale"},                 labels = {"sc"}},
+  {pages = {"duration"},                labels = {"du"}},
+  {pages = {"velocity"},                labels = {"ve"}},
+  {pages = {"probability"},             labels = {"pr"}},
+  {pages = {"mixer"},                   labels = {"mx"}},
+  {pages = {"alt_track"},               labels = {"at"}},
+  {pages = {"meta_pattern"},            labels = {"mp"}},
+  {pages = {"scale"},                   labels = {"sc"}},
 }
 
 local SCALE_NAMES = {
@@ -135,6 +135,51 @@ local function build_voice(ctx, t)
   -- Re-apply mixer state to the freshly built voice (level/pan per track).
   if ctx.voices[t] then
     mixer.apply_to_voice(ctx, t)
+  end
+end
+
+--- Update parameter visibility based on current voice type for a track
+local function update_voice_params(t)
+  if not params or not params.show or not params.hide then
+    return
+  end
+
+  local voice_idx = params:get("voice_" .. t)
+  local voice_type = VOICE_TYPES[voice_idx]
+
+  if voice_type == "midi" then
+    params:show("midi_ch_" .. t)
+  else
+    params:hide("midi_ch_" .. t)
+  end
+
+  if voice_type == "sc_synth" then
+    params:show("sc_synthdef_" .. t)
+  else
+    params:hide("sc_synthdef_" .. t)
+  end
+
+  local is_softcut = voice_type == "softcut"
+  local softcut_param_ids = {
+    "sample_path_" .. t,
+    "sample_root_" .. t,
+    "sample_start_" .. t,
+    "sample_end_" .. t,
+    "sample_loop_" .. t,
+    "sample_grab_len_" .. t,
+    "sample_grab_input_" .. t,
+    "sample_grab_" .. t,
+  }
+  for _, id in ipairs(softcut_param_ids) do
+    if is_softcut then
+      params:show(id)
+    else
+      params:hide(id)
+    end
+  end
+
+  if _menu and _menu.rebuild_params then
+    _menu.rebuild_params()
   end
 end
 
@@ -456,14 +501,15 @@ function M.init(config)
   -- params: per-track groups
   local div_names = {"1/16", "1/12", "1/8", "1/6", "1/4", "1/2", "1/1"}
   for t = 1, track_mod.NUM_TRACKS do
-    params:add_group("track_" .. t, "track " .. t, 10)
+    params:add_group("track_" .. t, "track " .. t, 15)
 
     params:add_option("voice_" .. t, "voice", VOICE_TYPES, 1)
-    if not use_config_voices then
-      params:set_action("voice_" .. t, function()
+    params:set_action("voice_" .. t, function()
+      if not use_config_voices then
         build_voice(ctx, t)
-      end)
-    end
+      end
+      update_voice_params(t)
+    end)
 
     params:add_number("midi_ch_" .. t, "midi ch", 1, 16, t)
     if not use_config_voices then
@@ -525,14 +571,18 @@ function M.init(config)
     params:set_action("direction_" .. t, function(val)
       ctx.tracks[t].direction = direction.MODES[val]
     end)
-  end
 
-  -- params: per-track swing
-  for t = 1, track_mod.NUM_TRACKS do
-    params:add_number("swing_" .. t, "track " .. t .. " swing", 0, 100, 0)
+    params:add_number("swing_" .. t, "swing", 0, 100, 0)
     params:set_action("swing_" .. t, function(val)
       ctx.tracks[t].swing = val
     end)
+
+    params:add_option("trig_clock_" .. t, "trig clock", {"off", "on"}, 1)
+    params:set_action("trig_clock_" .. t, function(val)
+      ctx.tracks[t].trig_clock = (val == 2)
+    end)
+
+    update_voice_params(t)
   end
 
   -- params: mixer (level, pan, mute per track).
