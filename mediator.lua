@@ -1,4 +1,7 @@
--- Minimal mediator implementation for busted event bus
+-- Minimal mediator implementation for busted's internal event bus.
+-- DO NOT DELETE: nothing in this repo require()s it directly, but busted
+-- itself depends on a `mediator` module, and scripts/busted.sh puts the
+-- repo root on LUA_PATH so this shim satisfies that dependency at test time.
 return function()
   local self = { channels = {} }
 
