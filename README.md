@@ -20,12 +20,13 @@ For an interactive visual guide to the grid interface, see [`docs/html/grid-inte
 - Meta-sequencer: ordered pattern sequence with per-step loop counts
 - Full session presets (tracks + patterns + meta-sequence + params) with checksum guard and autosave
 - MIDI clock sync — external slave, internal master clock output, Start/Stop/Continue transport
+- Per-track mixer page (level / pan / mute), with an optional SuperCollider mixer engine
 - Multiple voice backends: MIDI, OSC, SuperCollider synth (sub/fm/wavetable), SuperCollider drums, softcut sampler, sprite (visual)
 - [nb](https://github.com/sixolet/nb) voice output on norns
 - Monome grid UI (16x8) with page-tray screen indicator, trigger/value pages, loop editing, hold modifiers
-- Push 2 grid support (Ableton Push 2 as 16x8 monome grid)
+- Push 2 and Launchpad Pro grid support (as 16x8 monome-style grids)
 - Help overlay (`?`), grid theme cycling (yellow/red/orange/white)
-- Remote control API (OSC transport)
+- Remote control API module (OSC transport available; not wired into the entrypoints by default)
 - Keyboard fallback controls (seamstress)
 
 ## Requirements
@@ -93,7 +94,7 @@ Row 8 layout:
   6        trigger page (press again: ratchet)
   7        note page (press again: alt note)
   8        octave page (press again: glide)
-  9        cycles: duration → velocity → probability
+  9        cycles: duration → velocity → probability → mixer
   10       KEY 2 — config / alt-track page
   11       loop modifier (hold)
   12       pattern mode (hold)
@@ -108,6 +109,8 @@ Row 8 layout:
 **Value pages** (note, octave, duration, velocity, probability, alt note, glide): rows 1-7 show the active track. Row 1 = highest value (7), row 7 = lowest (1). Press to set a step's value.
 
 **Ratchet page:** rows 1-7 show a per-step bitmask of sub-gates (which sub-divisions of the step fire). Toggle individual sub-gates by pressing.
+
+**Mixer page** (fourth stop on the nav `x=9` cycle): each row is a track — columns `1-7` set level, `9-15` set pan (12 = center), `16` toggles mute.
 
 **Alt-track page** (nav `x=10` or `x=16`): per-track performance page. Each row is a track; columns `1-4` set direction, `5-11` set division, `13-15` set coarse swing, `16` toggles mute.
 
@@ -210,7 +213,7 @@ The screen UI shows a clock status indicator when external clock is selected.
 | octave | 1-7 | octave offset (4 = center) |
 | duration | 1-7 | 1/16 beat to 4 beats |
 | velocity | 1-7 | 0.15 to 1.0 |
-| ratchet | 1-7 | number of sub-gates within the step (per-gate bitmask) |
+| ratchet | 1-5 | number of sub-gates within the step (per-gate bitmask) |
 | alt note | 1-7 | degree offset added to note (1 = none) |
 | glide | 1-7 | portamento amount (1 = none) |
 | probability | 1-7 | trigger probability (1 = 0%, 7 = 100%) |
@@ -242,8 +245,13 @@ lib/preset.lua                   full session preset save/load + autosave
 lib/meta_pattern.lua             meta-sequencer (ordered pattern sequence)
 lib/direction.lua                playhead direction modes
 lib/clock_sync.lua               MIDI clock sync (external slave, clock output)
-lib/grid_provider.lua            pluggable grid backend (monome, midigrid, virtual, simulated, push2, synthetic)
+lib/mixer.lua                    per-track level/pan/mute state + voice routing
+lib/sc_bridge.lua                SuperCollider OSC handshake / connection state
+lib/stock_presets.lua            factory preset bank seeded on first run
+lib/startup_info.lua             startup banner (git hash, release, SC status)
+lib/grid_provider.lua            pluggable grid backend (monome, midigrid, virtual, simulated, push2, launchpad_pro, synthetic)
 lib/grid_push2.lua               Ableton Push 2 grid adapter
+lib/grid_launchpad_pro.lua       Novation Launchpad Pro grid adapter
 lib/events.lua                   lightweight pub/sub event bus
 lib/log.lua                      leveled logging with crash-capture wrappers
 
@@ -253,6 +261,7 @@ lib/voices/sc_synth.lua          SuperCollider melodic synth (sub/fm/wavetable)
 lib/voices/sc_drums.lua          SuperCollider drum voice
 lib/voices/softcut_zig.lua       softcut sampler voice
 lib/voices/softcut_runtime.lua   buffer management runtime for softcut
+lib/voices/sc_mixer.lua          SuperCollider mixer engine OSC client
 lib/voices/sprite.lua            visual sprite events
 lib/voices/recorder.lua          test voice (captures events)
 
@@ -263,6 +272,7 @@ lib/seamstress/screen_ui.lua     seamstress screen display
 lib/seamstress/grid_render.lua   simulated grid renderer
 lib/seamstress/sprite_render.lua sprite drawing
 lib/seamstress/help_overlay.lua  on-screen help overlay
+lib/seamstress/help_console.lua  console help() namespace (ctx/transport/debug)
 
 lib/remote/api.lua               transport-agnostic remote control API
 lib/remote/grid_api.lua          remote grid state and key injection
