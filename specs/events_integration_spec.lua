@@ -389,8 +389,9 @@ describe("events integration", function()
 
       -- Enter pattern mode
       ctx.pattern_held = true
-      -- Press slot 3 (row 1, col 3)
+      -- Quick press+release of slot 3 (row 1, col 3) -- a tap loads
       grid_ui.key(ctx, 3, 1, 1)
+      grid_ui.key(ctx, 3, 1, 0)
 
       assert.are.equal(ctx.pattern_slot, 3)
       assert.is_not_nil(received)
@@ -405,6 +406,7 @@ describe("events integration", function()
       for x = 1, 8 do
         pattern.save(ctx, x) -- populate so load doesn't skip
         grid_ui.key(ctx, x, 1, 1)
+        grid_ui.key(ctx, x, 1, 0)
         assert.are.equal(ctx.pattern_slot, x)
       end
     end)
@@ -416,6 +418,7 @@ describe("events integration", function()
         local slot = 8 + x
         pattern.save(ctx, slot)
         grid_ui.key(ctx, x, 2, 1)
+        grid_ui.key(ctx, x, 2, 0)
         assert.are.equal(ctx.pattern_slot, slot)
       end
     end)
@@ -426,10 +429,41 @@ describe("events integration", function()
       local initial_slot = ctx.pattern_slot
       -- Row 3 should be ignored
       grid_ui.key(ctx, 1, 3, 1)
-      assert.are.equal(ctx.pattern_slot, initial_slot)
       -- Col 9 should be ignored
       grid_ui.key(ctx, 9, 1, 1)
       assert.are.equal(ctx.pattern_slot, initial_slot)
+    end)
+
+    it("holding a slot for >= 0.5s saves current tracks into it, regardless of transport state", function()
+      local ctx = make_ctx()
+      ctx.tracks[2].params.trigger.steps[4] = 1
+      local received = nil
+      ctx.events:on("pattern:save", function(data) received = data end)
+
+      ctx.pattern_held = true
+      grid_ui.key(ctx, 5, 1, 1) -- press slot 5
+      ctx.pattern_press[5] = os.clock() - 1 -- simulate held for 1s
+      grid_ui.key(ctx, 5, 1, 0) -- release
+
+      assert.are.equal(5, ctx.pattern_slot)
+      assert.is_not_nil(received)
+      assert.are.equal(5, received.slot)
+      assert.is_true(pattern.is_populated(ctx.patterns, 5))
+
+      ctx.tracks[2].params.trigger.steps[4] = 0
+      pattern.load(ctx, 5)
+      assert.are.equal(1, ctx.tracks[2].params.trigger.steps[4])
+    end)
+
+    it("holding a slot while playing still saves, not cues", function()
+      local ctx = make_ctx({playing = true})
+      ctx.pattern_held = true
+      grid_ui.key(ctx, 6, 1, 1)
+      ctx.pattern_press[6] = os.clock() - 1
+      grid_ui.key(ctx, 6, 1, 0)
+
+      assert.is_true(pattern.is_populated(ctx.patterns, 6))
+      assert.is_nil(ctx.cued_pattern_slot)
     end)
 
     it("draws pattern indicator bright when held", function()

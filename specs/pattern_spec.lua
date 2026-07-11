@@ -522,4 +522,53 @@ describe("pattern", function()
 
   end)
 
+  -- ==========================================================================
+  -- resolve_tap: shared "quick tap on a slot" resolution, used by both the
+  -- grid pattern page (lib/grid_ui.lua) and the cmd:pattern:load command
+  -- handler (lib/behavior.lua), so the load/cue/meta-guard decision lives
+  -- in exactly one place.
+  -- ==========================================================================
+
+  describe("resolve_tap", function()
+
+    it("loads immediately when stopped", function()
+      local ctx = make_cue_ctx()
+      ctx.playing = false
+      ctx.tracks[1].division = 2
+      pattern.save(ctx, 2)
+      ctx.tracks[1].division = 1
+
+      pattern.resolve_tap(ctx, 2)
+
+      assert.are.equal(2, ctx.pattern_slot)
+      assert.are.equal(2, ctx.tracks[1].division)
+    end)
+
+    it("cues a quantized transition when playing", function()
+      local ctx = make_cue_ctx()
+      ctx.playing = true
+      pattern.resolve_tap(ctx, 2)
+      assert.are.equal(1, ctx.pattern_slot)
+      assert.are.equal(2, ctx.cued_pattern_slot)
+    end)
+
+    it("pressing the already-cued slot cancels the cue", function()
+      local ctx = make_cue_ctx()
+      ctx.playing = true
+      pattern.resolve_tap(ctx, 2)
+      pattern.resolve_tap(ctx, 2)
+      assert.is_nil(ctx.cued_pattern_slot)
+    end)
+
+    it("does nothing while the meta-sequencer is active", function()
+      local ctx = make_cue_ctx()
+      ctx.playing = true
+      ctx.meta = { active = true }
+      pattern.resolve_tap(ctx, 2)
+      assert.is_nil(ctx.cued_pattern_slot)
+      assert.are.equal(1, ctx.pattern_slot)
+    end)
+
+  end)
+
 end)

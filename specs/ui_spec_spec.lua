@@ -125,7 +125,8 @@ describe("ui_spec", function()
       ctx.patterns = require("lib/pattern").new_slots()
       ctx.pattern_held = true
       ctx.time_held = true
-      grid_ui.grid_key(ctx, 1, 1, 1)
+      grid_ui.grid_key(ctx, 1, 1, 1) -- press slot 1
+      grid_ui.grid_key(ctx, 1, 1, 0) -- quick release -> tap (loads/cues)
       assert.are.equal(1, ctx.pattern_slot)
     end)
 

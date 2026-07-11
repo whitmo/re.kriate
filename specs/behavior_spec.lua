@@ -226,6 +226,18 @@ describe("behavior", function()
       assert.are.equal(5, seen.slot)
     end)
 
+    it("cmd:pattern:load cues a quantized transition instead of hard-loading while playing", function()
+      local ctx = make_ctx()
+      behavior.wire_commands(ctx)
+      -- populate slot 6 directly (not via cmd:pattern:save, which would
+      -- also set ctx.pattern_slot = 6 and make it "the current slot")
+      pattern.save(ctx, 6)
+      ctx.playing = true
+      ctx.events:emit("cmd:pattern:load", {slot = 6})
+      assert.are.equal(6, ctx.cued_pattern_slot)
+      assert.are_not.equal(6, ctx.pattern_slot)
+    end)
+
     it("cmd:loop:set sets a param's loop bounds", function()
       local ctx = make_ctx()
       behavior.wire_commands(ctx)

@@ -241,9 +241,10 @@ function M.wire_commands(ctx)
   wire("cmd:pattern:load", function(data)
     if not data.slot then return end
     if not pattern.is_populated(ctx.patterns, data.slot) then return end
-    pattern.load(ctx, data.slot)
-    ctx.pattern_slot = data.slot
-    bus:emit("pattern:load", {slot = data.slot})
+    -- resolve_tap loads immediately when stopped, or cues/cancels a
+    -- quantized transition when playing (and emits its own fact) --
+    -- the same decision the grid pattern page makes, in one place.
+    pattern.resolve_tap(ctx, data.slot)
   end)
 
   wire("cmd:track:set_mute", function(data)

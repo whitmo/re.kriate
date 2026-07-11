@@ -51,10 +51,15 @@ local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
 local keyboard = require("lib/seamstress/keyboard")
 local screen_ui = require("lib/seamstress/screen_ui")
+local events = require("lib/events")
+local behavior = require("lib/behavior")
 
--- Helper: create minimal ctx for keyboard tests
+-- Helper: create minimal ctx for keyboard tests. The keyboard is a
+-- controller adapter (emits cmd:* events for pattern save/load/transport),
+-- so its ctx needs a bus with behavior.wire_commands installed, same as
+-- app.init does in production.
 local function make_ctx()
-  return {
+  local ctx = {
     tracks = track_mod.new_tracks(),
     patterns = pattern.new_slots(),
     active_track = 1,
@@ -63,7 +68,10 @@ local function make_ctx()
     grid_dirty = false,
     voices = {},
     clock_ids = nil,
+    events = events.new(),
   }
+  behavior.wire_commands(ctx)
+  return ctx
 end
 
 -- Helper: find text matching a Lua pattern in screen buffer

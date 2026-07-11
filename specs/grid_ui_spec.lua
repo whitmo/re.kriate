@@ -2050,10 +2050,17 @@ describe("grid_ui", function()
       return ctx, g
     end
 
+    -- A quick tap: press+release under PATTERN_SAVE_HOLD, so it always
+    -- resolves to load/cue rather than save.
+    local function tap(ctx, x, y)
+      grid_ui.pattern_key(ctx, x, y, 1)
+      grid_ui.pattern_key(ctx, x, y, 0)
+    end
+
     it("loads immediately when stopped", function()
       local ctx = make_pattern_ctx()
       ctx.playing = false
-      grid_ui.pattern_key(ctx, 2, 1)  -- slot 2
+      tap(ctx, 2, 1)  -- slot 2
       assert.are.equal(2, ctx.pattern_slot)
       assert.are.equal(2, ctx.tracks[1].division)
       assert.is_nil(ctx.cued_pattern_slot)
@@ -2062,7 +2069,7 @@ describe("grid_ui", function()
     it("cues a quantized transition when playing", function()
       local ctx = make_pattern_ctx()
       ctx.playing = true
-      grid_ui.pattern_key(ctx, 2, 1)  -- slot 2
+      tap(ctx, 2, 1)  -- slot 2
       -- current slot unchanged; transition is pending
       assert.are.equal(1, ctx.pattern_slot)
       assert.are.equal(1, ctx.tracks[1].division)
@@ -2072,9 +2079,9 @@ describe("grid_ui", function()
     it("pressing the currently-playing slot cancels a pending cue", function()
       local ctx = make_pattern_ctx()
       ctx.playing = true
-      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      tap(ctx, 2, 1)  -- cue slot 2
       assert.are.equal(2, ctx.cued_pattern_slot)
-      grid_ui.pattern_key(ctx, 1, 1)  -- press current slot 1
+      tap(ctx, 1, 1)  -- press current slot 1
       assert.is_nil(ctx.cued_pattern_slot)
       assert.are.equal(1, ctx.pattern_slot)
     end)
@@ -2082,8 +2089,8 @@ describe("grid_ui", function()
     it("pressing the already-cued slot cancels the cue", function()
       local ctx = make_pattern_ctx()
       ctx.playing = true
-      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
-      grid_ui.pattern_key(ctx, 2, 1)  -- press slot 2 again
+      tap(ctx, 2, 1)  -- cue slot 2
+      tap(ctx, 2, 1)  -- press slot 2 again
       assert.is_nil(ctx.cued_pattern_slot)
       assert.are.equal(1, ctx.pattern_slot)
     end)
@@ -2091,8 +2098,8 @@ describe("grid_ui", function()
     it("a second cue overwrites the pending slot", function()
       local ctx = make_pattern_ctx()
       ctx.playing = true
-      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
-      grid_ui.pattern_key(ctx, 4, 1)  -- cue slot 4 instead
+      tap(ctx, 2, 1)  -- cue slot 2
+      tap(ctx, 4, 1)  -- cue slot 4 instead
       assert.are.equal(4, ctx.cued_pattern_slot)
     end)
 
@@ -2100,12 +2107,21 @@ describe("grid_ui", function()
       local ctx, g = make_pattern_ctx()
       ctx.pattern_held = true
       ctx.playing = true
-      grid_ui.pattern_key(ctx, 2, 1)  -- cue slot 2
+      tap(ctx, 2, 1)  -- cue slot 2
       grid_ui.draw_pattern_slots(ctx, g)
       -- slot 2 is at col 2 row 1, cued brightness = 13
       assert.are.equal(13, led_at(g, 2, 1))
       -- slot 1 is at col 1 row 1, current+populated = 15
       assert.are.equal(15, led_at(g, 1, 1))
+    end)
+
+    it("does not queue a track-pattern cue while the meta-sequencer is active (meta owns transitions)", function()
+      local ctx = make_pattern_ctx()
+      ctx.playing = true
+      ctx.meta = { active = true }
+      tap(ctx, 2, 1) -- attempt to cue slot 2
+      assert.is_nil(ctx.cued_pattern_slot)
+      assert.are.equal(1, ctx.pattern_slot)
     end)
 
   end)

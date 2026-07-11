@@ -89,6 +89,10 @@ function M.start(meta, ctx)
   meta.loop_counter = step.loops
   pattern.load(ctx, step.slot)
   ctx.pattern_slot = step.slot
+  -- Meta owns pattern transitions while active; a track-pattern cue queued
+  -- before meta started must not linger and fire unexpectedly at some
+  -- loop boundary long after meta later deactivates.
+  ctx.cued_pattern_slot = nil
   reset_playheads(ctx)
   if ctx.events then
     ctx.events:emit("meta:start", { pos = meta.pos, slot = step.slot })
