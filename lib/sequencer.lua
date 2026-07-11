@@ -262,11 +262,6 @@ function M.step_track(ctx, track_num)
     local midi_note = scale_mod.to_midi(effective_degree, vals.octave, ctx.scale_notes)
     local velocity = track_mod.VELOCITY_MAP[vals.velocity] or track_mod.VELOCITY_MAP[4]
 
-    -- emit voice:note event
-    if ctx.events then
-      ctx.events:emit("voice:note", {track=track_num, note=midi_note, vel=velocity, dur=duration})
-    end
-
     -- apply glide/portamento
     local voice = ctx.voices and ctx.voices[track_num]
     if voice and voice.set_portamento then
@@ -275,6 +270,16 @@ function M.step_track(ctx, track_num)
       else
         voice:set_portamento(0)
       end
+    end
+
+    -- Dispatch a single sub-trigger: play the note and emit its voice:note
+    -- fact together, so ratcheted steps produce one fact per actual dispatch
+    -- (not one fact per step regardless of ratchet count).
+    local function fire_note(dur)
+      if ctx.events then
+        ctx.events:emit("voice:note", {track=track_num, note=midi_note, vel=velocity, dur=dur})
+      end
+      M.play_note(ctx, track_num, midi_note, velocity, dur)
     end
 
     -- ratchet: subdivide into N evenly-spaced sub-gates
@@ -287,7 +292,7 @@ function M.step_track(ctx, track_num)
         for i = 1, ratchet_count do
           local bit_idx = i - 1
           if (ratchet_bits >> bit_idx) & 1 == 1 then
-            M.play_note(ctx, track_num, midi_note, velocity, sub_dur)
+            fire_note(sub_dur)
           end
           if i < ratchet_count then
             clock.sync(sub_dur)
@@ -296,7 +301,7 @@ function M.step_track(ctx, track_num)
       end, "ratchet:" .. track_num))
     else
       if (ratchet_bits & 1) == 1 then
-        M.play_note(ctx, track_num, midi_note, velocity, duration)
+        fire_note(duration)
       end
     end
 
@@ -326,15 +331,17 @@ end
 function M.play_note(ctx, track_num, note, velocity, duration)
   local voice = ctx.voices and ctx.voices[track_num]
   if voice then
-    -- Scale by mixer level (default 1.0; 0.0 fully silences the voice).
-    local level = 1.0
-    if ctx.mixer and ctx.mixer.level and ctx.mixer.level[track_num] ~= nil then
-      level = ctx.mixer.level[track_num]
-    end
-    local scaled_vel = velocity * level
-    if scaled_vel < 0 then scaled_vel = 0 end
-    if scaled_vel > 1 then scaled_vel = 1 end
-    voice:play_note(note, scaled_vel, duration)
+    -- Mixer level attenuation is applied via voice:set_level (see
+    -- lib/mixer.lua's set_level / apply_to_voice, called on every level
+    -- change and whenever a voice is built/rebuilt). Do NOT also scale
+    -- velocity by mixer level here -- that would double-attenuate (a 0.5
+    -- fader would yield ~0.25 real loudness instead of 0.5). Voices that
+    -- don't implement set_level simply won't attenuate by mixer level,
+    -- which is correct (no double-counting), not a regression.
+    local vel = velocity
+    if vel < 0 then vel = 0 end
+    if vel > 1 then vel = 1 end
+    voice:play_note(note, vel, duration)
   end
 end
 
