@@ -728,6 +728,28 @@ describe("sequencer", function()
       assert.are.equal(#events, 3)
     end)
 
+    it("emits one voice:note fact per ratchet sub-trigger, not once per step", function()
+      local events_mod = require("lib/events")
+      local ctx, buffer = make_ctx()
+      ctx.events = events_mod.new()
+      local facts = {}
+      ctx.events:on("voice:note", function(data) table.insert(facts, data) end)
+
+      local track = ctx.tracks[1]
+      track.params.trigger.steps[1] = 1
+      track.params.trigger.pos = 1
+      track.params.ratchet.steps[1] = 3
+      track.params.ratchet.bits[1] = 7  -- 0b111: all 3 sub-gates active
+      track.params.ratchet.pos = 1
+
+      sequencer.step_track(ctx, 1)
+
+      assert.are.equal(3, #facts)
+      for _, f in ipairs(facts) do
+        assert.are.equal(1, f.track)
+      end
+    end)
+
     it("ratchet subdivides duration evenly", function()
       local ctx, buffer = make_ctx()
       local track = ctx.tracks[1]

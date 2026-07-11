@@ -5,47 +5,14 @@
 
 package.path = package.path .. ";./?.lua"
 
-rawset(_G, "clock", {
-  get_beats = function() return 0 end,
-  run = function(fn) return 1 end,
-  cancel = function(id) end,
-  sync = function() end,
-})
+local host_stubs = require("specs/lib/host_stubs")
 
-rawset(_G, "osc", {send = function() end})
+-- Host globals this spec fakes; snapshotted/restored per-test (see
+-- specs/lib/host_stubs.lua) so the fakes don't leak into whichever spec
+-- file happens to run next under --no-auto-insulate.
+local HOST_GLOBALS = {"clock", "osc", "params", "grid", "metro", "util", "screen", "midi"}
 
 local param_store, param_actions, param_defs = {}, {}, {}
-rawset(_G, "params", {
-  lookup = {},
-  add_separator = function(self, id, name) end,
-  add_group = function(self, id, name, n) end,
-  add_number = function(self, id, name, min, max, default)
-    param_store[id] = default
-    param_defs[id] = {type = "number", min = min, max = max, default = default}
-    self.lookup[id] = true
-  end,
-  add_option = function(self, id, name, options, default)
-    param_store[id] = default
-    param_defs[id] = {type = "option", options = options, default = default}
-    self.lookup[id] = true
-  end,
-  add_text = function(self, id, name, default)
-    param_store[id] = default
-    param_defs[id] = {type = "text", default = default}
-    self.lookup[id] = true
-  end,
-  add_control = function(self, id, name, spec)
-    param_store[id] = (spec and spec.default) or 0
-    param_defs[id] = {type = "control"}
-    self.lookup[id] = true
-  end,
-  set_action = function(self, id, fn) param_actions[id] = fn end,
-  get = function(self, id) return param_store[id] end,
-  set = function(self, id, val)
-    param_store[id] = val
-    if param_actions[id] then param_actions[id](val) end
-  end,
-})
 
 local function reset_params_mock()
   for k in pairs(param_store) do param_store[k] = nil end
@@ -54,40 +21,83 @@ local function reset_params_mock()
   for k in pairs(params.lookup) do params.lookup[k] = nil end
 end
 
-rawset(_G, "grid", {
-  connect = function()
-    return {
-      key = nil,
-      led = function(self, x, y, val) end,
-      refresh = function(self) end,
-      all = function(self, val) end,
-    }
-  end,
-})
+local function install_host_fakes()
+  rawset(_G, "clock", {
+    get_beats = function() return 0 end,
+    run = function(fn) return 1 end,
+    cancel = function(id) end,
+    sync = function() end,
+  })
 
-rawset(_G, "metro", {
-  init = function()
-    return {time = 0, event = nil, start = function(self) end, stop = function(self) end}
-  end,
-})
+  rawset(_G, "osc", {send = function() end})
 
-rawset(_G, "util", {
-  clamp = function(v, lo, hi)
-    if v < lo then return lo end
-    if v > hi then return hi end
-    return v
-  end,
-})
-rawset(_G, "screen", setmetatable({}, {__index = function() return function() end end}))
-rawset(_G, "midi", {
-  connect = function()
-    return {
-      note_on = function() end,
-      note_off = function() end,
-      cc = function() end,
-    }
-  end,
-})
+  rawset(_G, "params", {
+    lookup = {},
+    add_separator = function(self, id, name) end,
+    add_group = function(self, id, name, n) end,
+    add_number = function(self, id, name, min, max, default)
+      param_store[id] = default
+      param_defs[id] = {type = "number", min = min, max = max, default = default}
+      self.lookup[id] = true
+    end,
+    add_option = function(self, id, name, options, default)
+      param_store[id] = default
+      param_defs[id] = {type = "option", options = options, default = default}
+      self.lookup[id] = true
+    end,
+    add_text = function(self, id, name, default)
+      param_store[id] = default
+      param_defs[id] = {type = "text", default = default}
+      self.lookup[id] = true
+    end,
+    add_control = function(self, id, name, spec)
+      param_store[id] = (spec and spec.default) or 0
+      param_defs[id] = {type = "control"}
+      self.lookup[id] = true
+    end,
+    set_action = function(self, id, fn) param_actions[id] = fn end,
+    get = function(self, id) return param_store[id] end,
+    set = function(self, id, val)
+      param_store[id] = val
+      if param_actions[id] then param_actions[id](val) end
+    end,
+  })
+
+  rawset(_G, "grid", {
+    connect = function()
+      return {
+        key = nil,
+        led = function(self, x, y, val) end,
+        refresh = function(self) end,
+        all = function(self, val) end,
+      }
+    end,
+  })
+
+  rawset(_G, "metro", {
+    init = function()
+      return {time = 0, event = nil, start = function(self) end, stop = function(self) end}
+    end,
+  })
+
+  rawset(_G, "util", {
+    clamp = function(v, lo, hi)
+      if v < lo then return lo end
+      if v > hi then return hi end
+      return v
+    end,
+  })
+  rawset(_G, "screen", setmetatable({}, {__index = function() return function() end end}))
+  rawset(_G, "midi", {
+    connect = function()
+      return {
+        note_on = function() end,
+        note_off = function() end,
+        cc = function() end,
+      }
+    end,
+  })
+end
 
 package.loaded["musicutil"] = {
   generate_scale = function(root, kind, octaves)
@@ -100,6 +110,8 @@ package.loaded["musicutil"] = {
 local track_mod = require("lib/track")
 
 describe("transport params (re-9d9)", function()
+
+  local restore_host
 
   local function make_voices()
     local voices = {}
@@ -115,9 +127,14 @@ describe("transport params (re-9d9)", function()
   end
 
   before_each(function()
+    restore_host = host_stubs.stub(HOST_GLOBALS, install_host_fakes)
     reset_params_mock()
     -- Force fresh require each test so set_action closures bind to the new ctx.
     package.loaded["lib/app"] = nil
+  end)
+
+  after_each(function()
+    restore_host()
   end)
 
   it("registers advance_<t> params for every track", function()

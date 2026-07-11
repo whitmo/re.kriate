@@ -165,6 +165,20 @@ describe("behavior", function()
       assert.is_true(ctx.playing)
     end)
 
+    it("cmd:transport:play resumes without resetting playheads (local start = continue semantics, re-33)", function()
+      -- Every local start path (K2, space, transport_play param, remote) goes
+      -- through cmd:transport:play only — no implicit reset — so playback
+      -- resumes from wherever the playheads sit. This deliberately diverges
+      -- from incoming MIDI Start, which does reset (see the MIDI Start
+      -- integration test in specs/clock_sync_integration_spec.lua and the
+      -- comment in lib/app.lua's attach_midi_input).
+      local ctx = make_ctx()
+      behavior.wire_commands(ctx)
+      ctx.tracks[1].params.trigger.pos = 4
+      ctx.events:emit("cmd:transport:play", {})
+      assert.are.equal(4, ctx.tracks[1].params.trigger.pos)
+    end)
+
     it("cmd:transport:stop stops the sequencer", function()
       local ctx = make_ctx()
       behavior.wire_commands(ctx)

@@ -64,9 +64,12 @@ local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 local CLOCK_SOURCE_OPTIONS = {"internal", "external MIDI"}
 local CLOCK_OUTPUT_OPTIONS = {"off", "on"}
 
--- Grid provider selector options (user-facing labels → registry names)
-local GRID_PROVIDER_OPTIONS = {"monome", "midigrid", "push2", "launchpad pro", "virtual"}
-local GRID_PROVIDER_REGISTRY = {"monome", "midigrid", "push2", "launchpad_pro", "virtual"}
+-- Grid provider selector options (user-facing labels → registry names).
+-- "simulated" (seamstress's screen-rendered grid, lib/grid_provider.lua)
+-- is appended rather than inserted in registration order so existing
+-- saved option indices (e.g. MIDI-mapped) don't shift.
+local GRID_PROVIDER_OPTIONS = {"monome", "midigrid", "push2", "launchpad pro", "virtual", "simulated"}
+local GRID_PROVIDER_REGISTRY = {"monome", "midigrid", "push2", "launchpad_pro", "virtual", "simulated"}
 
 local DEFAULT_PRESET_NAME = "default"
 local PRESET_MESSAGE_KEY = "preset" .. "_message"
@@ -264,6 +267,19 @@ local function attach_midi_input(ctx)
     for _, ev in ipairs(events_fired) do
       if ctx.clock_sync.source == clock_sync.SOURCE_EXT_MIDI then
         if ev == "start" then
+          -- Deliberate divergence from every local start path (transport_play
+          -- param, K2, cmd:transport:play used by keyboard space and
+          -- standalone.lua): those resume playback from wherever the
+          -- playheads currently sit (continue semantics), with no implicit
+          -- reset. Incoming MIDI Start (0xFA) resets first because the real
+          -- MIDI transport spec defines Start as "begin from the beginning" —
+          -- this matches spec, it is not an oversight (assessment finding
+          -- re-33). If MIDI Start should ever resume-in-place instead, that
+          -- is a deliberate behavior change to make explicitly, not a
+          -- silent fix here. See the "MIDI Start resets playheads" test in
+          -- specs/clock_sync_integration_spec.lua and the "resumes without
+          -- resetting" test in specs/behavior_spec.lua for the pinned
+          -- contrast.
           sequencer.reset(ctx)
           sequencer.start(ctx)
         elseif ev == "continue" then
@@ -355,12 +371,17 @@ local function add_clock_sync_params(ctx)
 end
 
 --- Connect (or reconnect) the grid based on config + provider selection.
---- Cleanly tears down any existing grid before swapping in a new one.
+--- Connects the NEW provider first and only tears down the old one once
+--- that succeeds, so a failed connect (e.g. an uninstalled midigrid) leaves
+--- the existing, working grid completely untouched. Callers that want to
+--- swap providers at runtime (see add_grid_params) should call this inside
+--- a pcall — on failure ctx.g is guaranteed unchanged.
 local function connect_grid(ctx, provider_name, opts)
+  local new_grid = grid_provider.connect(provider_name, opts or {})
   if ctx.g and ctx.g.cleanup then
     pcall(function() ctx.g:cleanup() end)
   end
-  ctx.g = grid_provider.connect(provider_name, opts or {})
+  ctx.g = new_grid
   ctx.g.key = log.wrap(function(x, y, z)
     grid_ui.key(ctx, x, y, z)
     ctx.grid_dirty = true
@@ -864,7 +885,11 @@ end
 function M.enc(ctx, n, d)
   if n == 1 then
     -- E1: select track
+    local old_track = ctx.active_track
     ctx.active_track = util.clamp(ctx.active_track + d, 1, track_mod.NUM_TRACKS)
+    if ctx.active_track ~= old_track and ctx.events then
+      ctx.events:emit("track:select", {track=ctx.active_track})
+    end
   elseif n == 2 then
     -- E2: select page
     local pages = grid_ui.PAGES
@@ -872,8 +897,12 @@ function M.enc(ctx, n, d)
     for i, p in ipairs(pages) do
       if p == ctx.active_page then idx = i; break end
     end
+    local old_page = ctx.active_page
     idx = util.clamp(idx + d, 1, #pages)
     ctx.active_page = pages[idx]
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
   end
   ctx.grid_dirty = true
 end

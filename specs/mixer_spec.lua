@@ -5,63 +5,114 @@
 --   1. Voice interface: set_level / set_pan on each backend voice module.
 --   2. Mixer state module: ctx.mixer level/pan, mute via ctx.tracks.muted,
 --      propagation to voices, snapshot/restore.
---   3. Sequencer: play_note scales velocity by mixer level.
+--   3. Sequencer: play_note does NOT re-scale velocity by mixer level (that
+--      would double-attenuate on top of voice:set_level).
 --   4. Grid: mixer page columns (level / pan / mute) and nav cycle membership.
 --   5. Remote OSC API: /mixer/level, /mixer/pan, /mixer/mute, /mixer/get,
 --      and inclusion in /state/snapshot.
 
 package.path = package.path .. ";./?.lua"
 
--- Mock clock (sequencer + voice backends use this indirectly).
-rawset(_G, "clock", {
-  get_beats = function() return 0 end,
-  run = function(fn) return 1 end,
-  cancel = function(id) end,
-  sync = function() end,
-})
+local host_stubs = require("specs/lib/host_stubs")
 
--- Mock osc send (captured for set_level / set_pan assertions).
+-- Host globals this spec fakes; snapshotted/restored per-test (see
+-- specs/lib/host_stubs.lua) so the fakes don't leak into whichever spec
+-- file happens to run next under --no-auto-insulate.
+local HOST_GLOBALS = {"clock", "osc", "params", "grid", "metro", "util", "screen", "midi"}
+
+-- Captured for set_level / set_pan assertions; reset in reset_params_mock.
 local osc_sent = {}
-rawset(_G, "osc", {
-  send = function(target, path, args)
-    table.insert(osc_sent, {target = target, path = path, args = args})
-  end,
-})
 
 -- Minimal params mock used for action-driven tests. Some tests stub
 -- `params` directly or avoid it entirely (see reset_params_mock below).
 local param_store, param_actions, param_defs = {}, {}, {}
-rawset(_G, "params", {
-  lookup = {},
-  add_separator = function(self, id, name) end,
-  add_group = function(self, id, name, n) end,
-  add_number = function(self, id, name, min, max, default)
-    param_store[id] = default
-    param_defs[id] = {type = "number", min = min, max = max, default = default}
-    self.lookup[id] = true
-  end,
-  add_option = function(self, id, name, options, default)
-    param_store[id] = default
-    param_defs[id] = {type = "option", options = options, default = default}
-    self.lookup[id] = true
-  end,
-  add_text = function(self, id, name, default)
-    param_store[id] = default
-    param_defs[id] = {type = "text", default = default}
-    self.lookup[id] = true
-  end,
-  add_control = function(self, id, name, spec)
-    param_store[id] = (spec and spec.default) or 0
-    param_defs[id] = {type = "control"}
-    self.lookup[id] = true
-  end,
-  set_action = function(self, id, fn) param_actions[id] = fn end,
-  get = function(self, id) return param_store[id] end,
-  set = function(self, id, val)
-    param_store[id] = val
-    if param_actions[id] then param_actions[id](val) end
-  end,
-})
+
+local function install_host_fakes()
+  -- Mock clock (sequencer + voice backends use this indirectly).
+  rawset(_G, "clock", {
+    get_beats = function() return 0 end,
+    run = function(fn) return 1 end,
+    cancel = function(id) end,
+    sync = function() end,
+  })
+
+  -- Mock osc send (captured for set_level / set_pan assertions).
+  rawset(_G, "osc", {
+    send = function(target, path, args)
+      table.insert(osc_sent, {target = target, path = path, args = args})
+    end,
+  })
+
+  rawset(_G, "params", {
+    lookup = {},
+    add_separator = function(self, id, name) end,
+    add_group = function(self, id, name, n) end,
+    add_number = function(self, id, name, min, max, default)
+      param_store[id] = default
+      param_defs[id] = {type = "number", min = min, max = max, default = default}
+      self.lookup[id] = true
+    end,
+    add_option = function(self, id, name, options, default)
+      param_store[id] = default
+      param_defs[id] = {type = "option", options = options, default = default}
+      self.lookup[id] = true
+    end,
+    add_text = function(self, id, name, default)
+      param_store[id] = default
+      param_defs[id] = {type = "text", default = default}
+      self.lookup[id] = true
+    end,
+    add_control = function(self, id, name, spec)
+      param_store[id] = (spec and spec.default) or 0
+      param_defs[id] = {type = "control"}
+      self.lookup[id] = true
+    end,
+    set_action = function(self, id, fn) param_actions[id] = fn end,
+    get = function(self, id) return param_store[id] end,
+    set = function(self, id, val)
+      param_store[id] = val
+      if param_actions[id] then param_actions[id](val) end
+    end,
+  })
+
+  -- Mock grid.connect for app.init
+  rawset(_G, "grid", {
+    connect = function()
+      return {
+        key = nil,
+        led = function(self, x, y, val) end,
+        refresh = function(self) end,
+        all = function(self, val) end,
+      }
+    end,
+  })
+
+  -- Mock metro for app.init grid redraw loop.
+  rawset(_G, "metro", {
+    init = function()
+      return {time = 0, event = nil, start = function(self) end, stop = function(self) end}
+    end,
+  })
+
+  -- Mock util/screen/midi.
+  rawset(_G, "util", {
+    clamp = function(v, lo, hi)
+      if v < lo then return lo end
+      if v > hi then return hi end
+      return v
+    end,
+  })
+  rawset(_G, "screen", setmetatable({}, {__index = function() return function() end end}))
+  rawset(_G, "midi", {
+    connect = function()
+      return {
+        note_on = function() end,
+        note_off = function() end,
+        cc = function() end,
+      }
+    end,
+  })
+end
 
 local function reset_params_mock()
   for k in pairs(param_store) do param_store[k] = nil end
@@ -71,43 +122,20 @@ local function reset_params_mock()
   osc_sent = {}
 end
 
--- Mock grid.connect for app.init
-rawset(_G, "grid", {
-  connect = function()
-    return {
-      key = nil,
-      led = function(self, x, y, val) end,
-      refresh = function(self) end,
-      all = function(self, val) end,
-    }
-  end,
-})
+-- File-level hooks apply to every describe/it in this file (busted runs
+-- before_each/after_each registered outside any describe as part of the
+-- implicit root context). Installing/restoring the host fakes here -- not
+-- at module load time -- keeps them from leaking into whichever spec file
+-- runs next under --no-auto-insulate.
+local restore_host
 
--- Mock metro for app.init grid redraw loop.
-rawset(_G, "metro", {
-  init = function()
-    return {time = 0, event = nil, start = function(self) end, stop = function(self) end}
-  end,
-})
+before_each(function()
+  restore_host = host_stubs.stub(HOST_GLOBALS, install_host_fakes)
+end)
 
--- Mock util/screen/midi.
-rawset(_G, "util", {
-  clamp = function(v, lo, hi)
-    if v < lo then return lo end
-    if v > hi then return hi end
-    return v
-  end,
-})
-rawset(_G, "screen", setmetatable({}, {__index = function() return function() end end}))
-rawset(_G, "midi", {
-  connect = function()
-    return {
-      note_on = function() end,
-      note_off = function() end,
-      cc = function() end,
-    }
-  end,
-})
+after_each(function()
+  restore_host()
+end)
 
 package.loaded["musicutil"] = {
   generate_scale = function(root, kind, octaves)
@@ -361,7 +389,12 @@ end)
 -- Sequencer: velocity scaling
 --------------------------------------------------------------------------
 
-describe("mixer — sequencer velocity scaling", function()
+describe("mixer — sequencer velocity is NOT re-scaled by mixer level", function()
+  -- Mixer level attenuation is applied exactly once, via voice:set_level
+  -- (see mixer.set_level / mixer.apply_to_voice, called on every level change
+  -- and on every voice rebuild). play_note must NOT also scale velocity by
+  -- mixer.level -- doing so double-attenuates (a 0.5 fader would yield ~0.25
+  -- real loudness: velocity*0.5 here AND set_level(0.5) on the voice).
 
   local function recording_voice()
     local calls = {}
@@ -373,14 +406,14 @@ describe("mixer — sequencer velocity scaling", function()
     }
   end
 
-  it("scales velocity by mixer.level before dispatching to the voice", function()
+  it("passes velocity through unchanged when mixer level is 0.5 (attenuation happens via set_level only)", function()
     local ctx = make_ctx()
     ctx.voices[1] = recording_voice()
     ctx.mixer.level[1] = 0.5
     sequencer.play_note(ctx, 1, 60, 0.8, 0.25)
     assert.are.equal(1, #ctx.voices[1]._calls)
     assert.are.equal(60, ctx.voices[1]._calls[1].note)
-    assert.are.equal(0.4, ctx.voices[1]._calls[1].vel)
+    assert.are.equal(0.8, ctx.voices[1]._calls[1].vel)
   end)
 
   it("passes velocity through unchanged when level is 1.0", function()
@@ -391,21 +424,19 @@ describe("mixer — sequencer velocity scaling", function()
     assert.are.equal(0.7, ctx.voices[1]._calls[1].vel)
   end)
 
-  it("silences the voice when level is 0.0", function()
+  it("does not zero the velocity when level is 0.0 (set_level is what silences the voice)", function()
     local ctx = make_ctx()
     ctx.voices[1] = recording_voice()
     ctx.mixer.level[1] = 0.0
     sequencer.play_note(ctx, 1, 60, 1.0, 0.25)
     assert.are.equal(1, #ctx.voices[1]._calls)
-    assert.are.equal(0.0, ctx.voices[1]._calls[1].vel)
+    assert.are.equal(1.0, ctx.voices[1]._calls[1].vel)
   end)
 
-  it("clamps the scaled velocity to [0, 1] even when level > 1 is forced", function()
+  it("still clamps velocity itself to [0, 1], independent of mixer level", function()
     local ctx = make_ctx()
     ctx.voices[1] = recording_voice()
-    -- Bypass mixer.set_level clamping by writing directly (would never happen
-    -- via the public API, but proves the sequencer guardrail).
-    ctx.mixer.level[1] = 5.0
+    ctx.mixer.level[1] = 5.0  -- forced out-of-range level; must not affect vel at all
     sequencer.play_note(ctx, 1, 60, 1.0, 0.25)
     assert.are.equal(1.0, ctx.voices[1]._calls[1].vel)
   end)
