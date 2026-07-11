@@ -193,6 +193,19 @@ describe("clock_sync integration", function()
     assert.are.equal(clock_sync.TRANSPORT_PLAYING, ctx.clock_sync.transport)
   end)
 
+  it("incoming MIDI Start resets playheads to loop_start (real MIDI Start semantics, re-33)", function()
+    -- Deliberate divergence from local start paths (K2/space/params/remote):
+    -- the real MIDI 0xFA Start message means "begin from the beginning", so
+    -- this is intentional, not an oversight. See attach_midi_input in
+    -- lib/app.lua for the comment explaining the divergence.
+    local dev = make_midi_dev()
+    local ctx = make_app({midi_dev = dev})
+    params:set("clock_source_mode", 2)
+    ctx.tracks[1].params.trigger.pos = 4
+    dev.event({clock_sync.MIDI_START})
+    assert.are.equal(ctx.tracks[1].params.trigger.loop_start, ctx.tracks[1].params.trigger.pos)
+  end)
+
   it("incoming MIDI Stop stops the sequencer when slaved", function()
     local dev = make_midi_dev()
     local ctx = make_app({midi_dev = dev})

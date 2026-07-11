@@ -264,6 +264,19 @@ local function attach_midi_input(ctx)
     for _, ev in ipairs(events_fired) do
       if ctx.clock_sync.source == clock_sync.SOURCE_EXT_MIDI then
         if ev == "start" then
+          -- Deliberate divergence from every local start path (transport_play
+          -- param, K2, cmd:transport:play used by keyboard space and
+          -- standalone.lua): those resume playback from wherever the
+          -- playheads currently sit (continue semantics), with no implicit
+          -- reset. Incoming MIDI Start (0xFA) resets first because the real
+          -- MIDI transport spec defines Start as "begin from the beginning" —
+          -- this matches spec, it is not an oversight (assessment finding
+          -- re-33). If MIDI Start should ever resume-in-place instead, that
+          -- is a deliberate behavior change to make explicitly, not a
+          -- silent fix here. See the "MIDI Start resets playheads" test in
+          -- specs/clock_sync_integration_spec.lua and the "resumes without
+          -- resetting" test in specs/behavior_spec.lua for the pinned
+          -- contrast.
           sequencer.reset(ctx)
           sequencer.start(ctx)
         elseif ev == "continue" then
