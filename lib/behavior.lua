@@ -148,7 +148,11 @@ M.VOCAB = {
   { name = "track:select", layer = "behavioral", mood = "fact",
     payload = {"track"}, status = "implemented" },
   { name = "track:mute", layer = "behavioral", mood = "fact",
-    payload = {"track", "muted"}, status = "implemented" },
+    payload = {"track", "muted"}, status = "implemented",
+    note = "deprecated alias of mixer:mute, emitted alongside it by "
+      .. "lib/mixer.lua's M.set_mute for existing consumers/tests during a "
+      .. "deprecation window (assessment finding #21); new code should use "
+      .. "mixer:mute" },
   { name = "page:select", layer = "behavioral", mood = "fact",
     payload = {"page", "prev"}, status = "implemented" },
   { name = "pattern:load", layer = "behavioral", mood = "fact",

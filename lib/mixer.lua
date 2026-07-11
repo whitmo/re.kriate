@@ -91,6 +91,10 @@ function M.set_mute(ctx, t, muted)
   track.muted = muted and true or false
   if ctx.events then
     ctx.events:emit("mixer:mute", {track = t, muted = track.muted})
+    -- Deprecated alias, kept for existing consumers/tests during a
+    -- deprecation window (assessment finding #21). Same payload shape as
+    -- mixer:mute; new code should listen for mixer:mute instead.
+    ctx.events:emit("track:mute", {track = t, muted = track.muted})
   end
   return track.muted
 end

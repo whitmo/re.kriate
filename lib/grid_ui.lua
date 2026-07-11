@@ -7,6 +7,7 @@
 local track_mod = require("lib/track")
 local pattern = require("lib/pattern")
 local meta_pattern = require("lib/meta_pattern")
+local mixer = require("lib/mixer")
 
 local M = {}
 
@@ -623,11 +624,9 @@ function M.nav_key(ctx, x, z)
   end
   -- mute toggle (x=13)
   if x == NAV_MUTE and z == 1 then
-    local track = ctx.tracks[ctx.active_track]
-    track.muted = not track.muted
-    if ctx.events then
-      ctx.events:emit("track:mute", {track=ctx.active_track, muted=track.muted})
-    end
+    -- Route through lib/mixer (authoritative mutation + event emission) rather
+    -- than mutating track.muted here directly (assessment finding #21).
+    mixer.toggle_mute(ctx, ctx.active_track)
   end
   -- scale (x=15)
   if x == NAV_SCALE and z == 1 then
@@ -740,7 +739,6 @@ end
 -- non-mixer interactions target the tapped row without a separate nav step.
 function M.mixer_key(ctx, x, y)
   if y < 1 or y > track_mod.NUM_TRACKS then return end
-  local mixer = require("lib/mixer")
   local t = y
   ctx.active_track = t
   local params_available = params and params.lookup
@@ -921,7 +919,10 @@ function M.alt_track_key(ctx, x, y)
   end
 
   if x == 16 then
-    track.muted = not track.muted
+    -- Route through lib/mixer (authoritative mutation + event emission) rather
+    -- than mutating track.muted here directly (assessment finding #21). This
+    -- also fixes the previously-silent path: no fact used to be emitted here.
+    mixer.toggle_mute(ctx, y)
     ctx.active_track = y
   end
 end

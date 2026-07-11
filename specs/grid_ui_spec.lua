@@ -509,6 +509,35 @@ describe("grid_ui", function()
       assert.is_true(ctx.tracks[3].muted)
     end)
 
+    it("mute toggle (x=16) routes through lib/mixer and emits mixer:mute plus the track:mute alias", function()
+      -- Regression test for assessment finding #21: this path used to mutate
+      -- track.muted directly and emit nothing at all.
+      local ctx = make_ctx({active_page = "alt_track"})
+      ctx.events = events.new()
+      local mixer_events = {}
+      local track_events = {}
+      ctx.events:on("mixer:mute", function(data) mixer_events[#mixer_events + 1] = data end)
+      ctx.events:on("track:mute", function(data) track_events[#track_events + 1] = data end)
+
+      grid_ui.alt_track_key(ctx, 16, 3) -- mute toggle on track row 3
+
+      assert.is_true(ctx.tracks[3].muted)
+      assert.are.equal(1, #mixer_events)
+      assert.are.equal(3, mixer_events[1].track)
+      assert.is_true(mixer_events[1].muted)
+      assert.are.equal(1, #track_events)
+      assert.are.equal(3, track_events[1].track)
+      assert.is_true(track_events[1].muted)
+
+      -- Toggle again: unmute, both facts follow.
+      grid_ui.alt_track_key(ctx, 16, 3)
+      assert.is_false(ctx.tracks[3].muted)
+      assert.are.equal(2, #mixer_events)
+      assert.is_false(mixer_events[2].muted)
+      assert.are.equal(2, #track_events)
+      assert.is_false(track_events[2].muted)
+    end)
+
     it("emits track:direction/division/swing facts with {track, value} payload", function()
       local ctx = make_ctx({active_page = "alt_track"})
       ctx.events = events.new()
@@ -817,6 +846,29 @@ describe("grid_ui", function()
       assert.is_true(ctx.tracks[1].muted)
       grid_ui.nav_key(ctx, 13, 1)
       assert.is_false(ctx.tracks[1].muted)
+    end)
+
+    it("mute (x=13) routes through lib/mixer and emits mixer:mute plus the track:mute alias", function()
+      -- Pins the nav-row half of the finding-#21 consolidation: this path
+      -- used to hand-mutate track.muted and emit only track:mute directly;
+      -- mixer:mute here proves the mutation goes through mixer.toggle_mute.
+      local ctx = make_ctx()
+      ctx.events = events.new()
+      ctx.active_track = 2
+      local mixer_events = {}
+      local track_events = {}
+      ctx.events:on("mixer:mute", function(data) mixer_events[#mixer_events + 1] = data end)
+      ctx.events:on("track:mute", function(data) track_events[#track_events + 1] = data end)
+
+      grid_ui.nav_key(ctx, 13, 1)
+
+      assert.is_true(ctx.tracks[2].muted)
+      assert.are.equal(1, #mixer_events)
+      assert.are.equal(2, mixer_events[1].track)
+      assert.is_true(mixer_events[1].muted)
+      assert.are.equal(1, #track_events)
+      assert.are.equal(2, track_events[1].track)
+      assert.is_true(track_events[1].muted)
     end)
 
     it("KEY 1 (x=5) sets time_held on press", function()
