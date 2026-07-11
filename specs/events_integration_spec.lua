@@ -375,8 +375,9 @@ describe("events integration", function()
 
       -- Enter pattern mode
       ctx.pattern_held = true
-      -- Press slot 3 (row 1, col 3)
+      -- Quick press+release of slot 3 (row 1, col 3) — a tap loads
       grid_ui.key(ctx, 3, 1, 1)
+      grid_ui.key(ctx, 3, 1, 0)
 
       assert.are.equal(ctx.pattern_slot, 3)
       assert.is_not_nil(received)
@@ -391,6 +392,7 @@ describe("events integration", function()
       for x = 1, 8 do
         pattern.save(ctx, x) -- populate so load doesn't skip
         grid_ui.key(ctx, x, 1, 1)
+        grid_ui.key(ctx, x, 1, 0)
         assert.are.equal(ctx.pattern_slot, x)
       end
     end)
@@ -402,6 +404,7 @@ describe("events integration", function()
         local slot = 8 + x
         pattern.save(ctx, slot)
         grid_ui.key(ctx, x, 2, 1)
+        grid_ui.key(ctx, x, 2, 0)
         assert.are.equal(ctx.pattern_slot, slot)
       end
     end)

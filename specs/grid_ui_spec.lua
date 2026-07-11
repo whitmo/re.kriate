@@ -13,6 +13,7 @@ rawset(_G, "clock", {
 
 local track_mod = require("lib/track")
 local grid_ui = require("lib/grid_ui")
+local pattern = require("lib/pattern")
 
 -- Mock grid that records led() calls (used by make_ctx and extended page tests)
 local function mock_grid()
@@ -87,6 +88,7 @@ local function make_ctx(opts)
     g = g,
     voices = {},
     clock_ids = nil,
+    patterns = pattern.new_slots(),
   }
   return ctx, g
 end
@@ -703,6 +705,91 @@ describe("grid_ui", function()
       -- Press step 3, row 2 (value = 8-2 = 6)
       grid_ui.grid_key(ctx, 3, 2, 1)
       assert.are.equal(ctx.tracks[1].params.note.steps[3], 6)
+    end)
+
+    it("routes both press and release to pattern_key when pattern_held", function()
+      local ctx = make_ctx()
+      ctx.pattern_held = true
+      grid_ui.grid_key(ctx, 1, 1, 1)
+      assert.is_not_nil(ctx.pattern_press[1])
+      grid_ui.grid_key(ctx, 1, 1, 0)
+      assert.is_nil(ctx.pattern_press[1])
+    end)
+
+  end)
+
+  -- ========================================================================
+  -- Pattern key tests (grid-driven save/load, US: pattern save via long-press)
+  -- ========================================================================
+
+  describe("pattern_key", function()
+
+    it("loads the slot on a quick press+release", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+      pattern.save(ctx, 1)
+      ctx.tracks[1].params.trigger.steps[1] = 0 -- mutate after save
+
+      grid_ui.pattern_key(ctx, 1, 1, 1) -- press slot 1
+      grid_ui.pattern_key(ctx, 1, 1, 0) -- quick release
+
+      assert.are.equal(1, ctx.tracks[1].params.trigger.steps[1])
+      assert.are.equal(1, ctx.pattern_slot)
+    end)
+
+    it("emits pattern:load on a quick press+release", function()
+      local ctx = make_ctx()
+      pattern.save(ctx, 2)
+      local seen = {}
+      ctx.events = { emit = function(_, name, data) seen[#seen + 1] = { name = name, data = data } end }
+
+      grid_ui.pattern_key(ctx, 2, 1, 1)
+      grid_ui.pattern_key(ctx, 2, 1, 0)
+
+      assert.are.equal(1, #seen)
+      assert.are.equal("pattern:load", seen[1].name)
+      assert.are.equal(2, seen[1].data.slot)
+    end)
+
+    it("saves current tracks into the slot on a long-press release", function()
+      local ctx = make_ctx()
+      ctx.tracks[1].params.trigger.steps[1] = 1
+
+      grid_ui.pattern_key(ctx, 1, 1, 1) -- press slot 1
+      ctx.pattern_press[1] = os.clock() - 1 -- simulate held for 1s
+      grid_ui.pattern_key(ctx, 1, 1, 0) -- release
+
+      assert.is_true(pattern.is_populated(ctx.patterns, 1))
+      ctx.tracks[1].params.trigger.steps[1] = 0
+      pattern.load(ctx, 1)
+      assert.are.equal(1, ctx.tracks[1].params.trigger.steps[1])
+    end)
+
+    it("emits pattern:save on a long-press release", function()
+      local ctx = make_ctx()
+      local seen = {}
+      ctx.events = { emit = function(_, name, data) seen[#seen + 1] = { name = name, data = data } end }
+
+      grid_ui.pattern_key(ctx, 3, 1, 1)
+      ctx.pattern_press[3] = os.clock() - 1
+      grid_ui.pattern_key(ctx, 3, 1, 0)
+
+      assert.are.equal(1, #seen)
+      assert.are.equal("pattern:save", seen[1].name)
+      assert.are.equal(3, seen[1].data.slot)
+    end)
+
+    it("ignores a release with no matching prior press", function()
+      local ctx = make_ctx()
+      grid_ui.pattern_key(ctx, 4, 1, 0)
+      assert.is_nil(ctx.pattern_slot)
+    end)
+
+    it("ignores out-of-range coordinates", function()
+      local ctx = make_ctx()
+      grid_ui.pattern_key(ctx, 9, 1, 1) -- x out of range (only 1-8 valid)
+      grid_ui.pattern_key(ctx, 1, 3, 1) -- y out of range (only 1-2 valid)
+      assert.is_nil(ctx.pattern_press)
     end)
 
   end)

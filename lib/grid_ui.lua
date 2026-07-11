@@ -43,6 +43,10 @@ local ALT_DIRECTIONS = {"forward", "reverse", "pendulum", "drunk", "random"}
 local ALT_DIVISIONS = {1,2,3,4,5,6,7}
 local ALT_SWING = {0, 25, 50, 75, 100}
 
+-- Holding a pattern slot at least this long before release saves into it
+-- instead of loading it.
+local PATTERN_SAVE_HOLD = 0.5
+
 function M.redraw(ctx)
   local g = ctx.g
   if not g then return end
@@ -296,19 +300,18 @@ function M.nav_key(ctx, x, z)
 end
 
 function M.grid_key(ctx, x, y, z)
-  if z == 0 then return end -- only act on press
-
-  -- pattern slot selection mode
+  -- pattern slot selection mode: needs both press and release to detect
+  -- a long-press (save) vs a quick tap (load)
   if ctx.pattern_held then
-    M.pattern_key(ctx, x, y)
+    M.pattern_key(ctx, x, y, z)
     return
   end
 
+  if z == 0 then return end -- only act on press for all other modes
+
   -- alt-track page (bypasses loop/pattern edits)
   if ctx.active_page == "alt_track" then
-    if z == 1 then
-      M.alt_track_key(ctx, x, y)
-    end
+    M.alt_track_key(ctx, x, y)
     return
   end
 
@@ -373,14 +376,34 @@ function M.loop_key(ctx, x, page)
   end
 end
 
--- Pattern slot selection: rows 1-2, cols 1-8 = 16 slots
-function M.pattern_key(ctx, x, y)
+-- Pattern slot selection: rows 1-2, cols 1-8 = 16 slots.
+-- A quick press+release loads the slot; holding it for at least
+-- PATTERN_SAVE_HOLD seconds before releasing saves current tracks into it.
+function M.pattern_key(ctx, x, y, z)
   if x < 1 or x > 8 or y < 1 or y > 2 then return end
   local slot = (y - 1) * 8 + x
+
+  if z == 1 then
+    ctx.pattern_press = ctx.pattern_press or {}
+    ctx.pattern_press[slot] = os.clock()
+    return
+  end
+
+  local pressed_at = ctx.pattern_press and ctx.pattern_press[slot]
+  if not pressed_at then return end
+  ctx.pattern_press[slot] = nil
   ctx.pattern_slot = slot
-  pattern.load(ctx, slot)
-  if ctx.events then
-    ctx.events:emit("pattern:load", {slot=slot})
+
+  if os.clock() - pressed_at >= PATTERN_SAVE_HOLD then
+    pattern.save(ctx, slot)
+    if ctx.events then
+      ctx.events:emit("pattern:save", {slot=slot})
+    end
+  else
+    pattern.load(ctx, slot)
+    if ctx.events then
+      ctx.events:emit("pattern:load", {slot=slot})
+    end
   end
 end
 

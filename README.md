@@ -100,6 +100,7 @@ Row 8 layout:
   10       velocity page
   11       probability page
   12       loop edit (hold)
+  14       pattern slots (hold)
   15       alt-track page
   16       play / stop
 ```
@@ -118,6 +119,8 @@ Row 8 layout:
 - octave → **glide** (portamento amount, 1 = none, 7 = max)
 
 **Loop editing:** hold grid key 12 on row 8, then press two step columns to set the loop start and end for the current page/track.
+
+**Pattern page:** hold nav `x=14` to show the 16 pattern slots on rows 1-2. A quick tap on a slot loads it. Holding a slot for at least half a second before releasing saves the current tracks into it instead — no keyboard or params menu needed.
 
 **Right-click latch (seamstress simulated grid):** right-click nav `x=12` to latch/unlatch loop hold, or nav `x=14` to latch/unlatch pattern hold without keeping the mouse button down.
 
