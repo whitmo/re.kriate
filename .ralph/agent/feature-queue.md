@@ -9,6 +9,13 @@ Ensure fundamental features work correctly end-to-end and have thorough test cov
 
 - [x] Quality hardening: audit all 442 existing tests for gaps — verify loop boundary edge cases (loop_start == loop_end, loop wrapping at step 16→1), note retrigger safety (note-on before previous note-off), clock stop/start idempotency, pattern save/load roundtrip fidelity, direction mode transitions (changing mode mid-sequence), mute/unmute timing, and scale change mid-playback. Write failing tests for any uncovered edge case, then fix. Run seamstress load test to verify the script initializes and cleans up without errors or resource leaks.
 
+## Known Issues (flagged during live manual testing, 2026-07-11)
+
+- [ ] Remove redundant "probability" page from the nav x=9 cycle (`NAV_PAGE_CYCLE_9` in lib/grid_ui.lua): probability already works correctly as a hold-modifier (nav x=14, `ctx.prob_held`, overlays rows 1-7 on whatever page is active) — this is the original kria design and it's implemented right. The *page* version (3rd stop of the x=9 cycle, `draw_value_page(ctx, g, "probability")`) is leftover duplication from before the modifier existed (see CHANGELOG re-2d4) and should go, along with `mixer` shifting to 3rd stop.
+- [ ] `connect_grid()` in lib/app.lua (used by the `grid_provider` param's `set_action`) tears down the current grid (`ctx.g:cleanup()`) *before* confirming the new provider connects. If the new provider's `connect()` throws (e.g. selecting "midigrid" without it installed — reproduced live, see `~/.re_kriate.log` "grid reconnect failed (midigrid)"), the old grid has already been wiped. The simulated provider's `cleanup()` only blanks LEDs (self-heals next redraw frame), but this ordering is unsafe in general — reorder to connect the new provider first, and only tear down the old one after success.
+- [ ] Consider a "reset to defaults" action (params entry or grid gesture) to recover from a degraded UI/session state without restarting the process — came up after the params-menu grid-provider issue above left things feeling stuck.
+- [ ] Clarify further: reporter says "everything seems to destabilize at some point in the UI and options" — the grid-provider reconnect issue above is a strong candidate but unconfirmed as *the* cause; needs a repro if it recurs after that fix.
+
 ## Next Up
 
 - [ ] Probability & modifiers on virtual grid: add per-step trigger probability UI, alt-track modifier holds (keyboard + virtual grid), and tests using simulated grid.
