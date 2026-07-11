@@ -11,6 +11,21 @@ Thumbs.db
 .ralph/agent/review-cycle/
 specs/tmp/
 
+# Agent/orchestrator runtime state — never commit
+.runtime/
+.beads/redirect
+CLAUDE.local.md
+.ralph/*.lock
+.ralph/*.jsonl
+.ralph/loops.json
+.ralph/current-events
+.ralph/current-loop-id
+.ralph/events-*.jsonl
+.ralph/diagnostics/
+.ralph/agent/tasks.jsonl
+.ralph/agent/tasks.jsonl.lock
+.ralph/agent/scratchpad.md
+
 # Beads runtime state — never commit (re-p1d).
 # gt-pvx safety net has historically captured Dolt binaries from crew
 # workspaces where rekriate is nested; these patterns match at any depth so
