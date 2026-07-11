@@ -233,8 +233,14 @@ Each track has a direction mode that controls how all its parameters step throug
 ```
 re_kriate.lua                    norns entrypoint (thin global hooks)
 seamstress.lua                   seamstress entrypoint (voices, keyboard, sprites)
+standalone.lua                   plain-Lua entrypoint (no host runtime; doubles as smoke test)
 
 lib/app.lua                      init, params, grid, screen, key/enc orchestration
+lib/platform.lua                 environment boundary (norns/seamstress/standalone detection + stubs)
+lib/behavior.lua                 behavioral event layer (cmd:* vocabulary, wiring, stacking)
+lib/voice_registry.lua           pluggable instrument registry (register/create + validation)
+lib/button_events.lua            gesture classification (press/double_press/combo/hold)
+lib/ui_spec.lua                  declarative grid nav/body control spec (tested vs runtime)
 lib/sequencer.lua                clock-driven step advancement, voice output
 lib/track.lua                    data model (steps, loops, defaults)
 lib/grid_ui.lua                  grid display and input
@@ -289,6 +295,8 @@ All state flows through a single `ctx` table. No custom globals.
 
 ## Documentation
 
+- [`docs/adapters.md`](docs/adapters.md) — how to integrate new instruments, controllers, and execution environments
+- [`docs/event-layers.md`](docs/event-layers.md) — the interface/behavioral/abstract event model
 - [`docs/voice-quickstart.md`](docs/voice-quickstart.md) — voice backends and demo scripts
 - [`docs/supercollider-setup.md`](docs/supercollider-setup.md) — SuperCollider voice setup
 - [`docs/html/`](docs/html) — visual guides (grid, voices, events, polymetry)

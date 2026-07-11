@@ -16,6 +16,7 @@ local log = require("lib/log")
 local clock_sync = require("lib/clock_sync")
 local mixer = require("lib/mixer")
 local stock_presets = require("lib/stock_presets")
+local behavior = require("lib/behavior")
 
 local M = {}
 
@@ -51,8 +52,12 @@ local DEFAULT_CUSTOM_INTERVALS = {
 
 local NOTE_NAMES = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"}
 
-local VOICE_TYPES = {"midi", "osc", "sc_drums", "softcut", "sc_synth", "none"}
-local SC_SYNTHDEFS = {"sub", "fm", "wavetable"}
+-- Instrument names and sc_synth defs come from the voice registry — the
+-- pluggable instrument boundary. Registering a new instrument there makes
+-- it appear in the per-track voice menu with no edits here.
+local voice_registry = require("lib/voice_registry")
+local VOICE_TYPES = voice_registry.names()
+local SC_SYNTHDEFS = voice_registry.SC_SYNTHDEFS
 local DEFAULT_PATTERN_BANK = "default"
 local PATTERN_MESSAGE_KEY = "pattern" .. "_message"
 
@@ -87,51 +92,11 @@ end
 local function build_voice(ctx, t)
   local voice_idx = params:get("voice_" .. t)
   local voice_type = VOICE_TYPES[voice_idx]
-  if voice_type == "midi" then
-    local midi_voice = require("lib/voices/midi")
-    local ch = params:get("midi_ch_" .. t)
-    ctx.voices[t] = midi_voice.new(ctx.midi_dev, ch)
-  elseif voice_type == "osc" then
-    local osc_voice = require("lib/voices/osc")
-    local host = params:get("osc_host")
-    local port = params:get("osc_port")
-    ctx.voices[t] = osc_voice.new(t, host, port)
-  elseif voice_type == "sc_drums" then
-    local sc_drums = require("lib/voices/sc_drums")
-    local host = params:get("osc_host")
-    local port = params:get("osc_port")
-    ctx.voices[t] = sc_drums.new(t, host, port)
-  elseif voice_type == "sc_synth" then
-    local sc_synth = require("lib/voices/sc_synth")
-    local host = params:get("osc_host")
-    local port = params:get("osc_port")
-    local synthdef_idx = params:get("sc_synthdef_" .. t)
-    local synthdef = SC_SYNTHDEFS[synthdef_idx] or "sub"
-    local voice = sc_synth.new(t, host, port, synthdef)
-    -- Announce the selected SynthDef to the SC side so it has fresh state.
-    voice:set_synthdef(synthdef)
-    ctx.voices[t] = voice
-  elseif voice_type == "softcut" then
-    if not ctx.softcut_runtime then
-      local softcut_runtime = require("lib/voices/softcut_runtime")
-      ctx.softcut_runtime = softcut_runtime.new()
-      -- Announce platform mode once per session so users immediately see
-      -- whether they're getting real audio (norns) or dry-mode (seamstress).
-      softcut_runtime.announce(ctx.softcut_runtime.mode)
-    end
-    local softcut_zig = require("lib/voices/softcut_zig")
-    local sample_path = params:get("sample_path_" .. t)
-    local config = {
-      sample_path = (sample_path ~= "") and sample_path or nil,
-      root_note = params:get("sample_root_" .. t),
-      start_sec = params:get("sample_start_" .. t),
-      end_sec = params:get("sample_end_" .. t),
-      loop = params:get("sample_loop_" .. t) == 2,
-    }
-    ctx.voices[t] = softcut_zig.new(t, ctx.softcut_runtime, config)
-  else
-    ctx.voices[t] = nil
+  local voice, err = voice_registry.create(voice_type, ctx, t)
+  if err then
+    log.warn("voice build failed (" .. tostring(voice_type) .. ", track " .. t .. "): " .. tostring(err))
   end
+  ctx.voices[t] = voice
   -- Re-apply mixer state to the freshly built voice (level/pan per track).
   if ctx.voices[t] then
     mixer.apply_to_voice(ctx, t)
@@ -484,6 +449,12 @@ function M.init(config)
     midi_out_port = config.clock_midi_out_port or 1,
   })
 
+  -- Behavioral command layer: subscribe every implemented cmd:* event to
+  -- the module that performs it. Interface adapters (grid, keyboard, OSC,
+  -- future voice/TUI/controllers) emit commands; this is the one junction
+  -- where they meet the sequencer. See docs/event-layers.md.
+  ctx.unwire_commands = behavior.wire_commands(ctx)
+
   -- params: global settings
   params:add_separator("re_kriate", "re.kriate")
 
@@ -679,6 +650,11 @@ function M.init(config)
       log.info("preset autoload restored previous session")
     end
   end
+
+  -- Init is complete: flag it on ctx (re-checkable by late-arriving code)
+  -- and emit the app:ready fact for anything already subscribed.
+  ctx.ready = true
+  ctx.events:emit("app:ready", {})
 
   return ctx
 end

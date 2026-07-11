@@ -27,12 +27,17 @@ local pattern = require("lib/pattern")
 local app = require("lib/app")
 local keyboard = require("lib/seamstress/keyboard")
 local pattern_persistence = require("lib/pattern_persistence")
+local events = require("lib/events")
+local behavior = require("lib/behavior")
 
 local persistence_tmp = "specs/tmp/keyboard_pattern_persistence"
 
--- Helper: create a minimal ctx
+-- Helper: create a minimal ctx. The keyboard is a controller ADAPTER: it
+-- emits cmd:* behavioral events, so the ctx it operates on carries a bus
+-- with behavior.wire_commands installed — the same wiring app.init does
+-- in production.
 local function make_ctx()
-  return {
+  local ctx = {
     tracks = track_mod.new_tracks(),
     patterns = pattern.new_slots(),
     active_track = 1,
@@ -41,7 +46,10 @@ local function make_ctx()
     grid_dirty = false,
     voices = {},
     clock_ids = nil,
+    events = events.new(),
   }
+  behavior.wire_commands(ctx)
+  return ctx
 end
 
 describe("keyboard", function()
@@ -75,6 +83,23 @@ describe("keyboard", function()
       assert.is_true(ctx.playing)
       keyboard.key(ctx, " ", {}, false, 1)
       assert.is_false(ctx.playing)
+    end)
+
+    it("space works by EMITTING cmd:transport events (adapter contract)", function()
+      local ctx = make_ctx()
+      local emitted = {}
+      ctx.events:on("cmd:*", function(name) emitted[#emitted + 1] = name end)
+      keyboard.key(ctx, " ", {}, false, 1)
+      keyboard.key(ctx, " ", {}, false, 1)
+      assert.are.same({"cmd:transport:play", "cmd:transport:stop"}, emitted)
+    end)
+
+    it("r works by emitting cmd:transport:reset", function()
+      local ctx = make_ctx()
+      local emitted = nil
+      ctx.events:on("cmd:transport:reset", function() emitted = true end)
+      keyboard.key(ctx, "r", {}, false, 1)
+      assert.is_true(emitted)
     end)
 
   end)
