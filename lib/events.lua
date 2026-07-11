@@ -70,7 +70,8 @@ function Bus:on(event, fn)
         "events: multi-level wildcard '" .. event .. "' is not supported -- " ..
         "matching only checks the first colon-delimited segment of the " ..
         "emitted event name, so this subscription would never fire. " ..
-        "Use a single-level wildcard (e.g. '" .. prefix:match("^[^:]+") ..
+        "Use a single-level wildcard (e.g. '" ..
+        (prefix:match("^[^:]+") or prefix) ..
         ":*') or subscribe to the exact event name instead.",
         2
       )

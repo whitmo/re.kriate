@@ -554,6 +554,17 @@ describe("events", function()
       end)
       assert.is_false(ok)
     end)
+
+    it("gives the same actionable error for a leading-colon pattern", function()
+      -- ":a:*" has no non-colon first segment, so the "use 'x:*' instead"
+      -- suggestion can't be derived from it; the error must still be the
+      -- multi-level-wildcard message, not a crash inside its construction.
+      local ok, err = pcall(function()
+        bus:on(":a:*", function() end)
+      end)
+      assert.is_false(ok)
+      assert.matches("multi%-level wildcard", err)
+    end)
   end)
 
 end)
