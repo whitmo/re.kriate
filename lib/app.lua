@@ -267,6 +267,19 @@ local function attach_midi_input(ctx)
     for _, ev in ipairs(events_fired) do
       if ctx.clock_sync.source == clock_sync.SOURCE_EXT_MIDI then
         if ev == "start" then
+          -- Deliberate divergence from every local start path (transport_play
+          -- param, K2, cmd:transport:play used by keyboard space and
+          -- standalone.lua): those resume playback from wherever the
+          -- playheads currently sit (continue semantics), with no implicit
+          -- reset. Incoming MIDI Start (0xFA) resets first because the real
+          -- MIDI transport spec defines Start as "begin from the beginning" —
+          -- this matches spec, it is not an oversight (assessment finding
+          -- re-33). If MIDI Start should ever resume-in-place instead, that
+          -- is a deliberate behavior change to make explicitly, not a
+          -- silent fix here. See the "MIDI Start resets playheads" test in
+          -- specs/clock_sync_integration_spec.lua and the "resumes without
+          -- resetting" test in specs/behavior_spec.lua for the pinned
+          -- contrast.
           sequencer.reset(ctx)
           sequencer.start(ctx)
         elseif ev == "continue" then
@@ -872,7 +885,11 @@ end
 function M.enc(ctx, n, d)
   if n == 1 then
     -- E1: select track
+    local old_track = ctx.active_track
     ctx.active_track = util.clamp(ctx.active_track + d, 1, track_mod.NUM_TRACKS)
+    if ctx.active_track ~= old_track and ctx.events then
+      ctx.events:emit("track:select", {track=ctx.active_track})
+    end
   elseif n == 2 then
     -- E2: select page
     local pages = grid_ui.PAGES
@@ -880,8 +897,12 @@ function M.enc(ctx, n, d)
     for i, p in ipairs(pages) do
       if p == ctx.active_page then idx = i; break end
     end
+    local old_page = ctx.active_page
     idx = util.clamp(idx + d, 1, #pages)
     ctx.active_page = pages[idx]
+    if ctx.active_page ~= old_page and ctx.events then
+      ctx.events:emit("page:select", {page=ctx.active_page, prev=old_page})
+    end
   end
   ctx.grid_dirty = true
 end
