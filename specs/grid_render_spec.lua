@@ -714,7 +714,13 @@ describe("grid_render", function()
 
   describe("performance", function()
 
-    it("100 draws of 128 grid complete in under 1000ms", function()
+    it("100 draws of 128 grid complete in under 3000ms", function()
+      -- Budget is generous (3000ms for 100 draws, i.e. 30ms/draw) on purpose:
+      -- this is a gross-regression guard, not a micro-benchmark. It's flaked
+      -- twice under CI's coverage instrumentation on shared runners at the
+      -- previous 1000ms threshold even with no code change, so the margin
+      -- needs to absorb that noise rather than the timing itself getting
+      -- more precise.
       local mock_grid = make_mock_grid()
       mock_grid:all(8)
       local mock_screen = make_perf_screen()
@@ -723,7 +729,7 @@ describe("grid_render", function()
         grid_render.draw(mock_grid, mock_screen)
       end
       local elapsed = (os.clock() - start) * 1000
-      assert.is_true(elapsed < 1000, "100 draws took " .. elapsed .. "ms (> 1000ms limit)")
+      assert.is_true(elapsed < 3000, "100 draws took " .. elapsed .. "ms (> 3000ms limit)")
     end)
 
   end)
