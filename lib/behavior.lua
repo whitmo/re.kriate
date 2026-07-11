@@ -172,8 +172,9 @@ M.VOCAB = {
     payload = {"scale_type"}, status = "implemented",
     note = "command-intent hybrid; see scale:root" },
   { name = "app:ready", layer = "behavioral", mood = "fact",
-    payload = {}, status = "planned",
-    note = "emitted once init completes, so adapters/compositions can defer setup" },
+    payload = {}, status = "implemented",
+    note = "emitted at the end of app.init (which also sets ctx.ready for "
+      .. "late-arriving code); lets adapters/compositions defer setup" },
 
   -- ---- L2: abstract events (examples; created via M.define by features) ----
   { name = "song:start", layer = "abstract", mood = "command",

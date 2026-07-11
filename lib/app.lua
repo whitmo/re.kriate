@@ -16,6 +16,7 @@ local log = require("lib/log")
 local clock_sync = require("lib/clock_sync")
 local mixer = require("lib/mixer")
 local stock_presets = require("lib/stock_presets")
+local behavior = require("lib/behavior")
 
 local M = {}
 
@@ -448,6 +449,12 @@ function M.init(config)
     midi_out_port = config.clock_midi_out_port or 1,
   })
 
+  -- Behavioral command layer: subscribe every implemented cmd:* event to
+  -- the module that performs it. Interface adapters (grid, keyboard, OSC,
+  -- future voice/TUI/controllers) emit commands; this is the one junction
+  -- where they meet the sequencer. See docs/event-layers.md.
+  ctx.unwire_commands = behavior.wire_commands(ctx)
+
   -- params: global settings
   params:add_separator("re_kriate", "re.kriate")
 
@@ -643,6 +650,11 @@ function M.init(config)
       log.info("preset autoload restored previous session")
     end
   end
+
+  -- Init is complete: flag it on ctx (re-checkable by late-arriving code)
+  -- and emit the app:ready fact for anything already subscribed.
+  ctx.ready = true
+  ctx.events:emit("app:ready", {})
 
   return ctx
 end

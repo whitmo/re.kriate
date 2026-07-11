@@ -5,7 +5,6 @@
 -- d = cycle direction mode for active track
 -- ctrl+1-9 = save pattern, shift+1-9 = load pattern
 
-local sequencer = require("lib/sequencer")
 local pattern = require("lib/pattern")
 local grid_ui = require("lib/grid_ui")
 local app = require("lib/app")
@@ -45,10 +44,13 @@ function M.key(ctx, char, modifiers, is_repeat, state)
   if type(char) ~= "string" then return end
 
   if char == " " then
+    -- Controller-adapter contract (docs/event-layers.md): interfaces emit
+    -- behavioral commands; behavior.wire_commands (installed by app.init)
+    -- performs them. The keyboard is the first migrated adapter.
     if ctx.playing then
-      sequencer.stop(ctx)
+      ctx.events:emit("cmd:transport:stop", {})
     else
-      sequencer.start(ctx)
+      ctx.events:emit("cmd:transport:play", {})
     end
   elseif char == "s" and modifiers and modifiers.ctrl then
     local ok, path_or_err = app.save_pattern_bank(ctx)
@@ -79,7 +81,7 @@ function M.key(ctx, char, modifiers, is_repeat, state)
     ctx.active_page = "alt_track"
     set_status(ctx, "alt-track page")
   elseif char == "r" then
-    sequencer.reset(ctx)
+    ctx.events:emit("cmd:transport:reset", {})
   elseif char >= "1" and char <= "9" and modifiers and modifiers.ctrl and ctx.patterns then
     local slot = tonumber(char)
     pattern.save(ctx, slot)

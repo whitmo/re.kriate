@@ -263,4 +263,26 @@ describe("app params", function()
 
     app.cleanup(ctx)
   end)
+
+  it("installs the behavioral command layer (cmd:* events drive the app)", function()
+    local ctx = app.init({})
+
+    ctx.events:emit("cmd:transport:play", {})
+    assert.is_true(ctx.playing)
+    ctx.events:emit("cmd:transport:stop", {})
+    assert.is_false(ctx.playing)
+    ctx.events:emit("cmd:track:set_mute", {track = 2, muted = true})
+    assert.is_true(ctx.tracks[2].muted)
+
+    app.cleanup(ctx)
+  end)
+
+  it("emits app:ready once init completes", function()
+    -- app.init constructs ctx.events itself, so callers can't subscribe
+    -- before init; the contract is a re-checkable ctx.ready flag set by
+    -- the same code path that emits the app:ready fact.
+    local ctx = app.init({})
+    assert.is_true(ctx.ready)
+    app.cleanup(ctx)
+  end)
 end)
