@@ -211,6 +211,64 @@ describe("remote API", function()
       assert.is_not_nil(err)
     end)
 
+    it("/mute routes through mixer and emits mute facts", function()
+      local ctx = make_ctx()
+      local mixer_fact, track_fact
+      ctx.events:on("mixer:mute", function(data) mixer_fact = data end)
+      ctx.events:on("track:mute", function(data) track_fact = data end)
+      -- toggle (no explicit value)
+      api.dispatch(ctx, "/track/mute", {2})
+      assert.is_true(ctx.tracks[2].muted)
+      assert.are.same({track = 2, muted = true}, mixer_fact)
+      assert.are.same({track = 2, muted = true}, track_fact)
+      -- explicit value
+      api.dispatch(ctx, "/track/mute", {2, 0})
+      assert.is_false(ctx.tracks[2].muted)
+      assert.are.same({track = 2, muted = false}, mixer_fact)
+      assert.are.same({track = 2, muted = false}, track_fact)
+    end)
+
+    it("/direction emits track:direction fact on set", function()
+      local ctx = make_ctx()
+      local fact
+      ctx.events:on("track:direction", function(data) fact = data end)
+      api.dispatch(ctx, "/track/direction", {3, "reverse"})
+      assert.are.same({track = 3, value = "reverse"}, fact)
+      -- query path emits nothing
+      fact = nil
+      api.dispatch(ctx, "/track/direction", {3})
+      assert.is_nil(fact)
+    end)
+
+    it("/division emits track:division fact on set", function()
+      local ctx = make_ctx()
+      local fact
+      ctx.events:on("track:division", function(data) fact = data end)
+      api.dispatch(ctx, "/track/division", {4, 6})
+      assert.are.same({track = 4, value = 6}, fact)
+      -- query path emits nothing
+      fact = nil
+      api.dispatch(ctx, "/track/division", {4})
+      assert.is_nil(fact)
+    end)
+
+    it("mute/direction/division still work when ctx.events is nil", function()
+      local ctx = make_ctx()
+      ctx.events = nil
+      local ok = api.dispatch(ctx, "/track/mute", {1})
+      assert.is_true(ok)
+      assert.is_true(ctx.tracks[1].muted)
+      ok = api.dispatch(ctx, "/track/mute", {1, 0})
+      assert.is_true(ok)
+      assert.is_false(ctx.tracks[1].muted)
+      ok = api.dispatch(ctx, "/track/direction", {1, "drunk"})
+      assert.is_true(ok)
+      assert.are.equal(ctx.tracks[1].direction, "drunk")
+      ok = api.dispatch(ctx, "/track/division", {1, 3})
+      assert.is_true(ok)
+      assert.are.equal(ctx.tracks[1].division, 3)
+    end)
+
     it("/get returns track info", function()
       local ctx = make_ctx()
       ctx.tracks[3].muted = true
