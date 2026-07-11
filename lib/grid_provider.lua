@@ -185,10 +185,12 @@ M.register("simulated", function(opts)
   local cols = opts.cols or 16
   local rows = opts.rows or 8
   local leds = {}
-  local mirror = nil
+  local mirror = opts.mirror_monome and grid.connect(opts.mirror_device or opts.device or 1) or nil
 
-  if opts.mirror_monome then
-    mirror = grid.connect(opts.mirror_device or opts.device or 1)
+  local function mirror_call(method, ...)
+    if mirror and mirror[method] then
+      return mirror[method](mirror, ...)
+    end
   end
 
   local g = {
@@ -203,23 +205,17 @@ M.register("simulated", function(opts)
           end
         end
       end
-      if mirror and mirror.all then
-        mirror:all(brightness)
-      end
+      mirror_call("all", brightness)
     end,
 
     led = function(self, x, y, brightness)
       if x < 1 or x > cols or y < 1 or y > rows then return end
       leds[y * cols + x] = brightness
-      if mirror and mirror.led then
-        mirror:led(x, y, brightness)
-      end
+      mirror_call("led", x, y, brightness)
     end,
 
     refresh = function(self)
-      if mirror and mirror.refresh then
-        mirror:refresh()
-      end
+      mirror_call("refresh")
       if self.on_refresh then
         self:on_refresh()
       end
@@ -245,12 +241,8 @@ M.register("simulated", function(opts)
 
     cleanup = function(self)
       leds = {}
-      if mirror and mirror.all then
-        mirror:all(0)
-      end
-      if mirror and mirror.refresh then
-        mirror:refresh()
-      end
+      mirror_call("all", 0)
+      mirror_call("refresh")
     end,
   }
 
